@@ -39,6 +39,7 @@ import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.PermissionState
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -89,7 +90,7 @@ fun HealthDebugScreen(
         }
 
         DebugSection(title = "体重記録") {
-            WeightSummary(state.weightRecords, state.yesterdaySteps)
+            WeightSummary(state.weightRecords, state.stepDailyRecords)
         }
 
         DebugSection(title = "血糖値記録") {
@@ -99,11 +100,15 @@ fun HealthDebugScreen(
             }
         }
 
-        DebugSection(title = "昨日の歩数") {
+        DebugSection(title = "歩数記録") {
             val steps = state.yesterdaySteps
+            DebugLine("件数", state.stepDailyRecords.size.toString())
             DebugLine("歩数", "${steps?.steps ?: 0}歩")
             DebugLine("集計開始", steps?.aggregationStartAt?.formatDateTime() ?: "不明")
             DebugLine("集計終了", steps?.aggregationEndAt?.formatDateTime() ?: "不明")
+            state.stepDailyRecords.take(10).forEach { record ->
+                StepDailyRow(record)
+            }
         }
 
         DebugSection(title = "デバッグ") {
@@ -160,7 +165,7 @@ private fun DebugLine(label: String, value: String) {
 @Composable
 private fun WeightSummary(
     records: List<DebugWeightRecord>,
-    dailySteps: DebugStepDaily?,
+    dailySteps: List<DebugStepDaily>,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
 
@@ -181,7 +186,7 @@ private fun WeightSummary(
 @Composable
 private fun WeightTrendChart(
     records: List<DebugWeightRecord>,
-    dailySteps: DebugStepDaily?,
+    dailySteps: List<DebugStepDaily>,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.OneMonth) }
@@ -297,8 +302,8 @@ private fun WeightTrendChart(
                 strokeWidth = 1.dp.toPx(),
             )
 
-            calculateStepBar(dailySteps, chartRecords)?.let { stepBar ->
-                val stepRatio = (stepBar.steps.toFloat() / max(10_000f, stepBar.steps.toFloat())).coerceIn(0f, 1f)
+            calculateStepBars(dailySteps, chartRecords).forEach { stepBar ->
+                val stepRatio = (stepBar.steps.toFloat() / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)
                 val barHeight = chartHeight * stepRatio
                 val barWidth = 12.dp.toPx()
                 drawRect(
@@ -379,6 +384,19 @@ private fun WeightChartRangeButton(
         OutlinedButton(onClick = onClick) {
             Text(range.label)
         }
+    }
+}
+
+@Composable
+private fun StepDailyRow(record: DebugStepDaily) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = "${record.targetDate}  ${record.steps}歩",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text("${record.aggregationStartAt.formatDateTime()} - ${record.aggregationEndAt.formatDateTime()}")
+        Spacer(Modifier.height(4.dp))
     }
 }
 
@@ -500,21 +518,22 @@ private fun calculateTrendLine(records: List<DebugWeightRecord>): WeightTrendLin
     )
 }
 
-private fun calculateStepBar(
-    dailySteps: DebugStepDaily?,
+private fun calculateStepBars(
+    dailySteps: List<DebugStepDaily>,
     records: List<DebugWeightRecord>,
-): StepBar? {
-    if (dailySteps == null || dailySteps.steps <= 0) return null
-    val dayIndices = records
-        .mapIndexedNotNull { index, record ->
-            if (record.targetDate == dailySteps.targetDate) index else null
-        }
-    if (dayIndices.isEmpty()) return null
-
-    return StepBar(
-        centerIndex = (dayIndices.first() + dayIndices.last()) / 2f,
-        steps = dailySteps.steps,
-    )
+): List<StepBar> {
+    if (dailySteps.isEmpty()) return emptyList()
+    val recordIndicesByDate: Map<LocalDate, List<Int>> = records
+        .mapIndexed { index, record -> record.targetDate to index }
+        .groupBy({ it.first }, { it.second })
+    return dailySteps.mapNotNull { dailyStep ->
+        if (dailyStep.steps <= 0) return@mapNotNull null
+        val dayIndices = recordIndicesByDate[dailyStep.targetDate] ?: return@mapNotNull null
+        StepBar(
+            centerIndex = (dayIndices.first() + dayIndices.last()) / 2f,
+            steps = dailyStep.steps,
+        )
+    }
 }
 
 private fun chartSliderPosition(
@@ -567,3 +586,4 @@ private fun nearestChartIndex(
 }
 
 private const val TAG = "HealthSheetSync"
+private const val STEP_CHART_MAX_STEPS = 30_000f

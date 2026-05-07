@@ -9,6 +9,7 @@ data class HealthDebugUiState(
     val isLoading: Boolean = false,
     val weightRecords: List<DebugWeightRecord> = emptyList(),
     val glucoseRecords: List<DebugGlucoseRecord> = emptyList(),
+    val stepDailyRecords: List<DebugStepDaily> = emptyList(),
     val yesterdaySteps: DebugStepDaily? = null,
     val sourceSummaries: List<String> = emptyList(),
     val debugMessages: List<String> = emptyList(),
