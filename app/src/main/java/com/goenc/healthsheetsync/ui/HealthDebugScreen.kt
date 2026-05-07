@@ -162,6 +162,8 @@ private fun WeightSummary(
     dailySteps: List<DebugStepDaily>,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
+    var showWeightList by remember { mutableStateOf(false) }
+    var showStepList by remember { mutableStateOf(false) }
 
     DebugLine("件数", records.size.toString())
     if (latestRecord == null) {
@@ -174,8 +176,21 @@ private fun WeightSummary(
 
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
     DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
-    WeightDailySummary(records)
-    TodayStepsLine(dailySteps)
+    LatestStepsLine(dailySteps)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { showWeightList = !showWeightList }) {
+            Text(if (showWeightList) "体重一覧を閉じる" else "体重一覧")
+        }
+        OutlinedButton(onClick = { showStepList = !showStepList }) {
+            Text(if (showStepList) "歩数一覧を閉じる" else "歩数一覧")
+        }
+    }
+    if (showWeightList) {
+        WeightDailySummary(records)
+    }
+    if (showStepList) {
+        StepDailySummary(dailySteps)
+    }
     WeightTrendChart(records, dailySteps)
 }
 
@@ -193,14 +208,25 @@ private fun WeightDailySummary(records: List<DebugWeightRecord>) {
 }
 
 @Composable
-private fun TodayStepsLine(dailySteps: List<DebugStepDaily>) {
-    val today = LocalDate.now()
-    val steps = dailySteps.firstOrNull { it.targetDate == today }
+private fun LatestStepsLine(dailySteps: List<DebugStepDaily>) {
+    val steps = dailySteps.maxByOrNull { it.targetDate }
     Text(
-        text = "$today  ${steps?.steps ?: 0}歩",
+        text = steps?.let { "${it.targetDate}  ${it.steps}歩" } ?: "歩数記録はありません",
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.SemiBold,
     )
+}
+
+@Composable
+private fun StepDailySummary(dailySteps: List<DebugStepDaily>) {
+    dailySteps
+        .sortedByDescending { it.targetDate }
+        .forEach { steps ->
+            Text(
+                text = "${steps.targetDate}  ${steps.steps}歩",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
 }
 
 @Composable
