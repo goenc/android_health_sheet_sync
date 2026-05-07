@@ -2,6 +2,7 @@ package com.goenc.healthsheetsync.ui
 
 import android.util.Log
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.PermissionState
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -176,8 +178,11 @@ private fun WeightSummary(records: List<DebugWeightRecord>) {
 private fun WeightTrendChart(records: List<DebugWeightRecord>) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.OneMonth) }
-    val chartRecords = remember(sortedRecords, selectedRange) {
-        selectedRange.filter(sortedRecords)
+    var chartEndAt by remember(sortedRecords, selectedRange) {
+        mutableStateOf(sortedRecords.lastOrNull()?.measuredAt)
+    }
+    val chartRecords = remember(sortedRecords, selectedRange, chartEndAt) {
+        selectedRange.filter(sortedRecords, chartEndAt)
     }
     var selectedIndex by remember(chartRecords) { mutableStateOf(chartRecords.lastIndex) }
     val selectedRecord = chartRecords.getOrNull(selectedIndex)
@@ -187,6 +192,7 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
     val morningPointColor = Color(0xFF2E7D32)
     val selectedColor = colorScheme.tertiary
     val gridColor = colorScheme.outlineVariant
+    val trendLineColor = Color(0xFFD32F2F)
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -216,6 +222,19 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
                             pointCount = chartRecords.size,
                             horizontalPadding = 18.dp.toPx(),
                         )
+                    }
+                }
+                .pointerInput(sortedRecords, selectedRange, chartEndAt) {
+                    detectHorizontalDragGestures { change, dragAmount ->
+                        val currentEndAt = chartEndAt ?: return@detectHorizontalDragGestures
+                        chartEndAt = panChartEndAt(
+                            currentEndAt = currentEndAt,
+                            dragAmount = dragAmount,
+                            width = size.width.toFloat(),
+                            records = sortedRecords,
+                            range = selectedRange,
+                        )
+                        change.consume()
                     }
                 },
         ) {
@@ -270,13 +289,22 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
             drawPath(
                 path = path,
                 color = lineColor,
-                style = Stroke(width = 3.dp.toPx()),
+                style = Stroke(width = 2.dp.toPx()),
             )
+
+            calculateTrendLine(chartRecords)?.let { trendLine ->
+                drawLine(
+                    color = trendLineColor,
+                    start = Offset(xAt(0), yAt(trendLine.startWeightKg)),
+                    end = Offset(xAt(chartRecords.lastIndex), yAt(trendLine.endWeightKg)),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
 
             chartRecords.forEachIndexed { index, record ->
                 drawCircle(
                     color = if (record.isMorning()) morningPointColor else pointColor,
-                    radius = 4.dp.toPx(),
+                    radius = 3.dp.toPx(),
                     center = Offset(xAt(index), yAt(record.weightKg)),
                 )
             }
@@ -291,7 +319,7 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
                 )
                 drawCircle(
                     color = if (record.isMorning()) morningPointColor else selectedColor,
-                    radius = 7.dp.toPx(),
+                    radius = 5.dp.toPx(),
                     center = selectedPoint,
                 )
             }
@@ -380,19 +408,79 @@ private fun formatDecimal(value: Double): String {
 private enum class WeightChartRange(
     val label: String,
     private val startAt: (LocalDateTime) -> LocalDateTime,
+    private val endAt: (LocalDateTime) -> LocalDateTime,
 ) {
-    OneMonth("1か月", { latestAt -> latestAt.minusMonths(1) }),
-    TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) });
+    OneMonth("1か月", { latestAt -> latestAt.minusMonths(1) }, { startAt -> startAt.plusMonths(1) }),
+    TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) }, { startAt -> startAt.plusWeeks(2) });
 
-    fun filter(records: List<DebugWeightRecord>): List<DebugWeightRecord> {
-        val latestAt = records.lastOrNull()?.measuredAt ?: return emptyList()
-        val rangeStartAt = startAt(latestAt)
-        return records.filter { !it.measuredAt.isBefore(rangeStartAt) }
+    fun filter(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): List<DebugWeightRecord> {
+        val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return emptyList()
+        val rangeStartAt = startAt(rangeEndAt)
+        return records.filter { !it.measuredAt.isBefore(rangeStartAt) && !it.measuredAt.isAfter(rangeEndAt) }
+    }
+
+    fun durationAt(endAt: LocalDateTime): Duration {
+        return Duration.between(startAt(endAt), endAt)
+    }
+
+    fun minimumEndAt(records: List<DebugWeightRecord>): LocalDateTime? {
+        val firstAt = records.firstOrNull()?.measuredAt ?: return null
+        val latestAt = records.lastOrNull()?.measuredAt ?: return null
+        val endForFirstRecord = endAt(firstAt)
+        return if (endForFirstRecord.isAfter(latestAt)) latestAt else endForFirstRecord
     }
 }
 
+private data class WeightTrendLine(
+    val startWeightKg: Double,
+    val endWeightKg: Double,
+)
+
 private fun DebugWeightRecord.isMorning(): Boolean =
     timeBand == "朝"
+
+private fun calculateTrendLine(records: List<DebugWeightRecord>): WeightTrendLine? {
+    if (records.size <= 1) return null
+
+    val count = records.size.toDouble()
+    val sumX = records.indices.sumOf { it.toDouble() }
+    val sumY = records.sumOf { it.weightKg }
+    val sumXY = records.foldIndexed(0.0) { index, total, record ->
+        total + index * record.weightKg
+    }
+    val sumXX = records.indices.sumOf { index ->
+        val x = index.toDouble()
+        x * x
+    }
+    val denominator = count * sumXX - sumX * sumX
+    if (denominator == 0.0) return null
+
+    val slope = (count * sumXY - sumX * sumY) / denominator
+    val intercept = (sumY - slope * sumX) / count
+    val lastX = records.lastIndex.toDouble()
+    return WeightTrendLine(
+        startWeightKg = intercept,
+        endWeightKg = slope * lastX + intercept,
+    )
+}
+
+private fun panChartEndAt(
+    currentEndAt: LocalDateTime,
+    dragAmount: Float,
+    width: Float,
+    records: List<DebugWeightRecord>,
+    range: WeightChartRange,
+): LocalDateTime {
+    val latestAt = records.lastOrNull()?.measuredAt ?: return currentEndAt
+    val minimumEndAt = range.minimumEndAt(records) ?: return currentEndAt
+    if (!minimumEndAt.isBefore(latestAt)) return latestAt
+
+    val chartWidth = max(1f, width)
+    val visibleDuration = max(1L, range.durationAt(currentEndAt).toMillis())
+    val shiftMillis = (-dragAmount / chartWidth * visibleDuration).toLong()
+    val shiftedEndAt = currentEndAt.plus(Duration.ofMillis(shiftMillis))
+    return shiftedEndAt.coerceIn(minimumEndAt, latestAt)
+}
 
 private fun nearestChartIndex(
     touchX: Float,
