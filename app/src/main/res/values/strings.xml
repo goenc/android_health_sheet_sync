@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">ヘルスシート同期</string>
+    <string name="permissions_rationale_title">Health Connect 権限について</string>
 </resources>

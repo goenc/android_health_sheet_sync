@@ -1,5 +1,6 @@
 package com.goenc.healthsheetsync.ui
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,7 +56,10 @@ fun HealthDebugScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
-                onClick = onRequestPermissions,
+                onClick = {
+                    Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
+                    onRequestPermissions()
+                },
                 enabled = state.canRequestPermissions && !state.isLoading,
             ) {
                 Text("権限をリクエスト")
@@ -208,3 +212,5 @@ private fun formatDecimal(value: Double): String {
         roundedOneDecimal.toString()
     }
 }
+
+private const val TAG = "HealthSheetSync"

@@ -1,6 +1,7 @@
 package com.goenc.healthsheetsync
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,7 +23,13 @@ class MainActivity : ComponentActivity() {
     private var healthState by mutableStateOf(HealthDebugUiState())
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
-    ) {
+    ) { grantedPermissions ->
+        Log.d(
+            TAG,
+            "Health Connect permission request result: ${
+                grantedPermissions.sorted().joinToString()
+            }",
+        )
         refreshHealthData()
     }
 
@@ -36,6 +43,12 @@ class MainActivity : ComponentActivity() {
                     HealthDebugScreen(
                         state = healthState,
                         onRequestPermissions = {
+                            Log.d(
+                                TAG,
+                                "Launching Health Connect permission request: ${
+                                    HealthConnectDebugReader.REQUIRED_PERMISSIONS.sorted().joinToString()
+                                }",
+                            )
                             requestPermissions.launch(HealthConnectDebugReader.REQUIRED_PERMISSIONS)
                         },
                         onRefresh = { refreshHealthData() },
@@ -54,3 +67,5 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+private const val TAG = "HealthSheetSync"

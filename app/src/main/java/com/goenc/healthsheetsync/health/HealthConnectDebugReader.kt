@@ -1,6 +1,7 @@
 package com.goenc.healthsheetsync.health
 
 import android.content.Context
+import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
@@ -23,7 +24,9 @@ class HealthConnectDebugReader(private val context: Context) {
 
     suspend fun load(): HealthDebugUiState {
         val debugMessages = mutableListOf<String>()
-        val availability = checkAvailability()
+        val sdkStatusCheck = checkSdkStatus()
+        val availability = sdkStatusCheck.availability
+        debugMessages += "HealthConnect SDK status: ${sdkStatusCheck.status.toSdkStatusLabel()} (${sdkStatusCheck.status})"
         if (availability !is HealthConnectAvailability.Available) {
             return HealthDebugUiState(
                 availability = availability,
@@ -92,13 +95,13 @@ class HealthConnectDebugReader(private val context: Context) {
         )
     }
 
-    private fun checkAvailability(): HealthConnectAvailability {
-        return when (
-            HealthConnectClient.getSdkStatus(
-                context,
-                HEALTH_CONNECT_PROVIDER_PACKAGE,
-            )
-        ) {
+    private fun checkSdkStatus(): SdkStatusCheck {
+        val sdkStatus = HealthConnectClient.getSdkStatus(
+            context,
+            HEALTH_CONNECT_PROVIDER_PACKAGE,
+        )
+        Log.d(TAG, "HealthConnectClient.getSdkStatus returned ${sdkStatus.toSdkStatusLabel()} ($sdkStatus)")
+        val availability = when (sdkStatus) {
             HealthConnectClient.SDK_AVAILABLE -> HealthConnectAvailability.Available
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
                 HealthConnectAvailability.Unavailable("ヘルスコネクト提供元の更新が必要です。")
@@ -106,6 +109,7 @@ class HealthConnectDebugReader(private val context: Context) {
                 HealthConnectAvailability.Unavailable("ヘルスコネクトを利用できないか、インストールされていません。")
             else -> HealthConnectAvailability.Unavailable("ヘルスコネクトの利用可否が不明です。")
         }
+        return SdkStatusCheck(sdkStatus, availability)
     }
 
     private suspend fun readWeightRecords(
@@ -244,8 +248,24 @@ class HealthConnectDebugReader(private val context: Context) {
         return "$prefix: ${message ?: "詳細なし"}"
     }
 
+    private fun Int.toSdkStatusLabel(): String {
+        return when (this) {
+            HealthConnectClient.SDK_AVAILABLE -> "SDK_AVAILABLE"
+            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
+                "SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED"
+            HealthConnectClient.SDK_UNAVAILABLE -> "SDK_UNAVAILABLE"
+            else -> "UNKNOWN"
+        }
+    }
+
+    private data class SdkStatusCheck(
+        val status: Int,
+        val availability: HealthConnectAvailability,
+    )
+
     companion object {
         const val UNKNOWN = "不明"
+        private const val TAG = "HealthSheetSync"
         private const val HEALTH_CONNECT_PROVIDER_PACKAGE = "com.google.android.apps.healthdata"
         private const val PAGE_SIZE = 1_000
 
