@@ -105,17 +105,6 @@ fun HealthDebugScreen(
             }
         }
 
-        DebugSection(title = "歩数記録") {
-            val steps = state.yesterdaySteps
-            DebugLine("件数", state.stepDailyRecords.size.toString())
-            DebugLine("歩数", "${steps?.steps ?: 0}歩")
-            DebugLine("集計開始", steps?.aggregationStartAt?.formatDateTime() ?: "不明")
-            DebugLine("集計終了", steps?.aggregationEndAt?.formatDateTime() ?: "不明")
-            state.stepDailyRecords.take(10).forEach { record ->
-                StepDailyRow(record)
-            }
-        }
-
         DebugSection(title = "デバッグ") {
             state.sourceSummaries.forEach { source ->
                 DebugLine("取得元", source)
@@ -185,7 +174,33 @@ private fun WeightSummary(
 
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
     DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
+    WeightDailySummary(records)
+    TodayStepsLine(dailySteps)
     WeightTrendChart(records, dailySteps)
+}
+
+@Composable
+private fun WeightDailySummary(records: List<DebugWeightRecord>) {
+    records
+        .groupBy { it.targetDate }
+        .toSortedMap(compareByDescending { it })
+        .forEach { (date, dailyRecords) ->
+            Text(
+                text = "$date  朝 ${dailyRecords.weightTextFor("朝")}、夜 ${dailyRecords.weightTextFor("夜")}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+}
+
+@Composable
+private fun TodayStepsLine(dailySteps: List<DebugStepDaily>) {
+    val today = LocalDate.now()
+    val steps = dailySteps.firstOrNull { it.targetDate == today }
+    Text(
+        text = "$today  ${steps?.steps ?: 0}歩",
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
@@ -431,19 +446,6 @@ private fun WeightChartRangeButton(
 }
 
 @Composable
-private fun StepDailyRow(record: DebugStepDaily) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = "${record.targetDate}  ${record.steps}歩",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text("${record.aggregationStartAt.formatDateTime()} - ${record.aggregationEndAt.formatDateTime()}")
-        Spacer(Modifier.height(4.dp))
-    }
-}
-
-@Composable
 private fun GlucoseRecordRow(record: DebugGlucoseRecord) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
@@ -535,6 +537,13 @@ private data class StepBar(
 
 private fun DebugWeightRecord.isMorning(): Boolean =
     timeBand == "朝"
+
+private fun List<DebugWeightRecord>.weightTextFor(timeBand: String): String {
+    return filter { it.timeBand == timeBand }
+        .maxByOrNull { it.measuredAt }
+        ?.let { "${formatDecimal(it.weightKg)}kg" }
+        ?: "-"
+}
 
 private fun calculateTrendLine(records: List<DebugWeightRecord>): WeightTrendLine? {
     if (records.size <= 1) return null
