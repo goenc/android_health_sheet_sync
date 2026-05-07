@@ -43,14 +43,14 @@ fun HealthDebugScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(
-            text = "Health Sheet Sync",
+            text = "ヘルスシート同期",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
 
-        DebugSection(title = "Health Connect") {
-            DebugLine("Availability", state.availability.displayText())
-            DebugLine("Permissions", state.permissions.displayText())
+        DebugSection(title = "ヘルスコネクト") {
+            DebugLine("利用可否", state.availability.displayText())
+            DebugLine("権限", state.permissions.displayText())
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -58,40 +58,40 @@ fun HealthDebugScreen(
                 onClick = onRequestPermissions,
                 enabled = state.canRequestPermissions && !state.isLoading,
             ) {
-                Text("Request Permissions")
+                Text("権限をリクエスト")
             }
             OutlinedButton(
                 onClick = onRefresh,
                 enabled = !state.isLoading,
             ) {
-                Text(if (state.isLoading) "Loading" else "Refresh Data")
+                Text(if (state.isLoading) "読み込み中" else "データ更新")
             }
         }
 
-        DebugSection(title = "WeightRecord") {
-            DebugLine("Count", state.weightRecords.size.toString())
+        DebugSection(title = "体重記録") {
+            DebugLine("件数", state.weightRecords.size.toString())
             state.weightRecords.take(10).forEach { record ->
                 WeightRecordRow(record)
             }
         }
 
-        DebugSection(title = "BloodGlucoseRecord") {
-            DebugLine("Count", state.glucoseRecords.size.toString())
+        DebugSection(title = "血糖値記録") {
+            DebugLine("件数", state.glucoseRecords.size.toString())
             state.glucoseRecords.take(10).forEach { record ->
                 GlucoseRecordRow(record)
             }
         }
 
-        DebugSection(title = "Yesterday Steps") {
+        DebugSection(title = "昨日の歩数") {
             val steps = state.yesterdaySteps
-            DebugLine("Steps", "${steps?.steps ?: 0} steps")
-            DebugLine("Aggregation Start", steps?.aggregationStartAt?.formatDateTime() ?: "unknown")
-            DebugLine("Aggregation End", steps?.aggregationEndAt?.formatDateTime() ?: "unknown")
+            DebugLine("歩数", "${steps?.steps ?: 0}歩")
+            DebugLine("集計開始", steps?.aggregationStartAt?.formatDateTime() ?: "不明")
+            DebugLine("集計終了", steps?.aggregationEndAt?.formatDateTime() ?: "不明")
         }
 
-        DebugSection(title = "Debug") {
+        DebugSection(title = "デバッグ") {
             state.sourceSummaries.forEach { source ->
-                DebugLine("Source", source)
+                DebugLine("取得元", source)
             }
             state.debugMessages.forEach { message ->
                 Text(
@@ -148,9 +148,9 @@ private fun WeightRecordRow(record: DebugWeightRecord) {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        Text("${formatDecimal(record.weightKg)} kg / target ${record.targetDate}")
-        Text("id ${record.healthConnectId}")
-        Text("source ${record.sourceAppName} / ${record.sourcePackageName}")
+        Text("${formatDecimal(record.weightKg)} kg / 対象日 ${record.targetDate}")
+        Text("識別子 ${record.healthConnectId}")
+        Text("取得元 ${record.sourceAppName} / ${record.sourcePackageName}")
         Spacer(Modifier.height(4.dp))
     }
 }
@@ -164,26 +164,36 @@ private fun GlucoseRecordRow(record: DebugGlucoseRecord) {
             fontWeight = FontWeight.SemiBold,
         )
         Text("${formatDecimal(record.bloodGlucoseMgDl)} mg/dL / ${record.mealRelation}")
-        Text("target ${record.targetDate}")
-        Text("id ${record.healthConnectId}")
-        Text("source ${record.sourceAppName} / ${record.sourcePackageName}")
+        Text("対象日 ${record.targetDate}")
+        Text("識別子 ${record.healthConnectId}")
+        Text("取得元 ${record.sourceAppName} / ${record.sourcePackageName}")
         Spacer(Modifier.height(4.dp))
     }
 }
 
 private fun HealthConnectAvailability.displayText(): String {
     return when (this) {
-        HealthConnectAvailability.Checking -> "checking"
-        HealthConnectAvailability.Available -> "available"
+        HealthConnectAvailability.Checking -> "確認中"
+        HealthConnectAvailability.Available -> "利用可能"
         is HealthConnectAvailability.Unavailable -> reason
     }
 }
 
 private fun PermissionState.displayText(): String {
     return when (this) {
-        PermissionState.Unknown -> "unknown"
-        is PermissionState.Granted -> "granted ($grantedCount/$requiredCount)"
-        is PermissionState.Missing -> "missing ($grantedCount/$requiredCount): ${missingPermissions.joinToString()}"
+        PermissionState.Unknown -> "不明"
+        is PermissionState.Granted -> "許可済み ($grantedCount/$requiredCount)"
+        is PermissionState.Missing ->
+            "不足 ($grantedCount/$requiredCount): ${missingPermissions.joinToString { it.toPermissionLabel() }}"
+    }
+}
+
+private fun String.toPermissionLabel(): String {
+    return when {
+        contains("READ_WEIGHT") -> "体重の読み取り"
+        contains("READ_BLOOD_GLUCOSE") -> "血糖値の読み取り"
+        contains("READ_STEPS") -> "歩数の読み取り"
+        else -> this
     }
 }
 

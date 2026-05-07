@@ -36,7 +36,7 @@ class HealthConnectDebugReader(private val context: Context) {
         val grantedPermissions = runCatching {
             client.permissionController.getGrantedPermissions()
         }.getOrElse { error ->
-            debugMessages += error.debugSummary("Permission check failed")
+            debugMessages += error.debugSummary("権限確認に失敗しました")
             emptySet()
         }
         val missingPermissions = REQUIRED_PERMISSIONS.minus(grantedPermissions).toList().sorted()
@@ -60,24 +60,24 @@ class HealthConnectDebugReader(private val context: Context) {
 
         val now = Instant.now()
         val readStart = now.minus(Duration.ofDays(30))
-        debugMessages += "Read range: ${readStart.toLocalDateTime()} - ${now.toLocalDateTime()}"
+        debugMessages += "読み取り範囲: ${readStart.toLocalDateTime()} - ${now.toLocalDateTime()}"
 
         val weightRecords = runCatching {
             readWeightRecords(client, readStart, now)
         }.getOrElse { error ->
-            debugMessages += error.debugSummary("WeightRecord read failed")
+            debugMessages += error.debugSummary("体重記録の読み取りに失敗しました")
             emptyList()
         }
         val glucoseRecords = runCatching {
             readGlucoseRecords(client, readStart, now)
         }.getOrElse { error ->
-            debugMessages += error.debugSummary("BloodGlucoseRecord read failed")
+            debugMessages += error.debugSummary("血糖値記録の読み取りに失敗しました")
             emptyList()
         }
         val yesterdaySteps = runCatching {
             readYesterdaySteps(client)
         }.getOrElse { error ->
-            debugMessages += error.debugSummary("Steps aggregation failed")
+            debugMessages += error.debugSummary("歩数集計に失敗しました")
             null
         }
 
@@ -101,10 +101,10 @@ class HealthConnectDebugReader(private val context: Context) {
         ) {
             HealthConnectClient.SDK_AVAILABLE -> HealthConnectAvailability.Available
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
-                HealthConnectAvailability.Unavailable("Health Connect provider update is required.")
+                HealthConnectAvailability.Unavailable("ヘルスコネクト提供元の更新が必要です。")
             HealthConnectClient.SDK_UNAVAILABLE ->
-                HealthConnectAvailability.Unavailable("Health Connect is unavailable or not installed.")
-            else -> HealthConnectAvailability.Unavailable("Health Connect availability is unknown.")
+                HealthConnectAvailability.Unavailable("ヘルスコネクトを利用できないか、インストールされていません。")
+            else -> HealthConnectAvailability.Unavailable("ヘルスコネクトの利用可否が不明です。")
         }
     }
 
@@ -216,18 +216,18 @@ class HealthConnectDebugReader(private val context: Context) {
     private fun LocalDateTime.toTimeBand(): String {
         val hour = hour
         return when (hour) {
-            in 4..11 -> "morning"
-            in 12..17 -> "afternoon"
-            else -> "night"
+            in 4..11 -> "朝"
+            in 12..17 -> "昼"
+            else -> "夜"
         }
     }
 
     private fun Int.toMealRelation(): String {
         return when (this) {
-            BloodGlucoseRecord.RELATION_TO_MEAL_GENERAL -> "general"
-            BloodGlucoseRecord.RELATION_TO_MEAL_FASTING -> "fasting"
-            BloodGlucoseRecord.RELATION_TO_MEAL_BEFORE_MEAL -> "before_meal"
-            BloodGlucoseRecord.RELATION_TO_MEAL_AFTER_MEAL -> "after_meal"
+            BloodGlucoseRecord.RELATION_TO_MEAL_GENERAL -> "通常"
+            BloodGlucoseRecord.RELATION_TO_MEAL_FASTING -> "空腹時"
+            BloodGlucoseRecord.RELATION_TO_MEAL_BEFORE_MEAL -> "食前"
+            BloodGlucoseRecord.RELATION_TO_MEAL_AFTER_MEAL -> "食後"
             else -> UNKNOWN
         }
     }
@@ -241,11 +241,11 @@ class HealthConnectDebugReader(private val context: Context) {
     }
 
     private fun Throwable.debugSummary(prefix: String): String {
-        return "$prefix: ${this::class.java.simpleName}: ${message ?: "no message"}"
+        return "$prefix: ${message ?: "詳細なし"}"
     }
 
     companion object {
-        const val UNKNOWN = "unknown"
+        const val UNKNOWN = "不明"
         private const val HEALTH_CONNECT_PROVIDER_PACKAGE = "com.google.android.apps.healthdata"
         private const val PAGE_SIZE = 1_000
 
