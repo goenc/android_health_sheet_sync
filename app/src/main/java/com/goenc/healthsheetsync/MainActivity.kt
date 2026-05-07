@@ -4,44 +4,53 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.lifecycleScope
+import com.goenc.healthsheetsync.health.HealthConnectDebugReader
+import com.goenc.healthsheetsync.health.HealthDebugUiState
+import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private lateinit var healthReader: HealthConnectDebugReader
+    private var healthState by mutableStateOf(HealthDebugUiState())
+    private val requestPermissions = registerForActivityResult(
+        HealthConnectDebugReader.permissionRequestContract(),
+    ) {
+        refreshHealthData()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        healthReader = HealthConnectDebugReader(applicationContext)
         enableEdgeToEdge()
         setContent {
             HealthSheetSyncTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
+                Scaffold { innerPadding ->
+                    HealthDebugScreen(
+                        state = healthState,
+                        onRequestPermissions = {
+                            requestPermissions.launch(HealthConnectDebugReader.REQUIRED_PERMISSIONS)
+                        },
+                        onRefresh = { refreshHealthData() },
+                        modifier = Modifier.padding(innerPadding),
                     )
                 }
             }
         }
+        refreshHealthData()
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    HealthSheetSyncTheme {
-        Greeting("Android")
+    private fun refreshHealthData() {
+        lifecycleScope.launch {
+            healthState = healthState.copy(isLoading = true)
+            healthState = healthReader.load()
+        }
     }
 }
