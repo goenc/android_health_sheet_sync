@@ -1,5 +1,6 @@
 package com.goenc.healthsheetsync.ui
 
+import android.graphics.Paint
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -29,15 +30,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.PermissionState
+import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -213,6 +218,7 @@ private fun WeightTrendChart(
     val gridColor = colorScheme.outlineVariant
     val trendLineColor = Color(0xFFD32F2F)
     val stepBarColor = Color(0x667B1FA2)
+    val weekBoundaryColor = colorScheme.outlineVariant
     val axisColor = colorScheme.outline
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -248,15 +254,15 @@ private fun WeightTrendChart(
                             touchX = offset.x,
                             width = size.width.toFloat(),
                             pointCount = chartRecords.size,
-                            horizontalPadding = 18.dp.toPx(),
+                            horizontalPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
                         )
                     }
                 }
         ) {
             if (chartRecords.isEmpty()) return@Canvas
 
-            val leftPadding = 18.dp.toPx()
-            val rightPadding = 18.dp.toPx()
+            val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
+            val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
             val topPadding = 18.dp.toPx()
             val bottomPadding = 26.dp.toPx()
             val chartLeft = leftPadding
@@ -268,6 +274,10 @@ private fun WeightTrendChart(
             val minWeight = chartRecords.minOf { it.weightKg }
             val maxWeight = chartRecords.maxOf { it.weightKg }
             val weightRange = max(1.0, maxWeight - minWeight)
+            val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = axisColor.toArgb()
+                textSize = 11.sp.toPx()
+            }
 
             fun xAtPosition(index: Float): Float {
                 return if (chartRecords.size == 1) {
@@ -286,6 +296,11 @@ private fun WeightTrendChart(
                 return chartBottom - chartHeight * ratio
             }
 
+            fun stepYAt(steps: Float): Float {
+                val ratio = (steps / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)
+                return chartBottom - chartHeight * ratio
+            }
+
             repeat(4) { index ->
                 val y = chartTop + chartHeight * index / 3f
                 drawLine(
@@ -301,6 +316,34 @@ private fun WeightTrendChart(
                 end = Offset(chartLeft, chartBottom),
                 strokeWidth = 1.dp.toPx(),
             )
+            drawLine(
+                color = axisColor,
+                start = Offset(chartRight, chartTop),
+                end = Offset(chartRight, chartBottom),
+                strokeWidth = 1.dp.toPx(),
+            )
+            chartRecords.zipWithNext().forEachIndexed { index, pair ->
+                val (previous, current) = pair
+                if (previous.targetDate.dayOfWeek == DayOfWeek.SUNDAY &&
+                    current.targetDate.dayOfWeek == DayOfWeek.MONDAY
+                ) {
+                    val x = (xAt(index) + xAt(index + 1)) / 2f
+                    drawLine(
+                        color = weekBoundaryColor,
+                        start = Offset(x, chartTop),
+                        end = Offset(x, chartBottom),
+                        strokeWidth = 1.dp.toPx(),
+                    )
+                }
+            }
+
+            drawContext.canvas.nativeCanvas.apply {
+                labelPaint.textAlign = Paint.Align.RIGHT
+                drawText("1", chartLeft - 6.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
+                labelPaint.textAlign = Paint.Align.LEFT
+                drawText("${formatDecimal(maxWeight)}kg", chartRight + 6.dp.toPx(), chartTop + 4.dp.toPx(), labelPaint)
+                drawText("${formatDecimal(minWeight)}kg", chartRight + 6.dp.toPx(), chartBottom, labelPaint)
+            }
 
             calculateStepBars(dailySteps, chartRecords).forEach { stepBar ->
                 val stepRatio = (stepBar.steps.toFloat() / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)
@@ -587,3 +630,6 @@ private fun nearestChartIndex(
 
 private const val TAG = "HealthSheetSync"
 private const val STEP_CHART_MAX_STEPS = 30_000f
+private const val STEP_REFERENCE_STEPS = 10_000f
+private const val CHART_LEFT_PADDING_DP = 30
+private const val CHART_RIGHT_PADDING_DP = 56
