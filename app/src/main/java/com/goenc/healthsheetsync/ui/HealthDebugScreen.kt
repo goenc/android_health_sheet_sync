@@ -23,11 +23,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
@@ -173,12 +174,17 @@ private fun WeightSummary(records: List<DebugWeightRecord>) {
 
 @Composable
 private fun WeightTrendChart(records: List<DebugWeightRecord>) {
-    val chartRecords = remember(records) { records.sortedBy { it.measuredAt } }
+    val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
+    var selectedRange by remember { mutableStateOf(WeightChartRange.OneMonth) }
+    val chartRecords = remember(sortedRecords, selectedRange) {
+        selectedRange.filter(sortedRecords)
+    }
     var selectedIndex by remember(chartRecords) { mutableStateOf(chartRecords.lastIndex) }
     val selectedRecord = chartRecords.getOrNull(selectedIndex)
     val colorScheme = MaterialTheme.colorScheme
     val lineColor = colorScheme.primary
     val pointColor = colorScheme.primary
+    val morningPointColor = Color(0xFF2E7D32)
     val selectedColor = colorScheme.tertiary
     val gridColor = colorScheme.outlineVariant
 
@@ -188,6 +194,15 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
             style = MaterialTheme.typography.labelMedium,
             color = colorScheme.primary,
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WeightChartRange.entries.forEach { range ->
+                WeightChartRangeButton(
+                    range = range,
+                    selected = range == selectedRange,
+                    onClick = { selectedRange = range },
+                )
+            }
+        }
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -260,7 +275,7 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
 
             chartRecords.forEachIndexed { index, record ->
                 drawCircle(
-                    color = pointColor,
+                    color = if (record.isMorning()) morningPointColor else pointColor,
                     radius = 4.dp.toPx(),
                     center = Offset(xAt(index), yAt(record.weightKg)),
                 )
@@ -275,7 +290,7 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
                     strokeWidth = 1.dp.toPx(),
                 )
                 drawCircle(
-                    color = selectedColor,
+                    color = if (record.isMorning()) morningPointColor else selectedColor,
                     radius = 7.dp.toPx(),
                     center = selectedPoint,
                 )
@@ -287,6 +302,23 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
             )
+        }
+    }
+}
+
+@Composable
+private fun WeightChartRangeButton(
+    range: WeightChartRange,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(onClick = onClick) {
+            Text(range.label)
+        }
+    } else {
+        OutlinedButton(onClick = onClick) {
+            Text(range.label)
         }
     }
 }
@@ -344,6 +376,23 @@ private fun formatDecimal(value: Double): String {
         roundedOneDecimal.toString()
     }
 }
+
+private enum class WeightChartRange(
+    val label: String,
+    private val startAt: (LocalDateTime) -> LocalDateTime,
+) {
+    OneMonth("1か月", { latestAt -> latestAt.minusMonths(1) }),
+    TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) });
+
+    fun filter(records: List<DebugWeightRecord>): List<DebugWeightRecord> {
+        val latestAt = records.lastOrNull()?.measuredAt ?: return emptyList()
+        val rangeStartAt = startAt(latestAt)
+        return records.filter { !it.measuredAt.isBefore(rangeStartAt) }
+    }
+}
+
+private fun DebugWeightRecord.isMorning(): Boolean =
+    timeBand == "朝"
 
 private fun nearestChartIndex(
     touchX: Float,
