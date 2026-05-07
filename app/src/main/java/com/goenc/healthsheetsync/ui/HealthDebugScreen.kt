@@ -2,7 +2,6 @@ package com.goenc.healthsheetsync.ui
 
 import android.util.Log
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
@@ -88,7 +89,7 @@ fun HealthDebugScreen(
         }
 
         DebugSection(title = "体重記録") {
-            WeightSummary(state.weightRecords)
+            WeightSummary(state.weightRecords, state.yesterdaySteps)
         }
 
         DebugSection(title = "血糖値記録") {
@@ -157,7 +158,10 @@ private fun DebugLine(label: String, value: String) {
 }
 
 @Composable
-private fun WeightSummary(records: List<DebugWeightRecord>) {
+private fun WeightSummary(
+    records: List<DebugWeightRecord>,
+    dailySteps: DebugStepDaily?,
+) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
 
     DebugLine("件数", records.size.toString())
@@ -171,11 +175,14 @@ private fun WeightSummary(records: List<DebugWeightRecord>) {
 
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
     DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
-    WeightTrendChart(records)
+    WeightTrendChart(records, dailySteps)
 }
 
 @Composable
-private fun WeightTrendChart(records: List<DebugWeightRecord>) {
+private fun WeightTrendChart(
+    records: List<DebugWeightRecord>,
+    dailySteps: DebugStepDaily?,
+) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.OneMonth) }
     var chartEndAt by remember(sortedRecords, selectedRange) {
@@ -186,6 +193,13 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
     }
     var selectedIndex by remember(chartRecords) { mutableStateOf(chartRecords.lastIndex) }
     val selectedRecord = chartRecords.getOrNull(selectedIndex)
+    val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
+    val earliestEndAt = remember(sortedRecords, selectedRange) {
+        selectedRange.minimumEndAt(sortedRecords)
+    }
+    val sliderPosition = remember(chartEndAt, earliestEndAt, latestEndAt) {
+        chartSliderPosition(chartEndAt, earliestEndAt, latestEndAt)
+    }
     val colorScheme = MaterialTheme.colorScheme
     val lineColor = colorScheme.primary
     val pointColor = colorScheme.primary
@@ -193,6 +207,8 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
     val selectedColor = colorScheme.tertiary
     val gridColor = colorScheme.outlineVariant
     val trendLineColor = Color(0xFFD32F2F)
+    val stepBarColor = Color(0x667B1FA2)
+    val axisColor = colorScheme.outline
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -209,6 +225,13 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
                 )
             }
         }
+        Slider(
+            value = sliderPosition,
+            onValueChange = { position ->
+                chartEndAt = chartEndAtFromSlider(position, earliestEndAt, latestEndAt)
+            },
+            enabled = earliestEndAt != null && latestEndAt != null && earliestEndAt.isBefore(latestEndAt),
+        )
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
@@ -224,19 +247,6 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
                         )
                     }
                 }
-                .pointerInput(sortedRecords, selectedRange, chartEndAt) {
-                    detectHorizontalDragGestures { change, dragAmount ->
-                        val currentEndAt = chartEndAt ?: return@detectHorizontalDragGestures
-                        chartEndAt = panChartEndAt(
-                            currentEndAt = currentEndAt,
-                            dragAmount = dragAmount,
-                            width = size.width.toFloat(),
-                            records = sortedRecords,
-                            range = selectedRange,
-                        )
-                        change.consume()
-                    }
-                },
         ) {
             if (chartRecords.isEmpty()) return@Canvas
 
@@ -254,12 +264,16 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
             val maxWeight = chartRecords.maxOf { it.weightKg }
             val weightRange = max(1.0, maxWeight - minWeight)
 
-            fun xAt(index: Int): Float {
+            fun xAtPosition(index: Float): Float {
                 return if (chartRecords.size == 1) {
                     chartLeft + chartWidth / 2f
                 } else {
-                    chartLeft + chartWidth * index / (chartRecords.lastIndex)
+                    chartLeft + chartWidth * index / chartRecords.lastIndex
                 }
+            }
+
+            fun xAt(index: Int): Float {
+                return xAtPosition(index.toFloat())
             }
 
             fun yAt(weightKg: Double): Float {
@@ -274,6 +288,23 @@ private fun WeightTrendChart(records: List<DebugWeightRecord>) {
                     start = Offset(chartLeft, y),
                     end = Offset(chartRight, y),
                     strokeWidth = 1.dp.toPx(),
+                )
+            }
+            drawLine(
+                color = axisColor,
+                start = Offset(chartLeft, chartTop),
+                end = Offset(chartLeft, chartBottom),
+                strokeWidth = 1.dp.toPx(),
+            )
+
+            calculateStepBar(dailySteps, chartRecords)?.let { stepBar ->
+                val stepRatio = (stepBar.steps.toFloat() / max(10_000f, stepBar.steps.toFloat())).coerceIn(0f, 1f)
+                val barHeight = chartHeight * stepRatio
+                val barWidth = 12.dp.toPx()
+                drawRect(
+                    color = stepBarColor,
+                    topLeft = Offset(xAtPosition(stepBar.centerIndex) - barWidth / 2f, chartBottom - barHeight),
+                    size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
                 )
             }
 
@@ -436,6 +467,11 @@ private data class WeightTrendLine(
     val endWeightKg: Double,
 )
 
+private data class StepBar(
+    val centerIndex: Float,
+    val steps: Long,
+)
+
 private fun DebugWeightRecord.isMorning(): Boolean =
     timeBand == "朝"
 
@@ -464,22 +500,46 @@ private fun calculateTrendLine(records: List<DebugWeightRecord>): WeightTrendLin
     )
 }
 
-private fun panChartEndAt(
-    currentEndAt: LocalDateTime,
-    dragAmount: Float,
-    width: Float,
+private fun calculateStepBar(
+    dailySteps: DebugStepDaily?,
     records: List<DebugWeightRecord>,
-    range: WeightChartRange,
-): LocalDateTime {
-    val latestAt = records.lastOrNull()?.measuredAt ?: return currentEndAt
-    val minimumEndAt = range.minimumEndAt(records) ?: return currentEndAt
-    if (!minimumEndAt.isBefore(latestAt)) return latestAt
+): StepBar? {
+    if (dailySteps == null || dailySteps.steps <= 0) return null
+    val dayIndices = records
+        .mapIndexedNotNull { index, record ->
+            if (record.targetDate == dailySteps.targetDate) index else null
+        }
+    if (dayIndices.isEmpty()) return null
 
-    val chartWidth = max(1f, width)
-    val visibleDuration = max(1L, range.durationAt(currentEndAt).toMillis())
-    val shiftMillis = (-dragAmount / chartWidth * visibleDuration).toLong()
-    val shiftedEndAt = currentEndAt.plus(Duration.ofMillis(shiftMillis))
-    return shiftedEndAt.coerceIn(minimumEndAt, latestAt)
+    return StepBar(
+        centerIndex = (dayIndices.first() + dayIndices.last()) / 2f,
+        steps = dailySteps.steps,
+    )
+}
+
+private fun chartSliderPosition(
+    currentEndAt: LocalDateTime?,
+    earliestEndAt: LocalDateTime?,
+    latestEndAt: LocalDateTime?,
+): Float {
+    if (currentEndAt == null || earliestEndAt == null || latestEndAt == null) return 1f
+    val totalMillis = Duration.between(earliestEndAt, latestEndAt).toMillis()
+    if (totalMillis <= 0L) return 1f
+
+    val currentMillis = Duration.between(earliestEndAt, currentEndAt.coerceIn(earliestEndAt, latestEndAt)).toMillis()
+    return (currentMillis.toFloat() / totalMillis).coerceIn(0f, 1f)
+}
+
+private fun chartEndAtFromSlider(
+    position: Float,
+    earliestEndAt: LocalDateTime?,
+    latestEndAt: LocalDateTime?,
+): LocalDateTime? {
+    if (earliestEndAt == null || latestEndAt == null) return latestEndAt
+    val totalMillis = Duration.between(earliestEndAt, latestEndAt).toMillis()
+    if (totalMillis <= 0L) return latestEndAt
+
+    return earliestEndAt.plus(Duration.ofMillis((totalMillis * position.coerceIn(0f, 1f)).toLong()))
 }
 
 private fun nearestChartIndex(
