@@ -1,6 +1,8 @@
 package com.goenc.healthsheetsync.ui
 
 import android.util.Log
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +19,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,6 +37,8 @@ import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.PermissionState
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
@@ -73,10 +85,7 @@ fun HealthDebugScreen(
         }
 
         DebugSection(title = "体重記録") {
-            DebugLine("件数", state.weightRecords.size.toString())
-            state.weightRecords.take(10).forEach { record ->
-                WeightRecordRow(record)
-            }
+            WeightSummary(state.weightRecords)
         }
 
         DebugSection(title = "血糖値記録") {
@@ -145,17 +154,140 @@ private fun DebugLine(label: String, value: String) {
 }
 
 @Composable
-private fun WeightRecordRow(record: DebugWeightRecord) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+private fun WeightSummary(records: List<DebugWeightRecord>) {
+    val latestRecord = records.maxByOrNull { it.measuredAt }
+
+    DebugLine("件数", records.size.toString())
+    if (latestRecord == null) {
         Text(
-            text = "${record.measuredAt.formatDateTime()} / ${record.timeBand}",
+            text = "体重記録はありません",
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
         )
-        Text("${formatDecimal(record.weightKg)} kg / 対象日 ${record.targetDate}")
-        Text("識別子 ${record.healthConnectId}")
-        Text("取得元 ${record.sourceAppName} / ${record.sourcePackageName}")
-        Spacer(Modifier.height(4.dp))
+        return
+    }
+
+    DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
+    DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
+    WeightTrendChart(records)
+}
+
+@Composable
+private fun WeightTrendChart(records: List<DebugWeightRecord>) {
+    val chartRecords = remember(records) { records.sortedBy { it.measuredAt } }
+    var selectedIndex by remember(chartRecords) { mutableStateOf(chartRecords.lastIndex) }
+    val selectedRecord = chartRecords.getOrNull(selectedIndex)
+    val colorScheme = MaterialTheme.colorScheme
+    val lineColor = colorScheme.primary
+    val pointColor = colorScheme.primary
+    val selectedColor = colorScheme.tertiary
+    val gridColor = colorScheme.outlineVariant
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "体重グラフ",
+            style = MaterialTheme.typography.labelMedium,
+            color = colorScheme.primary,
+        )
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .pointerInput(chartRecords) {
+                    detectTapGestures { offset ->
+                        if (chartRecords.isEmpty()) return@detectTapGestures
+                        selectedIndex = nearestChartIndex(
+                            touchX = offset.x,
+                            width = size.width.toFloat(),
+                            pointCount = chartRecords.size,
+                            horizontalPadding = 18.dp.toPx(),
+                        )
+                    }
+                },
+        ) {
+            if (chartRecords.isEmpty()) return@Canvas
+
+            val leftPadding = 18.dp.toPx()
+            val rightPadding = 18.dp.toPx()
+            val topPadding = 18.dp.toPx()
+            val bottomPadding = 26.dp.toPx()
+            val chartLeft = leftPadding
+            val chartRight = size.width - rightPadding
+            val chartTop = topPadding
+            val chartBottom = size.height - bottomPadding
+            val chartWidth = max(1f, chartRight - chartLeft)
+            val chartHeight = max(1f, chartBottom - chartTop)
+            val minWeight = chartRecords.minOf { it.weightKg }
+            val maxWeight = chartRecords.maxOf { it.weightKg }
+            val weightRange = max(1.0, maxWeight - minWeight)
+
+            fun xAt(index: Int): Float {
+                return if (chartRecords.size == 1) {
+                    chartLeft + chartWidth / 2f
+                } else {
+                    chartLeft + chartWidth * index / (chartRecords.lastIndex)
+                }
+            }
+
+            fun yAt(weightKg: Double): Float {
+                val ratio = ((weightKg - minWeight) / weightRange).toFloat()
+                return chartBottom - chartHeight * ratio
+            }
+
+            repeat(4) { index ->
+                val y = chartTop + chartHeight * index / 3f
+                drawLine(
+                    color = gridColor,
+                    start = Offset(chartLeft, y),
+                    end = Offset(chartRight, y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+
+            val path = Path()
+            chartRecords.forEachIndexed { index, record ->
+                val point = Offset(xAt(index), yAt(record.weightKg))
+                if (index == 0) {
+                    path.moveTo(point.x, point.y)
+                } else {
+                    path.lineTo(point.x, point.y)
+                }
+            }
+            drawPath(
+                path = path,
+                color = lineColor,
+                style = Stroke(width = 3.dp.toPx()),
+            )
+
+            chartRecords.forEachIndexed { index, record ->
+                drawCircle(
+                    color = pointColor,
+                    radius = 4.dp.toPx(),
+                    center = Offset(xAt(index), yAt(record.weightKg)),
+                )
+            }
+
+            chartRecords.getOrNull(selectedIndex)?.let { record ->
+                val selectedPoint = Offset(xAt(selectedIndex), yAt(record.weightKg))
+                drawLine(
+                    color = selectedColor,
+                    start = Offset(selectedPoint.x, chartTop),
+                    end = Offset(selectedPoint.x, chartBottom),
+                    strokeWidth = 1.dp.toPx(),
+                )
+                drawCircle(
+                    color = selectedColor,
+                    radius = 7.dp.toPx(),
+                    center = selectedPoint,
+                )
+            }
+        }
+        selectedRecord?.let { record ->
+            Text(
+                text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.weightKg)} kg",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
 
@@ -211,6 +343,30 @@ private fun formatDecimal(value: Double): String {
     } else {
         roundedOneDecimal.toString()
     }
+}
+
+private fun nearestChartIndex(
+    touchX: Float,
+    width: Float,
+    pointCount: Int,
+    horizontalPadding: Float,
+): Int {
+    if (pointCount <= 1) return 0
+    val chartLeft = horizontalPadding
+    val chartRight = width - horizontalPadding
+    val chartWidth = max(1f, chartRight - chartLeft)
+    val clampedX = touchX.coerceIn(chartLeft, chartRight)
+    var nearestIndex = 0
+    var nearestDistance = Float.MAX_VALUE
+    repeat(pointCount) { index ->
+        val x = chartLeft + chartWidth * index / (pointCount - 1)
+        val distance = abs(clampedX - x)
+        if (distance < nearestDistance) {
+            nearestDistance = distance
+            nearestIndex = index
+        }
+    }
+    return nearestIndex
 }
 
 private const val TAG = "HealthSheetSync"
