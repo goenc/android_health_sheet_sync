@@ -70,30 +70,14 @@ fun HealthDebugScreen(
         if (showSettings) {
             SettingsScreen(
                 state = state,
+                onRequestPermissions = onRequestPermissions,
+                onRefresh = onRefresh,
                 onBack = { showSettings = false },
             )
             return@Column
         }
 
         Header(onSettingsClick = { showSettings = true })
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                onClick = {
-                    Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
-                    onRequestPermissions()
-                },
-                enabled = state.canRequestPermissions && !state.isLoading,
-            ) {
-                Text("権限をリクエスト")
-            }
-            OutlinedButton(
-                onClick = onRefresh,
-                enabled = !state.isLoading,
-            ) {
-                Text(if (state.isLoading) "読み込み中" else "データ更新")
-            }
-        }
 
         DebugSection(title = "体重記録") {
             WeightSummary(state.weightRecords, state.stepDailyRecords)
@@ -103,19 +87,6 @@ fun HealthDebugScreen(
             DebugLine("件数", state.glucoseRecords.size.toString())
             state.glucoseRecords.take(10).forEach { record ->
                 GlucoseRecordRow(record)
-            }
-        }
-
-        DebugSection(title = "デバッグ") {
-            state.sourceSummaries.forEach { source ->
-                DebugLine("取得元", source)
-            }
-            state.debugMessages.forEach { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
             }
         }
     }
@@ -143,6 +114,8 @@ private fun Header(
 @Composable
 private fun SettingsScreen(
     state: HealthDebugUiState,
+    onRequestPermissions: () -> Unit,
+    onRefresh: () -> Unit,
     onBack: () -> Unit,
 ) {
     Text(
@@ -150,12 +123,41 @@ private fun SettingsScreen(
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold,
     )
-    OutlinedButton(onClick = onBack) {
-        Text("戻る")
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(
+            onClick = {
+                Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
+                onRequestPermissions()
+            },
+            enabled = state.canRequestPermissions && !state.isLoading,
+        ) {
+            Text("権限をリクエスト")
+        }
+        OutlinedButton(
+            onClick = onRefresh,
+            enabled = !state.isLoading,
+        ) {
+            Text(if (state.isLoading) "読み込み中" else "データ更新")
+        }
+        OutlinedButton(onClick = onBack) {
+            Text("戻る")
+        }
     }
     DebugSection(title = "ヘルスコネクト") {
         DebugLine("利用可否", state.availability.displayText())
         DebugLine("権限", state.permissions.displayText())
+    }
+    DebugSection(title = "デバッグ") {
+        state.sourceSummaries.forEach { source ->
+            DebugLine("取得元", source)
+        }
+        state.debugMessages.forEach { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 
