@@ -20,7 +20,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,9 +64,7 @@ fun HealthDebugScreen(
     onUploadSpreadsheet: () -> Unit,
     spreadsheetUploadStatus: String?,
     isSpreadsheetUploading: Boolean,
-    spreadsheetWebAppUrl: String,
     targetSpreadsheetUrl: String,
-    onSpreadsheetWebAppUrlChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -91,9 +88,7 @@ fun HealthDebugScreen(
                 onRefresh = onRefresh,
                 onSaveExternalWorkbook = onSaveExternalWorkbook,
                 externalSaveStatus = externalSaveStatus,
-                spreadsheetWebAppUrl = spreadsheetWebAppUrl,
                 targetSpreadsheetUrl = targetSpreadsheetUrl,
-                onSpreadsheetWebAppUrlChange = onSpreadsheetWebAppUrlChange,
                 onBack = { showSettings = false },
             )
             return@Column
@@ -103,8 +98,7 @@ fun HealthDebugScreen(
             onSettingsClick = { showSettings = true },
             onUploadSpreadsheet = onUploadSpreadsheet,
             canUploadSpreadsheet = !state.isLoading &&
-                !isSpreadsheetUploading &&
-                spreadsheetWebAppUrl.isNotBlank(),
+                !isSpreadsheetUploading,
             isUploading = isSpreadsheetUploading,
         )
         spreadsheetUploadStatus?.let { status ->
@@ -191,9 +185,7 @@ private fun SettingsScreen(
     onRefresh: () -> Unit,
     onSaveExternalWorkbook: () -> Unit,
     externalSaveStatus: String?,
-    spreadsheetWebAppUrl: String,
     targetSpreadsheetUrl: String,
-    onSpreadsheetWebAppUrlChange: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     Row(
@@ -238,13 +230,7 @@ private fun SettingsScreen(
     }
     DebugSection(title = "アップロード先") {
         DebugLine("対象スプレッドシート", targetSpreadsheetUrl)
-        OutlinedTextField(
-            value = spreadsheetWebAppUrl,
-            onValueChange = onSpreadsheetWebAppUrlChange,
-            label = { Text("Apps Script WebアプリURL") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
+        DebugLine("方式", "Googleログインで直接書き込み")
     }
     DebugSection(title = "ヘルスコネクト") {
         DebugLine("利用可否", state.availability.displayText())

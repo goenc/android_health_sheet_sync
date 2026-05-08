@@ -2,10 +2,11 @@ package com.goenc.healthsheetsync
 
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
@@ -13,6 +14,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
 import com.goenc.healthsheetsync.data.SpreadsheetUploadSettings
 import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploader
@@ -24,11 +29,9 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
-    private lateinit var spreadsheetSettings: SpreadsheetUploadSettings
     private val spreadsheetUploader = SpreadsheetUploader()
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var externalSaveStatus by mutableStateOf<String?>(null)
-    private var spreadsheetWebAppUrl by mutableStateOf("")
     private var spreadsheetUploadStatus by mutableStateOf<String?>(null)
     private var isSpreadsheetUploading by mutableStateOf(false)
     private val requestPermissions = registerForActivityResult(
@@ -62,12 +65,23 @@ class MainActivity : ComponentActivity() {
             "外部保存に失敗しました: ${error.message ?: "原因不明"}"
         }
     }
+    private val startGoogleAuthorization = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        try {
+            val authorizationResult = Identity.getAuthorizationClient(this)
+                .getAuthorizationResultFromIntent(result.data)
+            continueSpreadsheetUpload(authorizationResult.accessToken)
+        } catch (error: ApiException) {
+            Log.e(TAG, "Google authorization failed.", error)
+            isSpreadsheetUploading = false
+            spreadsheetUploadStatus = "Googleログインが完了しませんでした: ${error.localizedMessage ?: error.statusCode}"
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         healthReader = HealthConnectDebugReader(applicationContext)
-        spreadsheetSettings = SpreadsheetUploadSettings(applicationContext)
-        spreadsheetWebAppUrl = spreadsheetSettings.webAppUrl
         enableEdgeToEdge()
         setContent {
             HealthSheetSyncTheme {
@@ -92,12 +106,7 @@ class MainActivity : ComponentActivity() {
                         onUploadSpreadsheet = { uploadSpreadsheetData() },
                         spreadsheetUploadStatus = spreadsheetUploadStatus,
                         isSpreadsheetUploading = isSpreadsheetUploading,
-                        spreadsheetWebAppUrl = spreadsheetWebAppUrl,
                         targetSpreadsheetUrl = SpreadsheetUploadSettings.TARGET_SPREADSHEET_URL,
-                        onSpreadsheetWebAppUrlChange = { url ->
-                            spreadsheetWebAppUrl = url
-                            spreadsheetSettings.webAppUrl = url
-                        },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -114,19 +123,53 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun uploadSpreadsheetData() {
-        val webAppUrl = spreadsheetWebAppUrl.trim()
-        if (webAppUrl.isBlank()) {
-            spreadsheetUploadStatus = "設定画面でWebアプリURLを入力してください"
+        if (isSpreadsheetUploading) {
+            return
+        }
+
+        isSpreadsheetUploading = true
+        spreadsheetUploadStatus = "Googleログインを確認中"
+        val authorizationRequest = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(SHEETS_SCOPE)))
+            .build()
+        Identity.getAuthorizationClient(this)
+            .authorize(authorizationRequest)
+            .addOnSuccessListener { authorizationResult ->
+                if (authorizationResult.hasResolution()) {
+                    val pendingIntent = authorizationResult.pendingIntent
+                    if (pendingIntent == null) {
+                        isSpreadsheetUploading = false
+                        spreadsheetUploadStatus = "Googleログイン画面を開けませんでした"
+                        return@addOnSuccessListener
+                    }
+                    spreadsheetUploadStatus = "Googleログインを完了してください"
+                    startGoogleAuthorization.launch(
+                        IntentSenderRequest.Builder(pendingIntent.intentSender).build(),
+                    )
+                } else {
+                    continueSpreadsheetUpload(authorizationResult.accessToken)
+                }
+            }
+            .addOnFailureListener { error ->
+                Log.e(TAG, "Failed to authorize Google Sheets access.", error)
+                isSpreadsheetUploading = false
+                spreadsheetUploadStatus = "Googleログインに失敗しました: ${error.message ?: "原因不明"}"
+            }
+    }
+
+    private fun continueSpreadsheetUpload(accessToken: String?) {
+        if (accessToken.isNullOrBlank()) {
+            isSpreadsheetUploading = false
+            spreadsheetUploadStatus = "Google認証トークンを取得できませんでした"
             return
         }
 
         lifecycleScope.launch {
-            isSpreadsheetUploading = true
             spreadsheetUploadStatus = "アップロード中"
             spreadsheetUploadStatus = when (
                 val result = spreadsheetUploader.upload(
                     state = healthState,
-                    webAppUrl = webAppUrl,
+                    accessToken = accessToken,
                 )
             ) {
                 is SpreadsheetUploadResult.Success ->
@@ -140,6 +183,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private const val TAG = "HealthSheetSync"
+private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 private const val WORKBOOK_ASSET_NAME = "health_sheet_sync_work_branch_template.xlsx"
 private const val DEFAULT_WORKBOOK_NAME = "health_sheet_sync.xlsx"
 private const val WORKBOOK_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

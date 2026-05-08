@@ -7,107 +7,250 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import java.time.Instant
 
 class SpreadsheetUploader {
     suspend fun upload(
         state: HealthDebugUiState,
-        webAppUrl: String,
+        accessToken: String,
     ): SpreadsheetUploadResult = withContext(Dispatchers.IO) {
-        val trimmedUrl = webAppUrl.trim()
-        if (trimmedUrl.isBlank()) {
-            return@withContext SpreadsheetUploadResult.Failure("WebアプリURLが未設定です")
+        if (accessToken.isBlank()) {
+            return@withContext SpreadsheetUploadResult.Failure("Google認証トークンが空です")
         }
 
         runCatching {
-            val payload = state.toUploadPayload().toString().toByteArray(StandardCharsets.UTF_8)
-            val connection = (URL(trimmedUrl).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 15_000
-                readTimeout = 30_000
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("Accept", "application/json")
+            val sheetNames = loadSheetNames(accessToken).toMutableSet()
+            uploadTables(state).forEach { table ->
+                if (table.values.isNotEmpty()) {
+                    ensureSheet(accessToken, table, sheetNames)
+                    appendRows(accessToken, table)
+                }
             }
-
-            connection.outputStream.use { output ->
-                output.write(payload)
-            }
-
-            val code = connection.responseCode
-            if (code in 200..399) {
-                SpreadsheetUploadResult.Success(
-                    weightCount = state.weightRecords.size,
-                    glucoseCount = state.glucoseRecords.size,
-                    stepCount = state.stepDailyRecords.size,
-                )
-            } else {
-                val errorText = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                SpreadsheetUploadResult.Failure("HTTP $code ${errorText.take(120)}".trim())
-            }
+            SpreadsheetUploadResult.Success(
+                weightCount = state.weightRecords.size,
+                glucoseCount = state.glucoseRecords.size,
+                stepCount = state.stepDailyRecords.size,
+            )
         }.getOrElse { error ->
             SpreadsheetUploadResult.Failure(error.message ?: "原因不明")
         }
     }
 
-    private fun HealthDebugUiState.toUploadPayload(): JSONObject {
-        return JSONObject()
-            .put("spreadsheetId", SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID)
-            .put("sheetGid", SpreadsheetUploadSettings.TARGET_SHEET_GID)
-            .put("uploadedAt", Instant.now().toString())
-            .put(
-                "summary",
-                JSONObject()
-                    .put("weightCount", weightRecords.size)
-                    .put("glucoseCount", glucoseRecords.size)
-                    .put("stepCount", stepDailyRecords.size),
-            )
-            .put(
-                "weightRecords",
-                JSONArray(
-                    weightRecords.map { record ->
-                        JSONObject()
-                            .put("measuredAt", record.measuredAt.toString())
-                            .put("targetDate", record.targetDate.toString())
-                            .put("timeBand", record.timeBand)
-                            .put("weightKg", record.weightKg)
-                            .put("healthConnectId", record.healthConnectId)
-                            .put("sourceAppName", record.sourceAppName)
-                            .put("sourcePackageName", record.sourcePackageName)
-                    },
+    private fun uploadTables(state: HealthDebugUiState): List<SpreadsheetUploadTable> {
+        return listOf(
+            SpreadsheetUploadTable(
+                sheetName = "weightRecords",
+                headers = listOf(
+                    "measuredAt",
+                    "targetDate",
+                    "timeBand",
+                    "weightKg",
+                    "healthConnectId",
+                    "sourceAppName",
+                    "sourcePackageName",
                 ),
-            )
-            .put(
-                "glucoseRecords",
-                JSONArray(
-                    glucoseRecords.map { record ->
-                        JSONObject()
-                            .put("measuredAt", record.measuredAt.toString())
-                            .put("targetDate", record.targetDate.toString())
-                            .put("timeBand", record.timeBand)
-                            .put("bloodGlucoseMgDl", record.bloodGlucoseMgDl)
-                            .put("mealRelation", record.mealRelation)
-                            .put("healthConnectId", record.healthConnectId)
-                            .put("sourceAppName", record.sourceAppName)
-                            .put("sourcePackageName", record.sourcePackageName)
-                    },
+                values = state.weightRecords.map { record ->
+                    listOf(
+                        record.measuredAt.toString(),
+                        record.targetDate.toString(),
+                        record.timeBand,
+                        record.weightKg,
+                        record.healthConnectId,
+                        record.sourceAppName,
+                        record.sourcePackageName,
+                    )
+                },
+            ),
+            SpreadsheetUploadTable(
+                sheetName = "glucoseRecords",
+                headers = listOf(
+                    "measuredAt",
+                    "targetDate",
+                    "timeBand",
+                    "bloodGlucoseMgDl",
+                    "mealRelation",
+                    "healthConnectId",
+                    "sourceAppName",
+                    "sourcePackageName",
                 ),
-            )
-            .put(
-                "stepDailyRecords",
-                JSONArray(
-                    stepDailyRecords.map { record ->
-                        JSONObject()
-                            .put("targetDate", record.targetDate.toString())
-                            .put("steps", record.steps)
-                            .put("aggregationStartAt", record.aggregationStartAt.toString())
-                            .put("aggregationEndAt", record.aggregationEndAt.toString())
-                    },
+                values = state.glucoseRecords.map { record ->
+                    listOf(
+                        record.measuredAt.toString(),
+                        record.targetDate.toString(),
+                        record.timeBand,
+                        record.bloodGlucoseMgDl,
+                        record.mealRelation,
+                        record.healthConnectId,
+                        record.sourceAppName,
+                        record.sourcePackageName,
+                    )
+                },
+            ),
+            SpreadsheetUploadTable(
+                sheetName = "stepDailyRecords",
+                headers = listOf(
+                    "targetDate",
+                    "steps",
+                    "aggregationStartAt",
+                    "aggregationEndAt",
                 ),
+                values = state.stepDailyRecords.map { record ->
+                    listOf(
+                        record.targetDate.toString(),
+                        record.steps,
+                        record.aggregationStartAt.toString(),
+                        record.aggregationEndAt.toString(),
+                    )
+                },
+            ),
+        )
+    }
+
+    private fun loadSheetNames(accessToken: String): Set<String> {
+        val url = URL(
+            "https://sheets.googleapis.com/v4/spreadsheets/" +
+                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}?fields=sheets.properties.title",
+        )
+        val response = requestJson(accessToken, url, method = "GET")
+        val sheets = response.optJSONArray("sheets") ?: return emptySet()
+        return buildSet {
+            repeat(sheets.length()) { index ->
+                val title = sheets
+                    .optJSONObject(index)
+                    ?.optJSONObject("properties")
+                    ?.optString("title")
+                    .orEmpty()
+                if (title.isNotBlank()) {
+                    add(title)
+                }
+            }
+        }
+    }
+
+    private fun ensureSheet(
+        accessToken: String,
+        table: SpreadsheetUploadTable,
+        sheetNames: MutableSet<String>,
+    ) {
+        if (!sheetNames.contains(table.sheetName)) {
+            addSheet(accessToken, table.sheetName)
+            sheetNames.add(table.sheetName)
+        }
+        if (!hasHeader(accessToken, table.sheetName)) {
+            writeHeader(accessToken, table)
+        }
+    }
+
+    private fun addSheet(accessToken: String, sheetName: String) {
+        val url = URL(
+            "https://sheets.googleapis.com/v4/spreadsheets/" +
+                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}:batchUpdate",
+        )
+        val payload = JSONObject()
+            .put(
+                "requests",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put(
+                                "addSheet",
+                                JSONObject()
+                                    .put(
+                                        "properties",
+                                        JSONObject().put("title", sheetName),
+                                    ),
+                            ),
+                    ),
             )
+        requestJson(accessToken, url, method = "POST", payload = payload)
+    }
+
+    private fun hasHeader(accessToken: String, sheetName: String): Boolean {
+        val range = encodePathSegment("'$sheetName'!A1:Z1")
+        val url = URL(
+            "https://sheets.googleapis.com/v4/spreadsheets/" +
+                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range",
+        )
+        val values = requestJson(accessToken, url, method = "GET").optJSONArray("values")
+        val firstRowLength = values?.optJSONArray(0)?.length() ?: 0
+        return firstRowLength > 0
+    }
+
+    private fun writeHeader(accessToken: String, table: SpreadsheetUploadTable) {
+        val range = encodePathSegment("'${table.sheetName}'!A1")
+        val url = URL(
+            "https://sheets.googleapis.com/v4/spreadsheets/" +
+                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range?valueInputOption=RAW",
+        )
+        val payload = JSONObject()
+            .put("majorDimension", "ROWS")
+            .put("values", JSONArray().put(JSONArray(table.headers)))
+        requestJson(accessToken, url, method = "PUT", payload = payload)
+    }
+
+    private fun appendRows(
+        accessToken: String,
+        table: SpreadsheetUploadTable,
+    ) {
+        if (table.values.isEmpty()) {
+            return
+        }
+
+        val range = encodePathSegment("'${table.sheetName}'!A1")
+        val url = URL(
+            "https://sheets.googleapis.com/v4/spreadsheets/" +
+                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range:append" +
+                "?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
+        )
+        val payload = JSONObject()
+            .put("majorDimension", "ROWS")
+            .put("values", JSONArray(table.values.map { row -> JSONArray(row) }))
+        requestJson(accessToken, url, method = "POST", payload = payload)
+    }
+
+    private fun requestJson(
+        accessToken: String,
+        url: URL,
+        method: String,
+        payload: JSONObject? = null,
+    ): JSONObject {
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            doOutput = payload != null
+            setRequestProperty("Authorization", "Bearer $accessToken")
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            setRequestProperty("Accept", "application/json")
+        }
+
+        if (payload != null) {
+            val bytes = payload.toString().toByteArray(StandardCharsets.UTF_8)
+            connection.outputStream.use { output ->
+                output.write(bytes)
+            }
+        }
+
+        val code = connection.responseCode
+        if (code !in 200..399) {
+            val errorText = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            error("HTTP $code ${errorText.take(120)}".trim())
+        }
+        val responseText = connection.inputStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        return if (responseText.isBlank()) JSONObject() else JSONObject(responseText)
+    }
+
+    private fun encodePathSegment(value: String): String {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")
     }
 }
+
+private data class SpreadsheetUploadTable(
+    val sheetName: String,
+    val headers: List<String>,
+    val values: List<List<Any>>,
+)
 
 sealed interface SpreadsheetUploadResult {
     data class Success(
