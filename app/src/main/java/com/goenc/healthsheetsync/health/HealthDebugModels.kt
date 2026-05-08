@@ -6,7 +6,7 @@ import java.time.LocalDateTime
 data class HealthDebugUiState(
     val availability: HealthConnectAvailability = HealthConnectAvailability.Checking,
     val permissions: PermissionState = PermissionState.Unknown,
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val weightRecords: List<DebugWeightRecord> = emptyList(),
     val glucoseRecords: List<DebugGlucoseRecord> = emptyList(),
     val stepDailyRecords: List<DebugStepDaily> = emptyList(),
