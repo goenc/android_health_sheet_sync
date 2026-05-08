@@ -59,6 +59,8 @@ fun HealthDebugScreen(
     state: HealthDebugUiState,
     onRequestPermissions: () -> Unit,
     onRefresh: () -> Unit,
+    onSaveExternalWorkbook: () -> Unit,
+    externalSaveStatus: String?,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -80,6 +82,8 @@ fun HealthDebugScreen(
                 state = state,
                 onRequestPermissions = onRequestPermissions,
                 onRefresh = onRefresh,
+                onSaveExternalWorkbook = onSaveExternalWorkbook,
+                externalSaveStatus = externalSaveStatus,
                 onBack = { showSettings = false },
             )
             return@Column
@@ -148,6 +152,8 @@ private fun SettingsScreen(
     state: HealthDebugUiState,
     onRequestPermissions: () -> Unit,
     onRefresh: () -> Unit,
+    onSaveExternalWorkbook: () -> Unit,
+    externalSaveStatus: String?,
     onBack: () -> Unit,
 ) {
     Text(
@@ -171,9 +177,18 @@ private fun SettingsScreen(
         ) {
             Text(if (state.isLoading) "読み込み中" else "データ更新")
         }
+        OutlinedButton(onClick = onSaveExternalWorkbook) {
+            Text("外部保存")
+        }
         OutlinedButton(onClick = onBack) {
             Text("戻る")
         }
+    }
+    externalSaveStatus?.let { status ->
+        Text(
+            text = status,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
     DebugSection(title = "ヘルスコネクト") {
         DebugLine("利用可否", state.availability.displayText())
