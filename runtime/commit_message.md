@@ -1,6 +1,5 @@
-Googleログインによる直接スプレッドシート書き込みへ変更
+Googleログイン設定エラーの表示を改善
 
-・Google Identity Services の認可依存を追加
-・Apps Script WebアプリURL方式を廃止し Sheets API 直接書き込みへ変更
-・送信前に対象タブとヘッダーを確認して不足時に作成する処理を追加
+・Google API Console 未登録エラー時に packageName と SHA-1 を表示するよう変更
+・Google認可失敗時の原因表示を共通化
 ・デバッグビルド成功を確認

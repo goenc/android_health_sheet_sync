@@ -1,5 +1,7 @@
 package com.goenc.healthsheetsync
 
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -26,6 +28,7 @@ import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
 import kotlinx.coroutines.launch
+import java.security.MessageDigest
 
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
@@ -75,7 +78,7 @@ class MainActivity : ComponentActivity() {
         } catch (error: ApiException) {
             Log.e(TAG, "Google authorization failed.", error)
             isSpreadsheetUploading = false
-            spreadsheetUploadStatus = "Googleログインが完了しませんでした: ${error.localizedMessage ?: error.statusCode}"
+            spreadsheetUploadStatus = "Googleログインが完了しませんでした: ${googleAuthorizationFailureMessage(error)}"
         }
     }
 
@@ -153,7 +156,7 @@ class MainActivity : ComponentActivity() {
             .addOnFailureListener { error ->
                 Log.e(TAG, "Failed to authorize Google Sheets access.", error)
                 isSpreadsheetUploading = false
-                spreadsheetUploadStatus = "Googleログインに失敗しました: ${error.message ?: "原因不明"}"
+                spreadsheetUploadStatus = "Googleログインに失敗しました: ${googleAuthorizationFailureMessage(error)}"
             }
     }
 
@@ -180,10 +183,37 @@ class MainActivity : ComponentActivity() {
             isSpreadsheetUploading = false
         }
     }
+
+    private fun googleAuthorizationFailureMessage(error: Exception): String {
+        val message = error.localizedMessage ?: error.message
+        if (message?.contains(API_CONSOLE_UNREGISTERED_STATUS, ignoreCase = true) == true) {
+            val registrationValues = buildList {
+                add("packageName=$packageName")
+                currentSigningSha1()?.let { sha1 -> add("SHA-1=$sha1") }
+            }.joinToString("、")
+            return "Google API Console の OAuth Android クライアント未登録です。$registrationValues を登録してください"
+        }
+        return message ?: "原因不明"
+    }
+
+    private fun currentSigningSha1(): String? = runCatching {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                .signingInfo
+                ?.apkContentsSigners
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+        }
+        val signature = signatures?.firstOrNull() ?: return null
+        val digest = MessageDigest.getInstance("SHA-1").digest(signature.toByteArray())
+        digest.joinToString(":") { byte -> "%02X".format(byte.toInt() and 0xFF) }
+    }.getOrNull()
 }
 
 private const val TAG = "HealthSheetSync"
 private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
 private const val WORKBOOK_ASSET_NAME = "health_sheet_sync_work_branch_template.xlsx"
 private const val DEFAULT_WORKBOOK_NAME = "health_sheet_sync.xlsx"
 private const val WORKBOOK_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
