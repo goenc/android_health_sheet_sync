@@ -13,6 +13,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.goenc.healthsheetsync.data.SpreadsheetUploadSettings
+import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
+import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import com.goenc.healthsheetsync.health.HealthConnectDebugReader
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
@@ -21,8 +24,13 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
+    private lateinit var spreadsheetSettings: SpreadsheetUploadSettings
+    private val spreadsheetUploader = SpreadsheetUploader()
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var externalSaveStatus by mutableStateOf<String?>(null)
+    private var spreadsheetWebAppUrl by mutableStateOf("")
+    private var spreadsheetUploadStatus by mutableStateOf<String?>(null)
+    private var isSpreadsheetUploading by mutableStateOf(false)
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
     ) { grantedPermissions ->
@@ -58,6 +66,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         healthReader = HealthConnectDebugReader(applicationContext)
+        spreadsheetSettings = SpreadsheetUploadSettings(applicationContext)
+        spreadsheetWebAppUrl = spreadsheetSettings.webAppUrl
         enableEdgeToEdge()
         setContent {
             HealthSheetSyncTheme {
@@ -79,6 +89,15 @@ class MainActivity : ComponentActivity() {
                             createExternalWorkbook.launch(DEFAULT_WORKBOOK_NAME)
                         },
                         externalSaveStatus = externalSaveStatus,
+                        onUploadSpreadsheet = { uploadSpreadsheetData() },
+                        spreadsheetUploadStatus = spreadsheetUploadStatus,
+                        isSpreadsheetUploading = isSpreadsheetUploading,
+                        spreadsheetWebAppUrl = spreadsheetWebAppUrl,
+                        targetSpreadsheetUrl = SpreadsheetUploadSettings.TARGET_SPREADSHEET_URL,
+                        onSpreadsheetWebAppUrlChange = { url ->
+                            spreadsheetWebAppUrl = url
+                            spreadsheetSettings.webAppUrl = url
+                        },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -91,6 +110,31 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             healthState = healthState.copy(isLoading = true)
             healthState = healthReader.load()
+        }
+    }
+
+    private fun uploadSpreadsheetData() {
+        val webAppUrl = spreadsheetWebAppUrl.trim()
+        if (webAppUrl.isBlank()) {
+            spreadsheetUploadStatus = "設定画面でWebアプリURLを入力してください"
+            return
+        }
+
+        lifecycleScope.launch {
+            isSpreadsheetUploading = true
+            spreadsheetUploadStatus = "アップロード中"
+            spreadsheetUploadStatus = when (
+                val result = spreadsheetUploader.upload(
+                    state = healthState,
+                    webAppUrl = webAppUrl,
+                )
+            ) {
+                is SpreadsheetUploadResult.Success ->
+                    "アップロード完了: 体重${result.weightCount}件、血糖${result.glucoseCount}件、歩数${result.stepCount}件"
+                is SpreadsheetUploadResult.Failure ->
+                    "アップロード失敗: ${result.message}"
+            }
+            isSpreadsheetUploading = false
         }
     }
 }

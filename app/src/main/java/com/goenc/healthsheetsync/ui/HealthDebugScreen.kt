@@ -20,6 +20,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,6 +62,12 @@ fun HealthDebugScreen(
     onRefresh: () -> Unit,
     onSaveExternalWorkbook: () -> Unit,
     externalSaveStatus: String?,
+    onUploadSpreadsheet: () -> Unit,
+    spreadsheetUploadStatus: String?,
+    isSpreadsheetUploading: Boolean,
+    spreadsheetWebAppUrl: String,
+    targetSpreadsheetUrl: String,
+    onSpreadsheetWebAppUrlChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -84,12 +91,28 @@ fun HealthDebugScreen(
                 onRefresh = onRefresh,
                 onSaveExternalWorkbook = onSaveExternalWorkbook,
                 externalSaveStatus = externalSaveStatus,
+                spreadsheetWebAppUrl = spreadsheetWebAppUrl,
+                targetSpreadsheetUrl = targetSpreadsheetUrl,
+                onSpreadsheetWebAppUrlChange = onSpreadsheetWebAppUrlChange,
                 onBack = { showSettings = false },
             )
             return@Column
         }
 
-        Header(onSettingsClick = { showSettings = true })
+        Header(
+            onSettingsClick = { showSettings = true },
+            onUploadSpreadsheet = onUploadSpreadsheet,
+            canUploadSpreadsheet = !state.isLoading &&
+                !isSpreadsheetUploading &&
+                spreadsheetWebAppUrl.isNotBlank(),
+            isUploading = isSpreadsheetUploading,
+        )
+        spreadsheetUploadStatus?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
 
         DebugSection(title = "体重記録") {
             WeightSummary(state.weightRecords, state.stepDailyRecords)
@@ -131,18 +154,30 @@ private fun LoadingScreen(
 @Composable
 private fun Header(
     onSettingsClick: () -> Unit,
+    onUploadSpreadsheet: () -> Unit,
+    canUploadSpreadsheet: Boolean,
+    isUploading: Boolean,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = "ヘルスシート同期",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
-        OutlinedButton(onClick = onSettingsClick) {
-            Text("設定")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onUploadSpreadsheet,
+                enabled = canUploadSpreadsheet,
+            ) {
+                Text(if (isUploading) "送信中" else "アップロード")
+            }
+            OutlinedButton(onClick = onSettingsClick) {
+                Text("設定")
+            }
         }
     }
 }
@@ -154,6 +189,9 @@ private fun SettingsScreen(
     onRefresh: () -> Unit,
     onSaveExternalWorkbook: () -> Unit,
     externalSaveStatus: String?,
+    spreadsheetWebAppUrl: String,
+    targetSpreadsheetUrl: String,
+    onSpreadsheetWebAppUrlChange: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     Row(
@@ -194,6 +232,16 @@ private fun SettingsScreen(
         Text(
             text = status,
             style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+    DebugSection(title = "アップロード先") {
+        DebugLine("対象スプレッドシート", targetSpreadsheetUrl)
+        OutlinedTextField(
+            value = spreadsheetWebAppUrl,
+            onValueChange = onSpreadsheetWebAppUrlChange,
+            label = { Text("Apps Script WebアプリURL") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
         )
     }
     DebugSection(title = "ヘルスコネクト") {
