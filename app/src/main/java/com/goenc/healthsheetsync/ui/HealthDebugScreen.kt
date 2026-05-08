@@ -661,7 +661,8 @@ private enum class WeightChartRange(
     private val endAt: (LocalDateTime) -> LocalDateTime,
 ) {
     OneMonth("1か月", { latestAt -> latestAt.minusMonths(1) }, { startAt -> startAt.plusMonths(1) }),
-    TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) }, { startAt -> startAt.plusWeeks(2) });
+    TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) }, { startAt -> startAt.plusWeeks(2) }),
+    OneWeek("1週間", { latestAt -> latestAt.minusWeeks(1) }, { startAt -> startAt.plusWeeks(1) });
 
     fun filter(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): List<DebugWeightRecord> {
         val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return emptyList()
