@@ -58,6 +58,8 @@ fun HealthDebugScreen(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showSettings by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -65,16 +67,15 @@ fun HealthDebugScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "ヘルスシート同期",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-
-        DebugSection(title = "ヘルスコネクト") {
-            DebugLine("利用可否", state.availability.displayText())
-            DebugLine("権限", state.permissions.displayText())
+        if (showSettings) {
+            SettingsScreen(
+                state = state,
+                onBack = { showSettings = false },
+            )
+            return@Column
         }
+
+        Header(onSettingsClick = { showSettings = true })
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
@@ -117,6 +118,44 @@ fun HealthDebugScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun Header(
+    onSettingsClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = "ヘルスシート同期",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        OutlinedButton(onClick = onSettingsClick) {
+            Text("設定")
+        }
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    state: HealthDebugUiState,
+    onBack: () -> Unit,
+) {
+    Text(
+        text = "設定",
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+    )
+    OutlinedButton(onClick = onBack) {
+        Text("戻る")
+    }
+    DebugSection(title = "ヘルスコネクト") {
+        DebugLine("利用可否", state.availability.displayText())
+        DebugLine("権限", state.permissions.displayText())
     }
 }
 
