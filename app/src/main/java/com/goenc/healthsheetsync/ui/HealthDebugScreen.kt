@@ -156,11 +156,20 @@ private fun SettingsScreen(
     externalSaveStatus: String?,
     onBack: () -> Unit,
 ) {
-    Text(
-        text = "設定",
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold,
-    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "設定",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        OutlinedButton(onClick = onBack) {
+            Text("メインに戻る")
+        }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Button(
             onClick = {
@@ -179,9 +188,6 @@ private fun SettingsScreen(
         }
         OutlinedButton(onClick = onSaveExternalWorkbook) {
             Text("外部保存")
-        }
-        OutlinedButton(onClick = onBack) {
-            Text("戻る")
         }
     }
     externalSaveStatus?.let { status ->

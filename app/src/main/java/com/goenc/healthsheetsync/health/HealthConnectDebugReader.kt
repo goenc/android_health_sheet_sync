@@ -31,6 +31,7 @@ class HealthConnectDebugReader(private val context: Context) {
             return HealthDebugUiState(
                 availability = availability,
                 permissions = PermissionState.Unknown,
+                isLoading = false,
                 debugMessages = debugMessages,
             )
         }
@@ -57,6 +58,7 @@ class HealthConnectDebugReader(private val context: Context) {
             return HealthDebugUiState(
                 availability = availability,
                 permissions = permissionState,
+                isLoading = false,
                 debugMessages = debugMessages,
             )
         }
@@ -89,6 +91,7 @@ class HealthConnectDebugReader(private val context: Context) {
         return HealthDebugUiState(
             availability = availability,
             permissions = permissionState,
+            isLoading = false,
             weightRecords = weightRecords,
             glucoseRecords = glucoseRecords,
             stepDailyRecords = stepDailyRecords,
