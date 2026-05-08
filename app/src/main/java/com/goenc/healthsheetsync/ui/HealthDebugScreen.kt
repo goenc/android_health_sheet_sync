@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -382,6 +383,7 @@ private fun WeightTrendChart(
     val sliderPosition = remember(chartEndAt, earliestEndAt, latestEndAt) {
         chartSliderPosition(chartEndAt, earliestEndAt, latestEndAt)
     }
+    val currentChartEndAt by rememberUpdatedState(chartEndAt)
     val colorScheme = MaterialTheme.colorScheme
     val lineColor = colorScheme.primary
     val pointColor = colorScheme.primary
@@ -419,13 +421,12 @@ private fun WeightTrendChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .pointerInput(chartEndAt, earliestEndAt, latestEndAt, selectedRange) {
+                .pointerInput(earliestEndAt, latestEndAt) {
                     detectHorizontalDragGestures { _, dragAmount ->
                         chartEndAt = chartEndAtAfterHorizontalDrag(
-                            currentEndAt = chartEndAt,
+                            currentEndAt = currentChartEndAt,
                             earliestEndAt = earliestEndAt,
                             latestEndAt = latestEndAt,
-                            selectedRange = selectedRange,
                             dragAmount = dragAmount,
                             width = size.width.toFloat(),
                         )
@@ -787,16 +788,15 @@ private fun chartEndAtAfterHorizontalDrag(
     currentEndAt: LocalDateTime?,
     earliestEndAt: LocalDateTime?,
     latestEndAt: LocalDateTime?,
-    selectedRange: WeightChartRange,
     dragAmount: Float,
     width: Float,
 ): LocalDateTime? {
     if (earliestEndAt == null || latestEndAt == null || width <= 0f) return currentEndAt
     val baseEndAt = currentEndAt ?: latestEndAt
-    val visibleMillis = selectedRange.durationAt(baseEndAt).toMillis()
-    if (visibleMillis <= 0L) return baseEndAt.coerceIn(earliestEndAt, latestEndAt)
+    val totalMillis = Duration.between(earliestEndAt, latestEndAt).toMillis()
+    if (totalMillis <= 0L) return baseEndAt.coerceIn(earliestEndAt, latestEndAt)
 
-    val dragMillis = (visibleMillis * dragAmount / width).toLong()
+    val dragMillis = (totalMillis * dragAmount / width).toLong()
     return baseEndAt.minus(Duration.ofMillis(dragMillis)).coerceIn(earliestEndAt, latestEndAt)
 }
 
