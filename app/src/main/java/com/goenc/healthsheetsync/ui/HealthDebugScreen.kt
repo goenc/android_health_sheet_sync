@@ -4,6 +4,7 @@ import android.graphics.Paint
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -418,6 +419,18 @@ private fun WeightTrendChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
+                .pointerInput(chartEndAt, earliestEndAt, latestEndAt, selectedRange) {
+                    detectHorizontalDragGestures { _, dragAmount ->
+                        chartEndAt = chartEndAtAfterHorizontalDrag(
+                            currentEndAt = chartEndAt,
+                            earliestEndAt = earliestEndAt,
+                            latestEndAt = latestEndAt,
+                            selectedRange = selectedRange,
+                            dragAmount = dragAmount,
+                            width = size.width.toFloat(),
+                        )
+                    }
+                }
                 .pointerInput(chartRecords) {
                     detectTapGestures { offset ->
                         if (chartRecords.isEmpty()) return@detectTapGestures
@@ -768,6 +781,23 @@ private fun chartEndAtFromSlider(
     if (totalMillis <= 0L) return latestEndAt
 
     return earliestEndAt.plus(Duration.ofMillis((totalMillis * position.coerceIn(0f, 1f)).toLong()))
+}
+
+private fun chartEndAtAfterHorizontalDrag(
+    currentEndAt: LocalDateTime?,
+    earliestEndAt: LocalDateTime?,
+    latestEndAt: LocalDateTime?,
+    selectedRange: WeightChartRange,
+    dragAmount: Float,
+    width: Float,
+): LocalDateTime? {
+    if (earliestEndAt == null || latestEndAt == null || width <= 0f) return currentEndAt
+    val baseEndAt = currentEndAt ?: latestEndAt
+    val visibleMillis = selectedRange.durationAt(baseEndAt).toMillis()
+    if (visibleMillis <= 0L) return baseEndAt.coerceIn(earliestEndAt, latestEndAt)
+
+    val dragMillis = (visibleMillis * dragAmount / width).toLong()
+    return baseEndAt.minus(Duration.ofMillis(dragMillis)).coerceIn(earliestEndAt, latestEndAt)
 }
 
 private fun nearestChartIndex(
