@@ -756,14 +756,14 @@ private fun List<DebugWeightRecord>.weightTextFor(timeBand: String): String {
 }
 
 private fun List<DebugWeightRecord>.toChartWeightPoints(): List<ChartWeightPoint> {
-    return groupBy { it.measuredAt }
+    return groupBy { it.targetDate to it.timeBand }
         .entries
-        .map { (measuredAt, records) ->
-            val firstRecord = records.first()
+        .map { (_, records) ->
+            val latestRecord = records.maxBy { it.measuredAt }
             ChartWeightPoint(
-                measuredAt = measuredAt,
-                targetDate = firstRecord.targetDate,
-                timeBand = firstRecord.timeBand,
+                measuredAt = latestRecord.measuredAt,
+                targetDate = latestRecord.targetDate,
+                timeBand = latestRecord.timeBand,
                 weightKg = records.sumOf { it.weightKg } / records.size,
                 sourceCount = records.size,
             )
