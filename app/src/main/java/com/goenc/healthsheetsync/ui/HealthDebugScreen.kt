@@ -467,7 +467,7 @@ private fun WeightTrendChart(
     val axisColor = ChartLabel
     val missingPointColor = ChartMissingPoint
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = "体重グラフ",
             style = MaterialTheme.typography.titleMedium,
