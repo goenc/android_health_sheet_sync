@@ -105,6 +105,10 @@ fun HealthDebugScreen(
                     onSaveExternalWorkbook = onSaveExternalWorkbook,
                     externalSaveStatus = externalSaveStatus,
                     targetSpreadsheetUrl = targetSpreadsheetUrl,
+                    onUploadSpreadsheet = onUploadSpreadsheet,
+                    spreadsheetUploadStatus = spreadsheetUploadStatus,
+                    canUploadSpreadsheet = !state.isLoading && !isSpreadsheetUploading,
+                    isSpreadsheetUploading = isSpreadsheetUploading,
                     onBack = { showSettings = false },
                 )
             }
@@ -113,23 +117,11 @@ fun HealthDebugScreen(
 
         Header(
             onSettingsClick = { showSettings = true },
-            onUploadSpreadsheet = onUploadSpreadsheet,
-            canUploadSpreadsheet = !state.isLoading &&
-                !isSpreadsheetUploading,
-            isUploading = isSpreadsheetUploading,
         )
         Column(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            spreadsheetUploadStatus?.let { status ->
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
             DebugSection(title = "体重記録") {
                 WeightSummary(state.weightRecords, state.stepDailyRecords)
             }
@@ -171,9 +163,6 @@ private fun LoadingScreen(
 @Composable
 private fun Header(
     onSettingsClick: () -> Unit,
-    onUploadSpreadsheet: () -> Unit,
-    canUploadSpreadsheet: Boolean,
-    isUploading: Boolean,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -193,21 +182,8 @@ private fun Header(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                horizontalArrangement = Arrangement.End,
             ) {
-                Button(
-                    onClick = onUploadSpreadsheet,
-                    enabled = canUploadSpreadsheet,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AppPrimary,
-                        contentColor = Color.White,
-                    ),
-                    modifier = Modifier
-                        .defaultMinSize(minWidth = 148.dp, minHeight = 52.dp),
-                ) {
-                    Text(if (isUploading) "送信中" else "アップロード")
-                }
                 OutlinedButton(
                     onClick = onSettingsClick,
                     shape = CircleShape,
@@ -229,8 +205,15 @@ private fun SettingsScreen(
     onSaveExternalWorkbook: () -> Unit,
     externalSaveStatus: String?,
     targetSpreadsheetUrl: String,
+    onUploadSpreadsheet: () -> Unit,
+    spreadsheetUploadStatus: String?,
+    canUploadSpreadsheet: Boolean,
+    isSpreadsheetUploading: Boolean,
     onBack: () -> Unit,
 ) {
+    var showWeightList by remember { mutableStateOf(false) }
+    var showStepList by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -245,24 +228,53 @@ private fun SettingsScreen(
             Text("メインに戻る")
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(
-            onClick = {
-                Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
-                onRequestPermissions()
-            },
-            enabled = state.canRequestPermissions && !state.isLoading,
-        ) {
-            Text("権限をリクエスト")
+    DebugSection(title = "操作") {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = onUploadSpreadsheet,
+                enabled = canUploadSpreadsheet,
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppPrimary,
+                    contentColor = Color.White,
+                ),
+                modifier = Modifier.defaultMinSize(minWidth = 148.dp, minHeight = 52.dp),
+            ) {
+                Text(if (isSpreadsheetUploading) "送信中" else "アップロード")
+            }
+            OutlinedButton(
+                onClick = onRefresh,
+                enabled = !state.isLoading,
+                shape = CircleShape,
+                modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 52.dp),
+            ) {
+                Text(if (state.isLoading) "読み込み中" else "データ更新")
+            }
         }
-        OutlinedButton(
-            onClick = onRefresh,
-            enabled = !state.isLoading,
-        ) {
-            Text(if (state.isLoading) "読み込み中" else "データ更新")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(
+                onClick = {
+                    Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
+                    onRequestPermissions()
+                },
+                enabled = state.canRequestPermissions && !state.isLoading,
+                shape = CircleShape,
+            ) {
+                Text("権限をリクエスト")
+            }
+            OutlinedButton(
+                onClick = onSaveExternalWorkbook,
+                shape = CircleShape,
+            ) {
+                Text("外部保存")
+            }
         }
-        OutlinedButton(onClick = onSaveExternalWorkbook) {
-            Text("外部保存")
+        spreadsheetUploadStatus?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
     externalSaveStatus?.let { status ->
@@ -270,6 +282,33 @@ private fun SettingsScreen(
             text = status,
             style = MaterialTheme.typography.bodyMedium,
         )
+    }
+    DebugSection(title = "記録一覧") {
+        DebugLine("体重記録の件数", state.weightRecords.size.toString())
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(
+                onClick = { showWeightList = !showWeightList },
+                shape = CircleShape,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+                modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
+            ) {
+                Text(if (showWeightList) "体重一覧を閉じる" else "体重一覧")
+            }
+            OutlinedButton(
+                onClick = { showStepList = !showStepList },
+                shape = CircleShape,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+                modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
+            ) {
+                Text(if (showStepList) "歩数一覧を閉じる" else "歩数一覧")
+            }
+        }
+        if (showWeightList) {
+            WeightDailySummary(state.weightRecords)
+        }
+        if (showStepList) {
+            StepDailySummary(state.stepDailyRecords)
+        }
     }
     DebugSection(title = "アップロード先") {
         DebugLine("対象スプレッドシート", targetSpreadsheetUrl)
@@ -337,10 +376,7 @@ private fun WeightSummary(
     dailySteps: List<DebugStepDaily>,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
-    var showWeightList by remember { mutableStateOf(false) }
-    var showStepList by remember { mutableStateOf(false) }
 
-    DebugLine("件数", records.size.toString())
     if (latestRecord == null) {
         Text(
             text = "体重記録はありません",
@@ -352,30 +388,6 @@ private fun WeightSummary(
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
     DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
     LatestStepsLine(dailySteps)
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OutlinedButton(
-            onClick = { showWeightList = !showWeightList },
-            shape = CircleShape,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-            modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
-        ) {
-            Text(if (showWeightList) "体重一覧を閉じる" else "体重一覧")
-        }
-        OutlinedButton(
-            onClick = { showStepList = !showStepList },
-            shape = CircleShape,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-            modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
-        ) {
-            Text(if (showStepList) "歩数一覧を閉じる" else "歩数一覧")
-        }
-    }
-    if (showWeightList) {
-        WeightDailySummary(records)
-    }
-    if (showStepList) {
-        StepDailySummary(dailySteps)
-    }
     WeightTrendChart(records, dailySteps)
 }
 
