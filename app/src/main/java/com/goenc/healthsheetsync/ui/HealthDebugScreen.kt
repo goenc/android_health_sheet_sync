@@ -62,6 +62,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -521,9 +523,15 @@ private fun WeightTrendChart(
                 val chartBottom = size.height - bottomPadding
                 val chartWidth = max(1f, chartRight - chartLeft)
                 val chartHeight = max(1f, chartBottom - chartTop)
-                val minWeight = chartPoints.minOf { it.weightKg } - CHART_WEIGHT_LOWER_PADDING_KG
-                val maxWeight = chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_UPPER_PADDING_KG
+                val minWeight = floor(chartPoints.minOf { it.weightKg } - CHART_WEIGHT_LOWER_PADDING_KG)
+                val maxWeight = ceil(chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_UPPER_PADDING_KG)
                 val weightRange = max(1.0, maxWeight - minWeight)
+                val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
+                    .takeWhile { it >= minWeight }
+                    .toList()
+                val halfWeightLines = generateSequence(maxWeight - 0.5) { it - 1.0 }
+                    .takeWhile { it > minWeight }
+                    .toList()
                 val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisColor.toArgb()
                     textSize = 12.sp.toPx()
@@ -553,15 +561,23 @@ private fun WeightTrendChart(
                 return chartBottom - chartHeight * ratio
             }
 
-            repeat(17) { index ->
-                val y = chartTop + chartHeight * index / 16f
-                val isMajorLine = index % 4 == 0
+            halfWeightLines.forEach { weightKg ->
+                val y = yAt(weightKg)
                 drawLine(
                     color = gridColor,
                     start = Offset(chartLeft, y),
                     end = Offset(chartRight, y),
                     strokeWidth = 1.dp.toPx(),
-                    pathEffect = if (isMajorLine) null else dashedGrid,
+                    pathEffect = dashedGrid,
+                )
+            }
+            solidWeightLines.forEach { weightKg ->
+                val y = yAt(weightKg)
+                drawLine(
+                    color = gridColor,
+                    start = Offset(chartLeft, y),
+                    end = Offset(chartRight, y),
+                    strokeWidth = 1.dp.toPx(),
                 )
             }
             chartPoints.zipWithNext().forEachIndexed { index, pair ->
@@ -581,9 +597,8 @@ private fun WeightTrendChart(
 
             drawContext.canvas.nativeCanvas.apply {
                 labelPaint.textAlign = Paint.Align.RIGHT
-                listOf(0, 4, 8, 12, 16).forEach { index ->
-                    val y = chartTop + chartHeight * index / 16f
-                    val weightKg = maxWeight - weightRange * index / 16.0
+                solidWeightLines.forEach { weightKg ->
+                    val y = yAt(weightKg)
                     drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), labelPaint)
                 }
                 labelPaint.textAlign = Paint.Align.LEFT
@@ -1056,8 +1071,8 @@ private fun nearestChartIndex(
 private const val TAG = "HealthSheetSync"
 private const val STEP_CHART_MAX_STEPS = 30_000f
 private const val STEP_REFERENCE_STEPS = 10_000f
-private const val CHART_LEFT_PADDING_DP = 62
-private const val CHART_RIGHT_PADDING_DP = 30
+private const val CHART_LEFT_PADDING_DP = 44
+private const val CHART_RIGHT_PADDING_DP = 8
 private const val CHART_TIME_BAND_MORNING = 0
 private const val CHART_TIME_BAND_NIGHT = 1
 private const val CHART_TIME_BAND_COUNT = 2
