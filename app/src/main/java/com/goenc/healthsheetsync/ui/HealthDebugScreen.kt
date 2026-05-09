@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -432,8 +433,8 @@ private fun WeightTrendChart(
         } ?: emptyList()
     }
     val chartPoints = remember(chartRecords) { chartRecords.toChartWeightPoints() }
-    var selectedIndex by remember(chartPoints) { mutableStateOf(chartPoints.lastIndex) }
-    val selectedPoint = chartPoints.getOrNull(selectedIndex)
+    var selectedIndex by remember(chartPoints) { mutableStateOf<Int?>(null) }
+    val selectedPoint = selectedIndex?.let { chartPoints.getOrNull(it) }
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
     val earliestEndAt = remember(sortedRecords, selectedRange) {
         selectedRange.minimumEndAt(sortedRecords)
@@ -481,57 +482,62 @@ private fun WeightTrendChart(
                 disabledInactiveTrackColor = SliderTrack,
             ),
         )
-        Canvas(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(520.dp)
-                .pointerInput(earliestEndAt, latestEndAt) {
-                    detectHorizontalDragGestures { _, dragAmount ->
-                        chartEndAt = chartEndAtAfterHorizontalDrag(
-                            currentEndAt = currentChartEndAt,
-                            earliestEndAt = earliestEndAt,
-                            latestEndAt = latestEndAt,
-                            dragAmount = dragAmount,
-                            width = size.width.toFloat(),
-                        )
-                    }
-                }
-                .pointerInput(chartPoints, chartWindow) {
-                    detectTapGestures { offset ->
-                        if (chartPoints.isEmpty()) return@detectTapGestures
-                        val visibleWindow = chartWindow ?: return@detectTapGestures
-                        selectedIndex = nearestChartIndex(
-                            touchX = offset.x,
-                            width = size.width.toFloat(),
-                            records = chartPoints,
-                            rangeStartAt = visibleWindow.startAt,
-                            rangeEndAt = visibleWindow.endAt,
-                            horizontalPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
-                        )
-                    }
-                }
+                .height(520.dp),
         ) {
-            if (chartPoints.isEmpty()) return@Canvas
-            val visibleWindow = chartWindow ?: return@Canvas
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(earliestEndAt, latestEndAt) {
+                        detectHorizontalDragGestures { _, dragAmount ->
+                            chartEndAt = chartEndAtAfterHorizontalDrag(
+                                currentEndAt = currentChartEndAt,
+                                earliestEndAt = earliestEndAt,
+                                latestEndAt = latestEndAt,
+                                dragAmount = dragAmount,
+                                width = size.width.toFloat(),
+                            )
+                        }
+                    }
+                    .pointerInput(chartPoints, chartWindow) {
+                        detectTapGestures { offset ->
+                            if (chartPoints.isEmpty()) return@detectTapGestures
+                            val visibleWindow = chartWindow ?: return@detectTapGestures
+                            selectedIndex = nearestChartIndex(
+                                touchX = offset.x,
+                                width = size.width.toFloat(),
+                                records = chartPoints,
+                                rangeStartAt = visibleWindow.startAt,
+                                rangeEndAt = visibleWindow.endAt,
+                                leftPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
+                                rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx(),
+                            )
+                        }
+                    }
+            ) {
+                if (chartPoints.isEmpty()) return@Canvas
+                val visibleWindow = chartWindow ?: return@Canvas
 
-            val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
-            val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
-            val topPadding = 28.dp.toPx()
-            val bottomPadding = 58.dp.toPx()
-            val chartLeft = leftPadding
-            val chartRight = size.width - rightPadding
-            val chartTop = topPadding
-            val chartBottom = size.height - bottomPadding
-            val chartWidth = max(1f, chartRight - chartLeft)
-            val chartHeight = max(1f, chartBottom - chartTop)
-            val minWeight = chartPoints.minOf { it.weightKg } - CHART_WEIGHT_PADDING_KG
-            val maxWeight = chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_PADDING_KG
-            val weightRange = max(1.0, maxWeight - minWeight)
-            val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = axisColor.toArgb()
-                textSize = 12.sp.toPx()
-            }
-            val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
+                val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
+                val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
+                val topPadding = 28.dp.toPx()
+                val bottomPadding = 58.dp.toPx()
+                val chartLeft = leftPadding
+                val chartRight = size.width - rightPadding
+                val chartTop = topPadding
+                val chartBottom = size.height - bottomPadding
+                val chartWidth = max(1f, chartRight - chartLeft)
+                val chartHeight = max(1f, chartBottom - chartTop)
+                val minWeight = chartPoints.minOf { it.weightKg } - CHART_WEIGHT_PADDING_KG
+                val maxWeight = chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_PADDING_KG
+                val weightRange = max(1.0, maxWeight - minWeight)
+                val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = axisColor.toArgb()
+                    textSize = 12.sp.toPx()
+                }
+                val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
 
             fun xAtTime(measuredAt: LocalDateTime): Float {
                 val totalMillis = max(1L, Duration.between(visibleWindow.startAt, visibleWindow.endAt).toMillis())
@@ -658,29 +664,51 @@ private fun WeightTrendChart(
                 }
             }
 
-            chartPoints.getOrNull(selectedIndex)?.let { record ->
-                val selectedPoint = Offset(xAt(selectedIndex), yAt(record.weightKg))
-                drawLine(
-                    color = selectedColor,
-                    start = Offset(selectedPoint.x, chartTop),
-                    end = Offset(selectedPoint.x, chartBottom),
-                    strokeWidth = 1.dp.toPx(),
-                )
-                drawCircle(
-                    color = selectedColor,
-                    radius = 6.dp.toPx(),
-                    center = selectedPoint,
-                    style = Stroke(width = 2.dp.toPx()),
-                )
+                selectedIndex?.let { index ->
+                    chartPoints.getOrNull(index)?.let { record ->
+                        val selectedPoint = Offset(xAt(index), yAt(record.weightKg))
+                        drawLine(
+                            color = selectedColor,
+                            start = Offset(selectedPoint.x, chartTop),
+                            end = Offset(selectedPoint.x, chartBottom),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                        drawCircle(
+                            color = selectedColor,
+                            radius = 6.dp.toPx(),
+                            center = selectedPoint,
+                            style = Stroke(width = 2.dp.toPx()),
+                        )
+                    }
+                }
             }
-        }
-        selectedPoint?.let { record ->
-            val averageLabel = if (record.isAverage) "（平均）" else ""
-            Text(
-                text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.weightKg)} kg$averageLabel",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+            selectedPoint?.let { record ->
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 42.dp, end = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = PopupBackground,
+                    shadowElevation = 6.dp,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = "${record.measuredAt.monthValue}月${record.measuredAt.dayOfMonth}日 ${record.timeBand}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AppText,
+                        )
+                        Text(
+                            text = "${formatDecimal(record.weightKg)} kg",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = ChartBlue,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -980,11 +1008,12 @@ private fun nearestChartIndex(
     records: List<ChartWeightPoint>,
     rangeStartAt: LocalDateTime,
     rangeEndAt: LocalDateTime,
-    horizontalPadding: Float,
+    leftPadding: Float,
+    rightPadding: Float,
 ): Int {
     if (records.size <= 1) return 0
-    val chartLeft = horizontalPadding
-    val chartRight = width - horizontalPadding
+    val chartLeft = leftPadding
+    val chartRight = width - rightPadding
     val chartWidth = max(1f, chartRight - chartLeft)
     val clampedX = touchX.coerceIn(chartLeft, chartRight)
     val totalMillis = max(1L, Duration.between(rangeStartAt, rangeEndAt).toMillis())
@@ -1027,3 +1056,4 @@ private val ChartStepBar = Color(0x337E57B2)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
 private val SliderTrack = Color(0xFFABABB1)
+private val PopupBackground = Color(0xF7FFFFFF)
