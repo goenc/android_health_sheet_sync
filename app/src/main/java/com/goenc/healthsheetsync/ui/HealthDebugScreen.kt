@@ -581,8 +581,11 @@ private fun WeightTrendChart(
 
             drawContext.canvas.nativeCanvas.apply {
                 labelPaint.textAlign = Paint.Align.RIGHT
-                drawText("${formatDecimal(maxWeight)}kg", chartLeft - 8.dp.toPx(), chartTop + 4.dp.toPx(), labelPaint)
-                drawText("${formatDecimal(minWeight)}kg", chartLeft - 8.dp.toPx(), chartBottom, labelPaint)
+                listOf(0, 4, 8, 12, 16).forEach { index ->
+                    val y = chartTop + chartHeight * index / 16f
+                    val weightKg = maxWeight - weightRange * index / 16.0
+                    drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), labelPaint)
+                }
                 labelPaint.textAlign = Paint.Align.LEFT
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
             }
