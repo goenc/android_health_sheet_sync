@@ -4,24 +4,30 @@ import android.graphics.Paint
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -80,20 +87,26 @@ fun HealthDebugScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(AppBackground)
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         if (showSettings) {
-            SettingsScreen(
-                state = state,
-                onRequestPermissions = onRequestPermissions,
-                onRefresh = onRefresh,
-                onSaveExternalWorkbook = onSaveExternalWorkbook,
-                externalSaveStatus = externalSaveStatus,
-                targetSpreadsheetUrl = targetSpreadsheetUrl,
-                onBack = { showSettings = false },
-            )
+            Column(
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                SettingsScreen(
+                    state = state,
+                    onRequestPermissions = onRequestPermissions,
+                    onRefresh = onRefresh,
+                    onSaveExternalWorkbook = onSaveExternalWorkbook,
+                    externalSaveStatus = externalSaveStatus,
+                    targetSpreadsheetUrl = targetSpreadsheetUrl,
+                    onBack = { showSettings = false },
+                )
+            }
             return@Column
         }
 
@@ -104,21 +117,27 @@ fun HealthDebugScreen(
                 !isSpreadsheetUploading,
             isUploading = isSpreadsheetUploading,
         )
-        spreadsheetUploadStatus?.let { status ->
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
+        Column(
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            spreadsheetUploadStatus?.let { status ->
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
 
-        DebugSection(title = "体重記録") {
-            WeightSummary(state.weightRecords, state.stepDailyRecords)
-        }
+            DebugSection(title = "体重記録") {
+                WeightSummary(state.weightRecords, state.stepDailyRecords)
+            }
 
-        DebugSection(title = "血糖値記録") {
-            DebugLine("件数", state.glucoseRecords.size.toString())
-            state.glucoseRecords.take(10).forEach { record ->
-                GlucoseRecordRow(record)
+            DebugSection(title = "血糖値記録") {
+                DebugLine("件数", state.glucoseRecords.size.toString())
+                state.glucoseRecords.take(10).forEach { record ->
+                    GlucoseRecordRow(record)
+                }
             }
         }
     }
@@ -155,27 +174,47 @@ private fun Header(
     canUploadSpreadsheet: Boolean,
     isUploading: Boolean,
 ) {
-    Column(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        color = HeaderBackground,
     ) {
-        Text(
-            text = "ヘルスシート同期",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Button(
-                onClick = onUploadSpreadsheet,
-                enabled = canUploadSpreadsheet,
+            Text(
+                text = "ヘルスシート同期",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = AppText,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
             ) {
-                Text(if (isUploading) "送信中" else "アップロード")
-            }
-            OutlinedButton(onClick = onSettingsClick) {
-                Text("設定")
+                Button(
+                    onClick = onUploadSpreadsheet,
+                    enabled = canUploadSpreadsheet,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AppPrimary,
+                        contentColor = Color.White,
+                    ),
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 148.dp, minHeight = 52.dp),
+                ) {
+                    Text(if (isUploading) "送信中" else "アップロード")
+                }
+                OutlinedButton(
+                    onClick = onSettingsClick,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+                    modifier = Modifier.defaultMinSize(minWidth = 92.dp, minHeight = 52.dp),
+                ) {
+                    Text("設定")
+                }
             }
         }
     }
@@ -259,16 +298,17 @@ private fun DebugSection(
     content: @Composable ColumnScopeMarker.() -> Unit,
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = AppText,
         )
         ColumnScopeMarker.content()
-        HorizontalDivider()
+        HorizontalDivider(color = DividerColor)
     }
 }
 
@@ -276,15 +316,16 @@ private object ColumnScopeMarker
 
 @Composable
 private fun DebugLine(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = AppMutedBlue,
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.titleMedium,
+            color = AppText,
         )
     }
 }
@@ -310,11 +351,21 @@ private fun WeightSummary(
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
     DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
     LatestStepsLine(dailySteps)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { showWeightList = !showWeightList }) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(
+            onClick = { showWeightList = !showWeightList },
+            shape = CircleShape,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+            modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
+        ) {
             Text(if (showWeightList) "体重一覧を閉じる" else "体重一覧")
         }
-        OutlinedButton(onClick = { showStepList = !showStepList }) {
+        OutlinedButton(
+            onClick = { showStepList = !showStepList },
+            shape = CircleShape,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+            modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
+        ) {
             Text(if (showStepList) "歩数一覧を閉じる" else "歩数一覧")
         }
     }
@@ -391,25 +442,22 @@ private fun WeightTrendChart(
         chartSliderPosition(chartEndAt, earliestEndAt, latestEndAt)
     }
     val currentChartEndAt by rememberUpdatedState(chartEndAt)
-    val colorScheme = MaterialTheme.colorScheme
-    val lineColor = colorScheme.primary
-    val pointColor = colorScheme.primary
-    val morningPointColor = Color(0xFF2E7D32)
-    val selectedColor = colorScheme.tertiary
-    val gridColor = colorScheme.outlineVariant
-    val trendLineColor = Color(0xFFD32F2F)
-    val stepBarColor = Color(0x667B1FA2)
-    val weekBoundaryColor = colorScheme.outlineVariant
-    val axisColor = colorScheme.outline
-    val missingPointColor = Color(0xFF9E9E9E)
+    val lineColor = ChartBlue
+    val selectedColor = AppPrimary
+    val gridColor = ChartGrid
+    val trendLineColor = ChartTrend
+    val stepBarColor = ChartStepBar
+    val weekBoundaryColor = ChartGrid
+    val axisColor = ChartLabel
+    val missingPointColor = ChartMissingPoint
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = "体重グラフ",
-            style = MaterialTheme.typography.labelMedium,
-            color = colorScheme.primary,
+            style = MaterialTheme.typography.titleMedium,
+            color = AppMutedBlue,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             WeightChartRange.entries.forEach { range ->
                 WeightChartRangeButton(
                     range = range,
@@ -424,11 +472,19 @@ private fun WeightTrendChart(
                 chartEndAt = chartEndAtFromSlider(position, earliestEndAt, latestEndAt)
             },
             enabled = earliestEndAt != null && latestEndAt != null && earliestEndAt.isBefore(latestEndAt),
+            colors = SliderDefaults.colors(
+                thumbColor = Color.Transparent,
+                activeTrackColor = SliderTrack,
+                inactiveTrackColor = SliderTrack,
+                disabledThumbColor = Color.Transparent,
+                disabledActiveTrackColor = SliderTrack,
+                disabledInactiveTrackColor = SliderTrack,
+            ),
         )
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
+                .height(390.dp)
                 .pointerInput(earliestEndAt, latestEndAt) {
                     detectHorizontalDragGestures { _, dragAmount ->
                         chartEndAt = chartEndAtAfterHorizontalDrag(
@@ -460,8 +516,8 @@ private fun WeightTrendChart(
 
             val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
             val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
-            val topPadding = 18.dp.toPx()
-            val bottomPadding = 26.dp.toPx()
+            val topPadding = 28.dp.toPx()
+            val bottomPadding = 58.dp.toPx()
             val chartLeft = leftPadding
             val chartRight = size.width - rightPadding
             val chartTop = topPadding
@@ -473,8 +529,9 @@ private fun WeightTrendChart(
             val weightRange = max(1.0, maxWeight - minWeight)
             val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = axisColor.toArgb()
-                textSize = 11.sp.toPx()
+                textSize = 12.sp.toPx()
             }
+            val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
 
             fun xAtTime(measuredAt: LocalDateTime): Float {
                 val totalMillis = max(1L, Duration.between(visibleWindow.startAt, visibleWindow.endAt).toMillis())
@@ -499,27 +556,17 @@ private fun WeightTrendChart(
                 return chartBottom - chartHeight * ratio
             }
 
-            repeat(4) { index ->
-                val y = chartTop + chartHeight * index / 3f
+            repeat(17) { index ->
+                val y = chartTop + chartHeight * index / 16f
+                val isMajorLine = index % 4 == 0
                 drawLine(
                     color = gridColor,
                     start = Offset(chartLeft, y),
                     end = Offset(chartRight, y),
                     strokeWidth = 1.dp.toPx(),
+                    pathEffect = if (isMajorLine) null else dashedGrid,
                 )
             }
-            drawLine(
-                color = axisColor,
-                start = Offset(chartLeft, chartTop),
-                end = Offset(chartLeft, chartBottom),
-                strokeWidth = 1.dp.toPx(),
-            )
-            drawLine(
-                color = axisColor,
-                start = Offset(chartRight, chartTop),
-                end = Offset(chartRight, chartBottom),
-                strokeWidth = 1.dp.toPx(),
-            )
             chartPoints.zipWithNext().forEachIndexed { index, pair ->
                 val (previous, current) = pair
                 if (previous.targetDate.dayOfWeek == DayOfWeek.SUNDAY &&
@@ -537,10 +584,10 @@ private fun WeightTrendChart(
 
             drawContext.canvas.nativeCanvas.apply {
                 labelPaint.textAlign = Paint.Align.RIGHT
-                drawText("1", chartLeft - 6.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
+                drawText("1", chartLeft - 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
                 labelPaint.textAlign = Paint.Align.LEFT
-                drawText("${formatDecimal(maxWeight)}kg", chartRight + 6.dp.toPx(), chartTop + 4.dp.toPx(), labelPaint)
-                drawText("${formatDecimal(minWeight)}kg", chartRight + 6.dp.toPx(), chartBottom, labelPaint)
+                drawText("${formatDecimal(maxWeight)}kg", chartRight + 8.dp.toPx(), chartTop + 4.dp.toPx(), labelPaint)
+                drawText("${formatDecimal(minWeight)}kg", chartRight + 8.dp.toPx(), chartBottom, labelPaint)
             }
 
             calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
@@ -589,11 +636,26 @@ private fun WeightTrendChart(
             }
 
             chartPoints.forEachIndexed { index, record ->
-                drawCircle(
-                    color = if (record.isMorning()) morningPointColor else pointColor,
-                    radius = 3.dp.toPx(),
-                    center = Offset(xAt(index), yAt(record.weightKg)),
-                )
+                val center = Offset(xAt(index), yAt(record.weightKg))
+                if (record.isMorning()) {
+                    drawCircle(
+                        color = lineColor,
+                        radius = 4.dp.toPx(),
+                        center = center,
+                    )
+                } else {
+                    drawCircle(
+                        color = AppBackground,
+                        radius = 4.dp.toPx(),
+                        center = center,
+                    )
+                    drawCircle(
+                        color = lineColor,
+                        radius = 4.dp.toPx(),
+                        center = center,
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                }
             }
 
             chartPoints.getOrNull(selectedIndex)?.let { record ->
@@ -605,9 +667,10 @@ private fun WeightTrendChart(
                     strokeWidth = 1.dp.toPx(),
                 )
                 drawCircle(
-                    color = if (record.isMorning()) morningPointColor else selectedColor,
-                    radius = 5.dp.toPx(),
+                    color = selectedColor,
+                    radius = 6.dp.toPx(),
                     center = selectedPoint,
+                    style = Stroke(width = 2.dp.toPx()),
                 )
             }
         }
@@ -629,11 +692,24 @@ private fun WeightChartRangeButton(
     onClick: () -> Unit,
 ) {
     if (selected) {
-        Button(onClick = onClick) {
+        Button(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AppPrimary,
+                contentColor = Color.White,
+            ),
+            modifier = Modifier.defaultMinSize(minWidth = 96.dp, minHeight = 48.dp),
+        ) {
             Text(range.label)
         }
     } else {
-        OutlinedButton(onClick = onClick) {
+        OutlinedButton(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+            modifier = Modifier.defaultMinSize(minWidth = 96.dp, minHeight = 48.dp),
+        ) {
             Text(range.label)
         }
     }
@@ -937,3 +1013,16 @@ private const val CHART_RIGHT_PADDING_DP = 56
 private const val CHART_TIME_BAND_MORNING = 0
 private const val CHART_TIME_BAND_NIGHT = 1
 private const val CHART_TIME_BAND_COUNT = 2
+private val AppBackground = Color(0xFFFAFAFC)
+private val HeaderBackground = Color(0xFFF2F2F3)
+private val AppText = Color(0xFF202128)
+private val AppMutedBlue = Color(0xFF4C6399)
+private val AppPrimary = Color(0xFF4B629B)
+private val DividerColor = Color(0xFFE5E5EA)
+private val ChartBlue = Color(0xFF07577D)
+private val ChartGrid = Color(0xFFE4E4E4)
+private val ChartTrend = Color(0xFF8F8F8F)
+private val ChartStepBar = Color(0x337E57B2)
+private val ChartLabel = Color(0xFF7D7D84)
+private val ChartMissingPoint = Color(0xFFB0B0B0)
+private val SliderTrack = Color(0xFFABABB1)
