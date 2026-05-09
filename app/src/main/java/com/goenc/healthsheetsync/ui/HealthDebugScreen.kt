@@ -473,30 +473,6 @@ private fun WeightTrendChart(
             style = MaterialTheme.typography.titleMedium,
             color = AppMutedBlue,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            WeightChartRange.entries.forEach { range ->
-                WeightChartRangeButton(
-                    range = range,
-                    selected = range == selectedRange,
-                    onClick = { selectedRange = range },
-                )
-            }
-        }
-        Slider(
-            value = sliderPosition,
-            onValueChange = { position ->
-                chartEndAt = chartEndAtFromSlider(position, earliestEndAt, latestEndAt)
-            },
-            enabled = earliestEndAt != null && latestEndAt != null && earliestEndAt.isBefore(latestEndAt),
-            colors = SliderDefaults.colors(
-                thumbColor = Color.Transparent,
-                activeTrackColor = SliderTrack,
-                inactiveTrackColor = SliderTrack,
-                disabledThumbColor = Color.Transparent,
-                disabledActiveTrackColor = SliderTrack,
-                disabledInactiveTrackColor = SliderTrack,
-            ),
-        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -723,6 +699,30 @@ private fun WeightTrendChart(
                         )
                     }
                 }
+            }
+        }
+        Slider(
+            value = sliderPosition,
+            onValueChange = { position ->
+                chartEndAt = chartEndAtFromSlider(position, earliestEndAt, latestEndAt)
+            },
+            enabled = earliestEndAt != null && latestEndAt != null && earliestEndAt.isBefore(latestEndAt),
+            colors = SliderDefaults.colors(
+                thumbColor = Color.Transparent,
+                activeTrackColor = SliderTrack,
+                inactiveTrackColor = SliderTrack,
+                disabledThumbColor = Color.Transparent,
+                disabledActiveTrackColor = SliderTrack,
+                disabledInactiveTrackColor = SliderTrack,
+            ),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            WeightChartRange.entries.forEach { range ->
+                WeightChartRangeButton(
+                    range = range,
+                    selected = range == selectedRange,
+                    onClick = { selectedRange = range },
+                )
             }
         }
     }
