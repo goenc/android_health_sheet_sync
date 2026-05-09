@@ -115,13 +115,13 @@ fun HealthDebugScreen(
             return@Column
         }
 
-        Header(
-            onSettingsClick = { showSettings = true },
-        )
+        Header()
         Column(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
+            WeightTrendChart(state.weightRecords, state.stepDailyRecords)
+
             DebugSection(title = "体重記録") {
                 WeightSummary(state.weightRecords, state.stepDailyRecords)
             }
@@ -132,6 +132,8 @@ fun HealthDebugScreen(
                     GlucoseRecordRow(record)
                 }
             }
+
+            SettingsButton(onClick = { showSettings = true })
         }
     }
 }
@@ -161,9 +163,7 @@ private fun LoadingScreen(
 }
 
 @Composable
-private fun Header(
-    onSettingsClick: () -> Unit,
-) {
+private fun Header() {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = HeaderBackground,
@@ -180,19 +180,23 @@ private fun Header(
                 fontWeight = FontWeight.Bold,
                 color = AppText,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                OutlinedButton(
-                    onClick = onSettingsClick,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-                    modifier = Modifier.defaultMinSize(minWidth = 92.dp, minHeight = 52.dp),
-                ) {
-                    Text("設定")
-                }
-            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        OutlinedButton(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+            modifier = Modifier.defaultMinSize(minWidth = 120.dp, minHeight = 52.dp),
+        ) {
+            Text("設定")
         }
     }
 }
@@ -388,7 +392,6 @@ private fun WeightSummary(
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
     DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
     LatestStepsLine(dailySteps)
-    WeightTrendChart(records, dailySteps)
 }
 
 @Composable
