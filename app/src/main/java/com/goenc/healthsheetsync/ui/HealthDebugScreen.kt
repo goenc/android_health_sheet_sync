@@ -117,7 +117,6 @@ fun HealthDebugScreen(
             return@Column
         }
 
-        Header()
         Column(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
@@ -159,28 +158,6 @@ private fun LoadingScreen(
                 text = "データロード中",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
-}
-
-@Composable
-private fun Header() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = HeaderBackground,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            Text(
-                text = "ヘルスシート同期",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = AppText,
             )
         }
     }
@@ -471,7 +448,7 @@ private fun WeightTrendChart(
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "体重グラフ",
+            text = "体重、歩数",
             style = MaterialTheme.typography.titleMedium,
             color = AppMutedBlue,
         )
