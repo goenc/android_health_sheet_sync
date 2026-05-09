@@ -51,8 +51,8 @@ import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -401,6 +401,7 @@ private fun WeightTrendChart(
     val stepBarColor = Color(0x667B1FA2)
     val weekBoundaryColor = colorScheme.outlineVariant
     val axisColor = colorScheme.outline
+    val missingPointColor = Color(0xFF9E9E9E)
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -571,7 +572,7 @@ private fun WeightTrendChart(
             val missingPointStroke = Stroke(width = 2.dp.toPx())
             calculateMissingWeightPoints(chartPoints).forEach { missingPoint ->
                 drawCircle(
-                    color = lineColor,
+                    color = missingPointColor,
                     radius = 4.dp.toPx(),
                     center = Offset(xAtTime(missingPoint.measuredAt), yAt(missingPoint.weightKg)),
                     style = missingPointStroke,
@@ -768,27 +769,52 @@ private fun List<DebugWeightRecord>.toChartWeightPoints(): List<ChartWeightPoint
                 sourceCount = records.size,
             )
         }
-        .sortedBy { it.measuredAt }
+        .sortedWith(compareBy<ChartWeightPoint> { it.targetDate }.thenBy { it.timeBand.chartTimeBandOrder() })
 }
 
 private fun calculateMissingWeightPoints(records: List<ChartWeightPoint>): List<ChartWeightPoint> {
     return records.zipWithNext().flatMap { (previous, current) ->
-        val missingDays = ChronoUnit.DAYS.between(previous.targetDate, current.targetDate) - 1
-        if (missingDays <= 0) return@flatMap emptyList()
+        val previousIndex = previous.chartGroupIndex()
+        val currentIndex = current.chartGroupIndex()
+        val missingGroupCount = currentIndex - previousIndex - 1
+        if (missingGroupCount <= 0) return@flatMap emptyList()
 
-        val weightStep = (current.weightKg - previous.weightKg) / (missingDays + 1)
-        (1..missingDays.toInt()).map { dayOffset ->
-            val targetDate = previous.targetDate.plusDays(dayOffset.toLong())
+        val weightStep = (current.weightKg - previous.weightKg) / (missingGroupCount + 1)
+        (1..missingGroupCount.toInt()).map { groupOffset ->
+            val group = chartGroupAt(previousIndex + groupOffset)
             ChartWeightPoint(
-                measuredAt = targetDate.atTime(previous.measuredAt.toLocalTime()),
-                targetDate = targetDate,
-                timeBand = previous.timeBand,
-                weightKg = previous.weightKg + weightStep * dayOffset,
+                measuredAt = group.targetDate.atTime(group.timeBand.chartRepresentativeTime()),
+                targetDate = group.targetDate,
+                timeBand = group.timeBand,
+                weightKg = previous.weightKg + weightStep * groupOffset,
                 sourceCount = 0,
             )
         }
     }
 }
+
+private data class ChartGroup(
+    val targetDate: LocalDate,
+    val timeBand: String,
+)
+
+private fun ChartWeightPoint.chartGroupIndex(): Long =
+    targetDate.toEpochDay() * CHART_TIME_BAND_COUNT + timeBand.chartTimeBandOrder()
+
+private fun chartGroupAt(index: Long): ChartGroup {
+    val targetDate = LocalDate.ofEpochDay(Math.floorDiv(index, CHART_TIME_BAND_COUNT.toLong()))
+    val timeBand = when (Math.floorMod(index, CHART_TIME_BAND_COUNT.toLong()).toInt()) {
+        CHART_TIME_BAND_MORNING -> "朝"
+        else -> "夜"
+    }
+    return ChartGroup(targetDate, timeBand)
+}
+
+private fun String.chartTimeBandOrder(): Int =
+    if (this == "朝") CHART_TIME_BAND_MORNING else CHART_TIME_BAND_NIGHT
+
+private fun String.chartRepresentativeTime(): LocalTime =
+    if (this == "朝") LocalTime.of(8, 0) else LocalTime.of(20, 0)
 
 private fun calculateTrendLine(records: List<ChartWeightPoint>): WeightTrendLine? {
     if (records.size <= 1) return null
@@ -908,3 +934,6 @@ private const val STEP_CHART_MAX_STEPS = 30_000f
 private const val STEP_REFERENCE_STEPS = 10_000f
 private const val CHART_LEFT_PADDING_DP = 30
 private const val CHART_RIGHT_PADDING_DP = 56
+private const val CHART_TIME_BAND_MORNING = 0
+private const val CHART_TIME_BAND_NIGHT = 1
+private const val CHART_TIME_BAND_COUNT = 2
