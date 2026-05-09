@@ -4,8 +4,8 @@ import android.graphics.Paint
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -369,11 +369,14 @@ private fun WeightTrendChart(
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.OneMonth) }
+    var chartDuration by remember(sortedRecords) {
+        mutableStateOf(defaultChartDuration(sortedRecords, selectedRange))
+    }
     var chartEndAt by remember(sortedRecords, selectedRange) {
         mutableStateOf(sortedRecords.lastOrNull()?.measuredAt)
     }
-    val chartWindow = remember(sortedRecords, selectedRange, chartEndAt) {
-        selectedRange.window(sortedRecords, chartEndAt)
+    val chartWindow = remember(sortedRecords, chartDuration, chartEndAt) {
+        chartWindow(sortedRecords, chartDuration, chartEndAt)
     }
     val chartRecords = remember(sortedRecords, chartWindow) {
         chartWindow?.let { window ->
@@ -384,13 +387,14 @@ private fun WeightTrendChart(
     var selectedIndex by remember(chartPoints) { mutableStateOf(chartPoints.lastIndex) }
     val selectedPoint = chartPoints.getOrNull(selectedIndex)
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
-    val earliestEndAt = remember(sortedRecords, selectedRange) {
-        selectedRange.minimumEndAt(sortedRecords)
+    val earliestEndAt = remember(sortedRecords, chartDuration) {
+        minimumChartEndAt(sortedRecords, chartDuration)
     }
     val sliderPosition = remember(chartEndAt, earliestEndAt, latestEndAt) {
         chartSliderPosition(chartEndAt, earliestEndAt, latestEndAt)
     }
     val currentChartEndAt by rememberUpdatedState(chartEndAt)
+    val currentChartDuration by rememberUpdatedState(chartDuration)
     val colorScheme = MaterialTheme.colorScheme
     val lineColor = colorScheme.primary
     val pointColor = colorScheme.primary
@@ -414,7 +418,10 @@ private fun WeightTrendChart(
                 WeightChartRangeButton(
                     range = range,
                     selected = range == selectedRange,
-                    onClick = { selectedRange = range },
+                    onClick = {
+                        selectedRange = range
+                        chartDuration = defaultChartDuration(sortedRecords, range)
+                    },
                 )
             }
         }
@@ -430,14 +437,20 @@ private fun WeightTrendChart(
                 .fillMaxWidth()
                 .height(220.dp)
                 .pointerInput(earliestEndAt, latestEndAt) {
-                    detectHorizontalDragGestures { _, dragAmount ->
-                        chartEndAt = chartEndAtAfterHorizontalDrag(
+                    detectTransformGestures { centroid, pan, zoom, _ ->
+                        val transformedWindow = chartWindowAfterTransform(
                             currentEndAt = currentChartEndAt,
-                            earliestEndAt = earliestEndAt,
-                            latestEndAt = latestEndAt,
-                            dragAmount = dragAmount,
+                            currentDuration = currentChartDuration,
+                            earliestRecordAt = sortedRecords.firstOrNull()?.measuredAt,
+                            latestRecordAt = latestEndAt,
+                            panAmount = pan.x,
+                            zoom = zoom,
+                            focusX = centroid.x,
                             width = size.width.toFloat(),
+                            horizontalPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
                         )
+                        chartDuration = transformedWindow.duration
+                        chartEndAt = transformedWindow.endAt
                     }
                 }
                 .pointerInput(chartPoints, chartWindow) {
@@ -746,6 +759,11 @@ private data class StepBar(
     val steps: Long,
 )
 
+private data class ChartTransformWindow(
+    val endAt: LocalDateTime?,
+    val duration: Duration,
+)
+
 private fun ChartWeightPoint.isMorning(): Boolean =
     timeBand == "朝"
 
@@ -857,6 +875,27 @@ private fun calculateStepBars(
     }
 }
 
+private fun defaultChartDuration(records: List<DebugWeightRecord>, range: WeightChartRange): Duration {
+    val latestAt = records.lastOrNull()?.measuredAt ?: return CHART_DEFAULT_VISIBLE_DURATION
+    return range.durationAt(latestAt)
+}
+
+private fun chartWindow(
+    records: List<DebugWeightRecord>,
+    duration: Duration,
+    visibleEndAt: LocalDateTime?,
+): ChartTimeWindow? {
+    val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return null
+    return ChartTimeWindow(rangeEndAt.minus(duration), rangeEndAt)
+}
+
+private fun minimumChartEndAt(records: List<DebugWeightRecord>, duration: Duration): LocalDateTime? {
+    val firstAt = records.firstOrNull()?.measuredAt ?: return null
+    val latestAt = records.lastOrNull()?.measuredAt ?: return null
+    val endForFirstRecord = firstAt.plus(duration)
+    return if (endForFirstRecord.isAfter(latestAt)) latestAt else endForFirstRecord
+}
+
 private fun chartSliderPosition(
     currentEndAt: LocalDateTime?,
     earliestEndAt: LocalDateTime?,
@@ -882,20 +921,49 @@ private fun chartEndAtFromSlider(
     return earliestEndAt.plus(Duration.ofMillis((totalMillis * position.coerceIn(0f, 1f)).toLong()))
 }
 
-private fun chartEndAtAfterHorizontalDrag(
+private fun chartWindowAfterTransform(
     currentEndAt: LocalDateTime?,
-    earliestEndAt: LocalDateTime?,
-    latestEndAt: LocalDateTime?,
-    dragAmount: Float,
+    currentDuration: Duration,
+    earliestRecordAt: LocalDateTime?,
+    latestRecordAt: LocalDateTime?,
+    panAmount: Float,
+    zoom: Float,
+    focusX: Float,
     width: Float,
-): LocalDateTime? {
-    if (earliestEndAt == null || latestEndAt == null || width <= 0f) return currentEndAt
-    val baseEndAt = currentEndAt ?: latestEndAt
-    val totalMillis = Duration.between(earliestEndAt, latestEndAt).toMillis()
-    if (totalMillis <= 0L) return baseEndAt.coerceIn(earliestEndAt, latestEndAt)
+    horizontalPadding: Float,
+): ChartTransformWindow {
+    if (earliestRecordAt == null || latestRecordAt == null || width <= 0f) {
+        return ChartTransformWindow(currentEndAt, currentDuration)
+    }
 
-    val dragMillis = (totalMillis * dragAmount / width).toLong()
-    return baseEndAt.minus(Duration.ofMillis(dragMillis)).coerceIn(earliestEndAt, latestEndAt)
+    val chartLeft = horizontalPadding
+    val chartRight = width - horizontalPadding
+    val chartWidth = max(1f, chartRight - chartLeft)
+    val focusRatio = ((focusX.coerceIn(chartLeft, chartRight) - chartLeft) / chartWidth).coerceIn(0f, 1f)
+    val maxDurationMillis = max(
+        CHART_MIN_VISIBLE_DURATION.toMillis(),
+        Duration.between(earliestRecordAt, latestRecordAt).toMillis(),
+    )
+    val minDurationMillis = CHART_MIN_VISIBLE_DURATION.toMillis().coerceAtMost(maxDurationMillis)
+    val currentDurationMillis = currentDuration.toMillis().coerceIn(minDurationMillis, maxDurationMillis)
+    val zoomedDurationMillis = (currentDurationMillis / zoom.coerceAtLeast(CHART_MIN_ZOOM_FACTOR))
+        .toLong()
+        .coerceIn(minDurationMillis, maxDurationMillis)
+    val zoomedDuration = Duration.ofMillis(zoomedDurationMillis)
+    val baseEndAt = currentEndAt ?: latestRecordAt
+    val baseStartAt = baseEndAt.minus(Duration.ofMillis(currentDurationMillis))
+    val focusOffsetMillis = (currentDurationMillis * focusRatio).toLong()
+    val focusAt = baseStartAt.plus(Duration.ofMillis(focusOffsetMillis))
+    val newFocusOffsetMillis = (zoomedDurationMillis * focusRatio).toLong()
+    val panMillis = (zoomedDurationMillis * panAmount / chartWidth).toLong()
+    val unclampedStartAt = focusAt
+        .minus(Duration.ofMillis(newFocusOffsetMillis))
+        .minus(Duration.ofMillis(panMillis))
+    val clampedStartAt = unclampedStartAt.coerceIn(
+        latestRecordAt.minus(zoomedDuration),
+        latestRecordAt,
+    )
+    return ChartTransformWindow(clampedStartAt.plus(zoomedDuration), zoomedDuration)
 }
 
 private fun nearestChartIndex(
@@ -937,3 +1005,6 @@ private const val CHART_RIGHT_PADDING_DP = 56
 private const val CHART_TIME_BAND_MORNING = 0
 private const val CHART_TIME_BAND_NIGHT = 1
 private const val CHART_TIME_BAND_COUNT = 2
+private val CHART_DEFAULT_VISIBLE_DURATION: Duration = Duration.ofDays(31)
+private val CHART_MIN_VISIBLE_DURATION: Duration = Duration.ofHours(12)
+private const val CHART_MIN_ZOOM_FACTOR = 0.1f
