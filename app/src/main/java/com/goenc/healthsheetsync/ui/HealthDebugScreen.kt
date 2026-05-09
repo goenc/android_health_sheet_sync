@@ -484,7 +484,7 @@ private fun WeightTrendChart(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(390.dp)
+                .height(520.dp)
                 .pointerInput(earliestEndAt, latestEndAt) {
                     detectHorizontalDragGestures { _, dragAmount ->
                         chartEndAt = chartEndAtAfterHorizontalDrag(
@@ -524,8 +524,8 @@ private fun WeightTrendChart(
             val chartBottom = size.height - bottomPadding
             val chartWidth = max(1f, chartRight - chartLeft)
             val chartHeight = max(1f, chartBottom - chartTop)
-            val minWeight = chartPoints.minOf { it.weightKg }
-            val maxWeight = chartPoints.maxOf { it.weightKg }
+            val minWeight = chartPoints.minOf { it.weightKg } - CHART_WEIGHT_PADDING_KG
+            val maxWeight = chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_PADDING_KG
             val weightRange = max(1.0, maxWeight - minWeight)
             val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = axisColor.toArgb()
@@ -584,10 +584,10 @@ private fun WeightTrendChart(
 
             drawContext.canvas.nativeCanvas.apply {
                 labelPaint.textAlign = Paint.Align.RIGHT
-                drawText("1", chartLeft - 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
+                drawText("${formatDecimal(maxWeight)}kg", chartLeft - 8.dp.toPx(), chartTop + 4.dp.toPx(), labelPaint)
+                drawText("${formatDecimal(minWeight)}kg", chartLeft - 8.dp.toPx(), chartBottom, labelPaint)
                 labelPaint.textAlign = Paint.Align.LEFT
-                drawText("${formatDecimal(maxWeight)}kg", chartRight + 8.dp.toPx(), chartTop + 4.dp.toPx(), labelPaint)
-                drawText("${formatDecimal(minWeight)}kg", chartRight + 8.dp.toPx(), chartBottom, labelPaint)
+                drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
             }
 
             calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
@@ -1008,11 +1008,12 @@ private fun nearestChartIndex(
 private const val TAG = "HealthSheetSync"
 private const val STEP_CHART_MAX_STEPS = 30_000f
 private const val STEP_REFERENCE_STEPS = 10_000f
-private const val CHART_LEFT_PADDING_DP = 30
-private const val CHART_RIGHT_PADDING_DP = 56
+private const val CHART_LEFT_PADDING_DP = 62
+private const val CHART_RIGHT_PADDING_DP = 30
 private const val CHART_TIME_BAND_MORNING = 0
 private const val CHART_TIME_BAND_NIGHT = 1
 private const val CHART_TIME_BAND_COUNT = 2
+private const val CHART_WEIGHT_PADDING_KG = 2.0
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)
