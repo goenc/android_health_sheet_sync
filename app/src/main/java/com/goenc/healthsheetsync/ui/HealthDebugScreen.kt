@@ -514,7 +514,7 @@ private fun WeightTrendChart(
                 val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
                 val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
                 val topPadding = 28.dp.toPx()
-                val bottomPadding = 58.dp.toPx()
+                val bottomPadding = 8.dp.toPx()
                 val chartLeft = leftPadding
                 val chartRight = size.width - rightPadding
                 val chartTop = topPadding
@@ -707,6 +707,7 @@ private fun WeightTrendChart(
                 chartEndAt = chartEndAtFromSlider(position, earliestEndAt, latestEndAt)
             },
             enabled = earliestEndAt != null && latestEndAt != null && earliestEndAt.isBefore(latestEndAt),
+            modifier = Modifier.height(32.dp),
             colors = SliderDefaults.colors(
                 thumbColor = Color.Transparent,
                 activeTrackColor = SliderTrack,
