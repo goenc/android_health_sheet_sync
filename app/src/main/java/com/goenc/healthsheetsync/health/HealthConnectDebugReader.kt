@@ -9,10 +9,9 @@ import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
-import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
-import java.time.Duration
+import com.goenc.healthsheetsync.data.LocalHealthDataStore
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -21,6 +20,7 @@ import kotlin.reflect.KClass
 
 class HealthConnectDebugReader(private val context: Context) {
     private val zoneId: ZoneId = ZoneId.systemDefault()
+    private val localStore = LocalHealthDataStore(context)
 
     suspend fun load(): HealthDebugUiState {
         val debugMessages = mutableListOf<String>()
@@ -64,8 +64,8 @@ class HealthConnectDebugReader(private val context: Context) {
         }
 
         val now = Instant.now()
-        val readStart = now.minus(Duration.ofDays(30))
-        debugMessages += "読み取り範囲: ${readStart.toLocalDateTime()} - ${now.toLocalDateTime()}"
+        val readStart = Instant.EPOCH
+        debugMessages += "読み取り範囲: 取得可能な最古 - ${now.toLocalDateTime()}"
 
         val weightRecords = runCatching {
             readWeightRecords(client, readStart, now)
@@ -85,18 +85,23 @@ class HealthConnectDebugReader(private val context: Context) {
             debugMessages += error.debugSummary("歩数集計に失敗しました")
             emptyList()
         }
+        if (weightRecords.isNotEmpty() || glucoseRecords.isNotEmpty() || stepDailyRecords.isNotEmpty()) {
+            localStore.save(weightRecords, glucoseRecords, stepDailyRecords)
+        }
+        val storedData = localStore.load()
+        debugMessages += "保存済み件数: 体重${storedData.weightRecords.size}件、血糖${storedData.glucoseRecords.size}件、歩数${storedData.stepDailyRecords.size}日"
         val yesterday = LocalDate.now(zoneId).minusDays(1)
-        val yesterdaySteps = stepDailyRecords.firstOrNull { it.targetDate == yesterday }
+        val yesterdaySteps = storedData.stepDailyRecords.firstOrNull { it.targetDate == yesterday }
 
         return HealthDebugUiState(
             availability = availability,
             permissions = permissionState,
             isLoading = false,
-            weightRecords = weightRecords,
-            glucoseRecords = glucoseRecords,
-            stepDailyRecords = stepDailyRecords,
+            weightRecords = storedData.weightRecords,
+            glucoseRecords = storedData.glucoseRecords,
+            stepDailyRecords = storedData.stepDailyRecords,
             yesterdaySteps = yesterdaySteps,
-            sourceSummaries = buildSourceSummaries(weightRecords, glucoseRecords),
+            sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
             debugMessages = debugMessages,
         )
     }
@@ -168,34 +173,18 @@ class HealthConnectDebugReader(private val context: Context) {
         start: Instant,
         end: Instant,
     ): List<DebugStepDaily> {
-        val startAt = start.toLocalDateTime()
-        val endAt = end.toLocalDateTime()
-        val records = mutableListOf<DebugStepDaily>()
-        var targetDate = startAt.toLocalDate()
-        val endDate = endAt.toLocalDate()
-        while (!targetDate.isAfter(endDate)) {
-            val aggregationStartAt = maxOf(startAt, targetDate.atStartOfDay())
-            val aggregationEndAt = minOf(endAt, targetDate.plusDays(1).atStartOfDay())
-            if (aggregationStartAt.isBefore(aggregationEndAt)) {
-                val response = client.aggregate(
-                    AggregateRequest(
-                        metrics = setOf(StepsRecord.COUNT_TOTAL),
-                        timeRangeFilter = TimeRangeFilter.between(
-                            aggregationStartAt.atZone(zoneId).toInstant(),
-                            aggregationEndAt.atZone(zoneId).toInstant(),
-                        ),
-                    ),
-                )
-                records += DebugStepDaily(
+        val stepRecords = client.readAllRecords(StepsRecord::class, start, end)
+        return stepRecords
+            .groupBy { record -> record.startTime.toLocalDateTime().toLocalDate() }
+            .map { (targetDate, records) ->
+                DebugStepDaily(
                     targetDate = targetDate,
-                    steps = response[StepsRecord.COUNT_TOTAL] ?: 0L,
-                    aggregationStartAt = aggregationStartAt,
-                    aggregationEndAt = aggregationEndAt,
+                    steps = records.sumOf { it.count },
+                    aggregationStartAt = targetDate.atStartOfDay(),
+                    aggregationEndAt = targetDate.plusDays(1).atStartOfDay(),
                 )
             }
-            targetDate = targetDate.plusDays(1)
-        }
-        return records.sortedByDescending { it.targetDate }
+            .sortedByDescending { it.targetDate }
     }
 
     private suspend fun <T : Record> HealthConnectClient.readAllRecords(
@@ -292,6 +281,7 @@ class HealthConnectDebugReader(private val context: Context) {
             HealthPermission.getReadPermission(WeightRecord::class),
             HealthPermission.getReadPermission(BloodGlucoseRecord::class),
             HealthPermission.getReadPermission(StepsRecord::class),
+            HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
         )
 
         fun permissionRequestContract() =
