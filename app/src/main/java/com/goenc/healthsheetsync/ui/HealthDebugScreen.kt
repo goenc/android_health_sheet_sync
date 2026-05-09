@@ -371,8 +371,13 @@ private fun WeightTrendChart(
     var chartEndAt by remember(sortedRecords, selectedRange) {
         mutableStateOf(sortedRecords.lastOrNull()?.measuredAt)
     }
-    val chartRecords = remember(sortedRecords, selectedRange, chartEndAt) {
-        selectedRange.filter(sortedRecords, chartEndAt)
+    val chartWindow = remember(sortedRecords, selectedRange, chartEndAt) {
+        selectedRange.window(sortedRecords, chartEndAt)
+    }
+    val chartRecords = remember(sortedRecords, chartWindow) {
+        chartWindow?.let { window ->
+            sortedRecords.filter { !it.measuredAt.isBefore(window.startAt) && !it.measuredAt.isAfter(window.endAt) }
+        } ?: emptyList()
     }
     var selectedIndex by remember(chartRecords) { mutableStateOf(chartRecords.lastIndex) }
     val selectedRecord = chartRecords.getOrNull(selectedIndex)
@@ -432,19 +437,23 @@ private fun WeightTrendChart(
                         )
                     }
                 }
-                .pointerInput(chartRecords) {
+                .pointerInput(chartRecords, chartWindow) {
                     detectTapGestures { offset ->
                         if (chartRecords.isEmpty()) return@detectTapGestures
+                        val visibleWindow = chartWindow ?: return@detectTapGestures
                         selectedIndex = nearestChartIndex(
                             touchX = offset.x,
                             width = size.width.toFloat(),
-                            pointCount = chartRecords.size,
+                            records = chartRecords,
+                            rangeStartAt = visibleWindow.startAt,
+                            rangeEndAt = visibleWindow.endAt,
                             horizontalPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
                         )
                     }
                 }
         ) {
             if (chartRecords.isEmpty()) return@Canvas
+            val visibleWindow = chartWindow ?: return@Canvas
 
             val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
             val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
@@ -464,16 +473,17 @@ private fun WeightTrendChart(
                 textSize = 11.sp.toPx()
             }
 
-            fun xAtPosition(index: Float): Float {
-                return if (chartRecords.size == 1) {
-                    chartLeft + chartWidth / 2f
-                } else {
-                    chartLeft + chartWidth * index / chartRecords.lastIndex
-                }
+            fun xAtTime(measuredAt: LocalDateTime): Float {
+                val totalMillis = max(1L, Duration.between(visibleWindow.startAt, visibleWindow.endAt).toMillis())
+                val elapsedMillis = Duration.between(
+                    visibleWindow.startAt,
+                    measuredAt.coerceIn(visibleWindow.startAt, visibleWindow.endAt),
+                ).toMillis()
+                return chartLeft + chartWidth * elapsedMillis.toFloat() / totalMillis
             }
 
             fun xAt(index: Int): Float {
-                return xAtPosition(index.toFloat())
+                return xAtTime(chartRecords[index].measuredAt)
             }
 
             fun yAt(weightKg: Double): Float {
@@ -530,13 +540,13 @@ private fun WeightTrendChart(
                 drawText("${formatDecimal(minWeight)}kg", chartRight + 6.dp.toPx(), chartBottom, labelPaint)
             }
 
-            calculateStepBars(dailySteps, chartRecords).forEach { stepBar ->
+            calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
                 val stepRatio = (stepBar.steps.toFloat() / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)
                 val barHeight = chartHeight * stepRatio
                 val barWidth = 12.dp.toPx()
                 drawRect(
                     color = stepBarColor,
-                    topLeft = Offset(xAtPosition(stepBar.centerIndex) - barWidth / 2f, chartBottom - barHeight),
+                    topLeft = Offset(xAtTime(stepBar.centerAt) - barWidth / 2f, chartBottom - barHeight),
                     size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
                 )
             }
@@ -678,10 +688,10 @@ private enum class WeightChartRange(
     TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) }, { startAt -> startAt.plusWeeks(2) }),
     OneWeek("1週間", { latestAt -> latestAt.minusWeeks(1) }, { startAt -> startAt.plusWeeks(1) });
 
-    fun filter(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): List<DebugWeightRecord> {
-        val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return emptyList()
+    fun window(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): ChartTimeWindow? {
+        val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return null
         val rangeStartAt = startAt(rangeEndAt)
-        return records.filter { !it.measuredAt.isBefore(rangeStartAt) && !it.measuredAt.isAfter(rangeEndAt) }
+        return ChartTimeWindow(rangeStartAt, rangeEndAt)
     }
 
     fun durationAt(endAt: LocalDateTime): Duration {
@@ -701,8 +711,13 @@ private data class WeightTrendLine(
     val endWeightKg: Double,
 )
 
+private data class ChartTimeWindow(
+    val startAt: LocalDateTime,
+    val endAt: LocalDateTime,
+)
+
 private data class StepBar(
-    val centerIndex: Float,
+    val centerAt: LocalDateTime,
     val steps: Long,
 )
 
@@ -743,17 +758,15 @@ private fun calculateTrendLine(records: List<DebugWeightRecord>): WeightTrendLin
 
 private fun calculateStepBars(
     dailySteps: List<DebugStepDaily>,
-    records: List<DebugWeightRecord>,
+    window: ChartTimeWindow,
 ): List<StepBar> {
     if (dailySteps.isEmpty()) return emptyList()
-    val recordIndicesByDate: Map<LocalDate, List<Int>> = records
-        .mapIndexed { index, record -> record.targetDate to index }
-        .groupBy({ it.first }, { it.second })
     return dailySteps.mapNotNull { dailyStep ->
         if (dailyStep.steps <= 0) return@mapNotNull null
-        val dayIndices = recordIndicesByDate[dailyStep.targetDate] ?: return@mapNotNull null
+        val centerAt = dailyStep.targetDate.atStartOfDay().plusHours(12)
+        if (centerAt.isBefore(window.startAt) || centerAt.isAfter(window.endAt)) return@mapNotNull null
         StepBar(
-            centerIndex = (dayIndices.first() + dayIndices.last()) / 2f,
+            centerAt = centerAt,
             steps = dailyStep.steps,
         )
     }
@@ -803,18 +816,25 @@ private fun chartEndAtAfterHorizontalDrag(
 private fun nearestChartIndex(
     touchX: Float,
     width: Float,
-    pointCount: Int,
+    records: List<DebugWeightRecord>,
+    rangeStartAt: LocalDateTime,
+    rangeEndAt: LocalDateTime,
     horizontalPadding: Float,
 ): Int {
-    if (pointCount <= 1) return 0
+    if (records.size <= 1) return 0
     val chartLeft = horizontalPadding
     val chartRight = width - horizontalPadding
     val chartWidth = max(1f, chartRight - chartLeft)
     val clampedX = touchX.coerceIn(chartLeft, chartRight)
+    val totalMillis = max(1L, Duration.between(rangeStartAt, rangeEndAt).toMillis())
     var nearestIndex = 0
     var nearestDistance = Float.MAX_VALUE
-    repeat(pointCount) { index ->
-        val x = chartLeft + chartWidth * index / (pointCount - 1)
+    records.forEachIndexed { index, record ->
+        val elapsedMillis = Duration.between(
+            rangeStartAt,
+            record.measuredAt.coerceIn(rangeStartAt, rangeEndAt),
+        ).toMillis()
+        val x = chartLeft + chartWidth * elapsedMillis.toFloat() / totalMillis
         val distance = abs(clampedX - x)
         if (distance < nearestDistance) {
             nearestDistance = distance
