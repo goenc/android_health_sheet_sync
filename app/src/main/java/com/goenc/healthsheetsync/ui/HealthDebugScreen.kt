@@ -27,8 +27,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -439,9 +437,6 @@ private fun WeightTrendChart(
     val earliestEndAt = remember(sortedRecords, selectedRange) {
         selectedRange.minimumEndAt(sortedRecords)
     }
-    val sliderPosition = remember(chartEndAt, earliestEndAt, latestEndAt) {
-        chartSliderPosition(chartEndAt, earliestEndAt, latestEndAt)
-    }
     val currentChartEndAt by rememberUpdatedState(chartEndAt)
     val lineColor = ChartBlue
     val selectedColor = AppPrimary
@@ -780,22 +775,6 @@ private fun WeightTrendChart(
                 }
             }
         }
-        Slider(
-            value = sliderPosition,
-            onValueChange = { position ->
-                chartEndAt = chartEndAtFromSlider(position, earliestEndAt, latestEndAt)
-            },
-            enabled = earliestEndAt != null && latestEndAt != null && earliestEndAt.isBefore(latestEndAt),
-            modifier = Modifier.height(32.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = Color.Transparent,
-                activeTrackColor = SliderTrack,
-                inactiveTrackColor = SliderTrack,
-                disabledThumbColor = Color.Transparent,
-                disabledActiveTrackColor = SliderTrack,
-                disabledInactiveTrackColor = SliderTrack,
-            ),
-        )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             WeightChartRange.entries.forEach { range ->
                 WeightChartRangeButton(
@@ -1091,31 +1070,6 @@ private fun calculateStepBars(
     }
 }
 
-private fun chartSliderPosition(
-    currentEndAt: LocalDateTime?,
-    earliestEndAt: LocalDateTime?,
-    latestEndAt: LocalDateTime?,
-): Float {
-    if (currentEndAt == null || earliestEndAt == null || latestEndAt == null) return 1f
-    val totalMillis = Duration.between(earliestEndAt, latestEndAt).toMillis()
-    if (totalMillis <= 0L) return 1f
-
-    val currentMillis = Duration.between(earliestEndAt, currentEndAt.coerceIn(earliestEndAt, latestEndAt)).toMillis()
-    return (currentMillis.toFloat() / totalMillis).coerceIn(0f, 1f)
-}
-
-private fun chartEndAtFromSlider(
-    position: Float,
-    earliestEndAt: LocalDateTime?,
-    latestEndAt: LocalDateTime?,
-): LocalDateTime? {
-    if (earliestEndAt == null || latestEndAt == null) return latestEndAt
-    val totalMillis = Duration.between(earliestEndAt, latestEndAt).toMillis()
-    if (totalMillis <= 0L) return latestEndAt
-
-    return earliestEndAt.plus(Duration.ofMillis((totalMillis * position.coerceIn(0f, 1f)).toLong()))
-}
-
 private fun chartEndAtAfterHorizontalDrag(
     currentEndAt: LocalDateTime?,
     earliestEndAt: LocalDateTime?,
@@ -1187,5 +1141,4 @@ private val ChartTrend = Color(0xFF8F8F8F)
 private val ChartStepBar = Color(0x337E57B2)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
-private val SliderTrack = Color(0xFFABABB1)
 private val PopupBackground = Color(0xF7FFFFFF)
