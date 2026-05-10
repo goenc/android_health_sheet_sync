@@ -125,10 +125,6 @@ fun HealthDebugScreen(
         ) {
             WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
-            DebugSection(title = "体重記録") {
-                WeightSummary(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
-            }
-
             sharedText?.takeIf { it.isNotBlank() }?.let { text ->
                 DebugSection(title = "共有テキスト") {
                     sharedTextImportStatus?.let { status ->
@@ -407,30 +403,6 @@ private fun DebugLine(label: String, value: String) {
             color = AppText,
         )
     }
-}
-
-@Composable
-private fun WeightSummary(
-    records: List<DebugWeightRecord>,
-    dailySteps: List<DebugStepDaily>,
-    glucoseRecords: List<DebugGlucoseRecord>,
-) {
-    val latestRecord = records.maxByOrNull { it.measuredAt }
-
-    if (latestRecord == null) {
-        Text(
-            text = "体重記録はありません",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        return
-    }
-
-    val latestSteps = dailySteps.maxByOrNull { it.targetDate }
-    val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
-
-    DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
-    DebugLine("最新の歩数", latestSteps?.let { "${it.steps}歩" } ?: "-")
-    DebugLine("最新の空腹時血糖", latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)} mg/dL" } ?: "-")
 }
 
 @Composable
