@@ -129,25 +129,14 @@ fun HealthDebugScreen(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Health Sheet Sync",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = AppText,
-                )
-                IconButton(onClick = { showSettings = true }) {
-                    SettingsGearIcon()
-                }
-            }
+            MainSummaryBar(
+                records = state.weightRecords,
+                dailySteps = state.stepDailyRecords,
+                glucoseRecords = state.glucoseRecords,
+                onSettingsClick = { showSettings = true },
+            )
 
             WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
-
-            WeightSummary(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
             sharedText?.takeIf { it.isNotBlank() }?.let { text ->
                 DebugSection(title = "共有テキスト") {
@@ -170,13 +159,60 @@ fun HealthDebugScreen(
 }
 
 @Composable
+private fun MainSummaryBar(
+    records: List<DebugWeightRecord>,
+    dailySteps: List<DebugStepDaily>,
+    glucoseRecords: List<DebugGlucoseRecord>,
+    onSettingsClick: () -> Unit,
+) {
+    val latestRecord = records.maxByOrNull { it.measuredAt }
+    val latestSteps = dailySteps.maxByOrNull { it.targetDate }
+    val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-")
+            SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-")
+            SummaryValue(
+                "血糖",
+                latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
+            )
+        }
+        IconButton(onClick = onSettingsClick) {
+            SettingsGearIcon()
+        }
+    }
+}
+
+@Composable
+private fun SummaryValue(
+    label: String,
+    value: String,
+) {
+    Text(
+        text = "$label $value",
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = AppText,
+        fontSize = 13.sp,
+    )
+}
+
+@Composable
 private fun SettingsGearIcon(
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier = modifier.size(24.dp)) {
-        val strokeWidth = 2.dp.toPx()
+        val strokeWidth = 3.dp.toPx()
         val center = Offset(size.width / 2f, size.height / 2f)
-        val innerRadius = size.minDimension * 0.14f
         val ringRadius = size.minDimension * 0.26f
         val toothStartRadius = size.minDimension * 0.36f
         val toothEndRadius = size.minDimension * 0.44f
@@ -205,11 +241,6 @@ private fun SettingsGearIcon(
             radius = ringRadius,
             center = center,
             style = Stroke(width = strokeWidth),
-        )
-        drawCircle(
-            color = AppText,
-            radius = innerRadius,
-            center = center,
         )
     }
 }
@@ -453,30 +484,6 @@ private fun DebugLine(label: String, value: String) {
             color = AppText,
         )
     }
-}
-
-@Composable
-private fun WeightSummary(
-    records: List<DebugWeightRecord>,
-    dailySteps: List<DebugStepDaily>,
-    glucoseRecords: List<DebugGlucoseRecord>,
-) {
-    val latestRecord = records.maxByOrNull { it.measuredAt }
-
-    if (latestRecord == null) {
-        Text(
-            text = "体重記録はありません",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        return
-    }
-
-    val latestSteps = dailySteps.maxByOrNull { it.targetDate }
-    val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
-
-    DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
-    DebugLine("最新の歩数", latestSteps?.let { "${it.steps}歩" } ?: "-")
-    DebugLine("最新の空腹時血糖", latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)} mg/dL" } ?: "-")
 }
 
 @Composable
