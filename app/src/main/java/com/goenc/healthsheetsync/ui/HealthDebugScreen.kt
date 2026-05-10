@@ -126,7 +126,7 @@ fun HealthDebugScreen(
             WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
             DebugSection(title = "体重記録") {
-                WeightSummary(state.weightRecords, state.stepDailyRecords)
+                WeightSummary(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
             }
 
             DebugSection(title = "血糖値記録") {
@@ -420,6 +420,7 @@ private fun DebugLine(label: String, value: String) {
 private fun WeightSummary(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
+    glucoseRecords: List<DebugGlucoseRecord>,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
 
@@ -434,6 +435,12 @@ private fun WeightSummary(
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
     DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
     LatestStepsLine(dailySteps)
+    Text(
+        text = "平均血糖 ${calculateWeightedAverageFastingGlucose(glucoseRecords)?.let { "${formatDecimal(it)} mg/dL" } ?: "-"}",
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = AppText,
+    )
 }
 
 @Composable
@@ -789,10 +796,10 @@ private fun WeightTrendChart(
                     )
                 }
                 drawContext.canvas.nativeCanvas.apply {
-                    glucosePaint.textAlign = Paint.Align.LEFT
+                    glucosePaint.textAlign = Paint.Align.RIGHT
                     drawText(
                         "${formatDecimal(chart.weightedAverageMgDl)}",
-                        chartRight + 8.dp.toPx(),
+                        chartRight - 4.dp.toPx(),
                         glucoseY + 4.dp.toPx(),
                         glucosePaint,
                     )
@@ -1239,16 +1246,10 @@ private fun calculateFastingGlucoseChart(
     glucoseRecords: List<DebugGlucoseRecord>,
     window: ChartTimeWindow,
 ): FastingGlucoseChart? {
-    val fastingRecords = glucoseRecords
-        .filter { it.mealRelation == "空腹時" }
-        .sortedByDescending { it.measuredAt }
+    val fastingRecords = glucoseRecords.fastingGlucoseRecords()
     if (fastingRecords.isEmpty()) return null
 
-    val weightedRecords = List(GLUCOSE_WEIGHT_COUNT) { index ->
-        fastingRecords.getOrElse(index) { fastingRecords.last() }
-    }
-    val weightedAverage = weightedRecords.zip(GLUCOSE_RECENT_WEIGHTS)
-        .sumOf { (record, weight) -> record.bloodGlucoseMgDl * weight }
+    val weightedAverage = calculateWeightedAverageFastingGlucose(fastingRecords) ?: return null
     val visibleRecords = fastingRecords
         .filter { record ->
             val pointAt = record.targetDate.atStartOfDay().plusHours(12)
@@ -1261,6 +1262,27 @@ private fun calculateFastingGlucoseChart(
         visibleRecords = visibleRecords,
     )
 }
+
+private fun calculateWeightedAverageFastingGlucose(
+    glucoseRecords: List<DebugGlucoseRecord>,
+): Double? {
+    val fastingRecords = glucoseRecords.fastingGlucoseRecords()
+    if (fastingRecords.isEmpty()) return null
+
+    val weightedRecords = List(GLUCOSE_WEIGHT_COUNT) { index ->
+        fastingRecords.getOrElse(index) { fastingRecords.last() }
+    }
+    return weightedRecords.zip(GLUCOSE_RECENT_WEIGHTS)
+        .sumOf { (record, weight) -> record.bloodGlucoseMgDl * weight }
+}
+
+private fun List<DebugGlucoseRecord>.fastingGlucoseRecords(): List<DebugGlucoseRecord> {
+    return filter { it.mealRelation.isFastingGlucoseRelation() }
+        .sortedByDescending { it.measuredAt }
+}
+
+private fun String.isFastingGlucoseRelation(): Boolean =
+    this == "空腹時" || this == "食前"
 
 private fun calculateStepBars(
     dailySteps: List<DebugStepDaily>,
