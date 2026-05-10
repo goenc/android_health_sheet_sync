@@ -195,11 +195,12 @@ private fun MainSummaryValues(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-")
-        SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-")
+        SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-", ChartBlue)
+        SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-", ChartStepBar)
         SummaryValue(
             "血糖",
             latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
+            ChartGlucose,
         )
     }
 }
@@ -208,12 +209,13 @@ private fun MainSummaryValues(
 private fun SummaryValue(
     label: String,
     value: String,
+    color: Color,
 ) {
     Text(
         text = "$label $value",
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.SemiBold,
-        color = AppText,
+        color = color,
         fontSize = 13.sp,
     )
 }
