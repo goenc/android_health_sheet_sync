@@ -429,6 +429,11 @@ private fun WeightTrendChart(
     val chartPoints = remember(chartRecords) { chartRecords.toChartWeightPoints() }
     var selectedIndex by remember(chartPoints) { mutableStateOf<Int?>(null) }
     val selectedPoint = selectedIndex?.let { chartPoints.getOrNull(it) }
+    val selectedSteps = remember(dailySteps, selectedPoint) {
+        selectedPoint?.let { point ->
+            dailySteps.firstOrNull { it.targetDate == point.targetDate }
+        }
+    }
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
     val earliestEndAt = remember(sortedRecords, selectedRange) {
         selectedRange.minimumEndAt(sortedRecords)
@@ -691,6 +696,11 @@ private fun WeightTrendChart(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = ChartBlue,
+                        )
+                        Text(
+                            text = "歩数 ${selectedSteps?.steps?.let { "${it}歩" } ?: "-"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AppText,
                         )
                     }
                 }
