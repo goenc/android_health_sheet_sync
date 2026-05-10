@@ -130,6 +130,11 @@ fun HealthDebugScreen(
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             MainHeader(onSettingsClick = { showSettings = true })
+            MainSummaryValues(
+                records = state.weightRecords,
+                dailySteps = state.stepDailyRecords,
+                glucoseRecords = state.glucoseRecords,
+            )
 
             WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
@@ -171,6 +176,44 @@ private fun MainHeader(
             SettingsGearIcon()
         }
     }
+}
+
+@Composable
+private fun MainSummaryValues(
+    records: List<DebugWeightRecord>,
+    dailySteps: List<DebugStepDaily>,
+    glucoseRecords: List<DebugGlucoseRecord>,
+) {
+    val latestRecord = records.maxByOrNull { it.measuredAt }
+    val latestSteps = dailySteps.maxByOrNull { it.targetDate }
+    val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-")
+        SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-")
+        SummaryValue(
+            "血糖",
+            latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
+        )
+    }
+}
+
+@Composable
+private fun SummaryValue(
+    label: String,
+    value: String,
+) {
+    Text(
+        text = "$label $value",
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = AppText,
+        fontSize = 13.sp,
+    )
 }
 
 @Composable
