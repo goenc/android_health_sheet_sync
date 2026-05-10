@@ -65,6 +65,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 @Composable
 fun HealthDebugScreen(
@@ -505,6 +506,7 @@ private fun WeightTrendChart(
                 val maxWeight = ceil(chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_UPPER_PADDING_KG)
                 val weightRange = max(1.0, maxWeight - minWeight)
                 val trendLine = calculateTrendLine(chartPoints)
+                val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
                 val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
@@ -520,7 +522,7 @@ private fun WeightTrendChart(
                     textSize = 9.sp.toPx()
                 }
                 val trendSummaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = trendLineColor.toArgb()
+                    color = ChartSummary.toArgb()
                     textSize = 13.sp.toPx()
                 }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
@@ -654,6 +656,12 @@ private fun WeightTrendChart(
                         trendSummaryPaint,
                     )
                 }
+                drawText(
+                    "平均歩数 ${averageSteps?.let { "%,d歩".format(it) } ?: "-"}",
+                    chartLeft + 8.dp.toPx(),
+                    chartTop + 34.dp.toPx(),
+                    trendSummaryPaint,
+                )
             }
 
             calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
@@ -1054,6 +1062,20 @@ private fun formatTrendChange(
     return "$sign${formatDecimal(changeKg)}kg/${range.label}"
 }
 
+private fun calculateAverageSteps(
+    dailySteps: List<DebugStepDaily>,
+    window: ChartTimeWindow,
+): Long? {
+    val stepsInWindow = dailySteps
+        .filter { dailyStep ->
+            val targetAt = dailyStep.targetDate.atStartOfDay()
+            !targetAt.isBefore(window.startAt) && !targetAt.isAfter(window.endAt)
+        }
+        .map { it.steps }
+    if (stepsInWindow.isEmpty()) return null
+    return stepsInWindow.average().roundToLong()
+}
+
 private fun calculateStepBars(
     dailySteps: List<DebugStepDaily>,
     window: ChartTimeWindow,
@@ -1138,6 +1160,7 @@ private val DividerColor = Color(0xFFE5E5EA)
 private val ChartBlue = Color(0xFF07577D)
 private val ChartGrid = Color(0xFFE4E4E4)
 private val ChartTrend = Color(0xFF8F8F8F)
+private val ChartSummary = Color(0xFF043C5A)
 private val ChartStepBar = Color(0x337E57B2)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
