@@ -170,7 +170,7 @@ private fun MainHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "体重、歩数、血糖",
+            text = "最新データ",
             style = MaterialTheme.typography.titleMedium,
             color = AppMutedBlue,
         )
