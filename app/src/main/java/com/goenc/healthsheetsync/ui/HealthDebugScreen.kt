@@ -78,6 +78,7 @@ fun HealthDebugScreen(
     spreadsheetUploadStatus: String?,
     isSpreadsheetUploading: Boolean,
     targetSpreadsheetUrl: String,
+    sharedText: String?,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -131,6 +132,16 @@ fun HealthDebugScreen(
                 DebugLine("件数", state.glucoseRecords.size.toString())
                 state.glucoseRecords.take(10).forEach { record ->
                     GlucoseRecordRow(record)
+                }
+            }
+
+            sharedText?.takeIf { it.isNotBlank() }?.let { text ->
+                DebugSection(title = "共有テキスト") {
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppText,
+                    )
                 }
             }
 

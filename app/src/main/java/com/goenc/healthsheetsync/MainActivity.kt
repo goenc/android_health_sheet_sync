@@ -1,6 +1,7 @@
 package com.goenc.healthsheetsync
 
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -37,6 +38,7 @@ class MainActivity : ComponentActivity() {
     private var externalSaveStatus by mutableStateOf<String?>(null)
     private var spreadsheetUploadStatus by mutableStateOf<String?>(null)
     private var isSpreadsheetUploading by mutableStateOf(false)
+    private var sharedText by mutableStateOf<String?>(null)
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
     ) { grantedPermissions ->
@@ -85,6 +87,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         healthReader = HealthConnectDebugReader(applicationContext)
+        handleSharedText(intent)
         enableEdgeToEdge()
         setContent {
             HealthSheetSyncTheme {
@@ -110,12 +113,24 @@ class MainActivity : ComponentActivity() {
                         spreadsheetUploadStatus = spreadsheetUploadStatus,
                         isSpreadsheetUploading = isSpreadsheetUploading,
                         targetSpreadsheetUrl = SpreadsheetUploadSettings.TARGET_SPREADSHEET_URL,
+                        sharedText = sharedText,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
             }
         }
         refreshHealthData()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSharedText(intent)
+    }
+
+    private fun handleSharedText(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND || intent.type != "text/plain") return
+        sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
     }
 
     private fun refreshHealthData() {
