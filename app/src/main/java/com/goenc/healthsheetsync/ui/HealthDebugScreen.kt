@@ -196,7 +196,7 @@ private fun MainSummaryValues(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-", ChartBlue)
-        SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-", ChartStepBar)
+        SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-", ChartStepText)
         SummaryValue(
             "血糖",
             latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
@@ -1420,6 +1420,7 @@ private val ChartGrid = Color(0xFFE4E4E4)
 private val ChartTrend = Color(0xFF8F8F8F)
 private val ChartSummary = Color(0xFF043C5A)
 private val ChartStepBar = Color(0x337E57B2)
+private val ChartStepText = Color(0xFF5E3F91)
 private val ChartGlucose = Color(0xFFC33A2B)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
