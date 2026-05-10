@@ -126,15 +126,17 @@ fun HealthDebugScreen(
         }
 
         Column(
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            modifier = Modifier.padding(start = 22.dp, top = 10.dp, end = 22.dp, bottom = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            MainHeader(onSettingsClick = { showSettings = true })
-            MainSummaryValues(
-                records = state.weightRecords,
-                dailySteps = state.stepDailyRecords,
-                glucoseRecords = state.glucoseRecords,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                MainHeader(onSettingsClick = { showSettings = true })
+                MainSummaryValues(
+                    records = state.weightRecords,
+                    dailySteps = state.stepDailyRecords,
+                    glucoseRecords = state.glucoseRecords,
+                )
+            }
 
             WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
