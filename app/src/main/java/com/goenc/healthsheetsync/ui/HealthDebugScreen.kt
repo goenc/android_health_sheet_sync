@@ -123,7 +123,7 @@ fun HealthDebugScreen(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            WeightTrendChart(state.weightRecords, state.stepDailyRecords)
+            WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
             DebugSection(title = "体重記録") {
                 WeightSummary(state.weightRecords, state.stepDailyRecords)
@@ -495,6 +495,7 @@ private fun GlucoseRecordSummary(records: List<DebugGlucoseRecord>) {
 private fun WeightTrendChart(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
+    glucoseRecords: List<DebugGlucoseRecord>,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.OneMonth) }
@@ -542,7 +543,7 @@ private fun WeightTrendChart(
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = "体重、歩数",
+            text = "体重、歩数、血糖",
             style = MaterialTheme.typography.titleMedium,
             color = AppMutedBlue,
         )
@@ -599,6 +600,7 @@ private fun WeightTrendChart(
                 val weightRange = max(1.0, maxWeight - minWeight)
                 val trendLine = calculateTrendLine(chartPoints)
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
+                val glucoseChart = calculateFastingGlucoseChart(glucoseRecords, visibleWindow)
                 val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
@@ -616,6 +618,10 @@ private fun WeightTrendChart(
                 val trendSummaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = ChartSummary.toArgb()
                     textSize = 13.sp.toPx()
+                }
+                val glucosePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = ChartGlucose.toArgb()
+                    textSize = 12.sp.toPx()
                 }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
 
@@ -765,6 +771,32 @@ private fun WeightTrendChart(
                     topLeft = Offset(xAtTime(stepBar.centerAt) - barWidth / 2f, chartBottom - barHeight),
                     size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
                 )
+            }
+
+            glucoseChart?.let { chart ->
+                val glucoseY = chartBottom - 54.dp.toPx()
+                drawLine(
+                    color = ChartGlucose,
+                    start = Offset(chartLeft, glucoseY),
+                    end = Offset(chartRight, glucoseY),
+                    strokeWidth = 1.5.dp.toPx(),
+                )
+                chart.visibleRecords.forEach { record ->
+                    drawCircle(
+                        color = ChartGlucose,
+                        radius = 4.dp.toPx(),
+                        center = Offset(xAtTime(record.targetDate.atStartOfDay().plusHours(12)), glucoseY),
+                    )
+                }
+                drawContext.canvas.nativeCanvas.apply {
+                    glucosePaint.textAlign = Paint.Align.LEFT
+                    drawText(
+                        "${formatDecimal(chart.weightedAverageMgDl)}",
+                        chartRight + 8.dp.toPx(),
+                        glucoseY + 4.dp.toPx(),
+                        glucosePaint,
+                    )
+                }
             }
 
             val path = Path()
@@ -1051,6 +1083,11 @@ private data class StepBar(
     val steps: Long,
 )
 
+private data class FastingGlucoseChart(
+    val weightedAverageMgDl: Double,
+    val visibleRecords: List<DebugGlucoseRecord>,
+)
+
 private data class ChartDateLabel(
     val date: LocalDate,
     val x: Float,
@@ -1198,6 +1235,33 @@ private fun calculateAverageSteps(
     return stepsInWindow.average().roundToLong()
 }
 
+private fun calculateFastingGlucoseChart(
+    glucoseRecords: List<DebugGlucoseRecord>,
+    window: ChartTimeWindow,
+): FastingGlucoseChart? {
+    val fastingRecords = glucoseRecords
+        .filter { it.mealRelation == "空腹時" }
+        .sortedByDescending { it.measuredAt }
+    if (fastingRecords.isEmpty()) return null
+
+    val weightedRecords = List(GLUCOSE_WEIGHT_COUNT) { index ->
+        fastingRecords.getOrElse(index) { fastingRecords.last() }
+    }
+    val weightedAverage = weightedRecords.zip(GLUCOSE_RECENT_WEIGHTS)
+        .sumOf { (record, weight) -> record.bloodGlucoseMgDl * weight }
+    val visibleRecords = fastingRecords
+        .filter { record ->
+            val pointAt = record.targetDate.atStartOfDay().plusHours(12)
+            !pointAt.isBefore(window.startAt) && !pointAt.isAfter(window.endAt)
+        }
+        .sortedBy { it.measuredAt }
+
+    return FastingGlucoseChart(
+        weightedAverageMgDl = weightedAverage,
+        visibleRecords = visibleRecords,
+    )
+}
+
 private fun calculateStepBars(
     dailySteps: List<DebugStepDaily>,
     window: ChartTimeWindow,
@@ -1273,6 +1337,8 @@ private const val CHART_TIME_BAND_COUNT = 2
 private const val CHART_WEIGHT_LOWER_PADDING_KG = 1.0
 private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
+private const val GLUCOSE_WEIGHT_COUNT = 3
+private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)
@@ -1284,6 +1350,7 @@ private val ChartGrid = Color(0xFFE4E4E4)
 private val ChartTrend = Color(0xFF8F8F8F)
 private val ChartSummary = Color(0xFF043C5A)
 private val ChartStepBar = Color(0x337E57B2)
+private val ChartGlucose = Color(0xFFC33A2B)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
 private val PopupBackground = Color(0xF7FFFFFF)
