@@ -498,7 +498,7 @@ private fun WeightTrendChart(
                 val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
                 val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
                 val topPadding = 28.dp.toPx()
-                val bottomPadding = 8.dp.toPx()
+                val bottomPadding = 24.dp.toPx()
                 val chartLeft = leftPadding
                 val chartRight = size.width - rightPadding
                 val chartTop = topPadding
@@ -590,6 +590,28 @@ private fun WeightTrendChart(
                 }
                 labelPaint.textAlign = Paint.Align.LEFT
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
+                labelPaint.textAlign = Paint.Align.CENTER
+                generateSequence(visibleWindow.startAt.toLocalDate()) { it.plusDays(1) }
+                    .takeWhile { !it.isAfter(visibleWindow.endAt.toLocalDate()) }
+                    .forEach { date ->
+                        val x = xAtTime(date.atStartOfDay().plusHours(12))
+                            .coerceIn(chartLeft + 6.dp.toPx(), chartRight - 6.dp.toPx())
+                        if (date.shouldShowChartDateNumber()) {
+                            drawText(
+                                date.dayOfMonth.toString(),
+                                x,
+                                chartBottom + 16.dp.toPx(),
+                                labelPaint,
+                            )
+                        } else {
+                            drawCircle(
+                                x,
+                                chartBottom + 11.dp.toPx(),
+                                1.5.dp.toPx(),
+                                labelPaint,
+                            )
+                        }
+                    }
                 trendLine?.let {
                     trendSummaryPaint.textAlign = Paint.Align.LEFT
                     drawText(
@@ -954,6 +976,9 @@ private fun String.chartTimeBandOrder(): Int =
 
 private fun String.chartRepresentativeTime(): LocalTime =
     if (this == "朝") LocalTime.of(8, 0) else LocalTime.of(20, 0)
+
+private fun LocalDate.shouldShowChartDateNumber(): Boolean =
+    dayOfWeek == DayOfWeek.MONDAY || plusDays(1).dayOfMonth == 1
 
 private fun calculateTrendLine(records: List<ChartWeightPoint>): WeightTrendLine? {
     if (records.size <= 1) return null
