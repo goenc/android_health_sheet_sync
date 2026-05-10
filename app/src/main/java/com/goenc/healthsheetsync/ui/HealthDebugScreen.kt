@@ -605,9 +605,24 @@ private fun WeightTrendChart(
                     monthLabelPaint,
                 )
                 val monthLabelMinX = chartLeft + monthLabelPaint.measureText(visibleStartMonthText) + 8.dp.toPx()
-                generateSequence(visibleWindow.startAt.toLocalDate()) { it.plusDays(1) }
+                val visibleDates = generateSequence(visibleWindow.startAt.toLocalDate()) { it.plusDays(1) }
                     .takeWhile { !it.isAfter(visibleWindow.endAt.toLocalDate()) }
-                    .forEach { date ->
+                    .toList()
+                val dateLabelPositions = visibleDates
+                    .filter { it.shouldShowChartDateNumber() }
+                    .map { date ->
+                        val x = xAtTime(date.atStartOfDay().plusHours(12))
+                            .coerceIn(chartLeft + 6.dp.toPx(), chartRight - 6.dp.toPx())
+                        val text = date.dayOfMonth.toString()
+                        ChartDateLabel(date, x, labelPaint.measureText(text))
+                    }
+                val hiddenDateLabels = dateLabelPositions
+                    .zipWithNext()
+                    .mapNotNull { (previous, current) ->
+                        if (previous.right + 4.dp.toPx() > current.left) previous.date else null
+                    }
+                    .toSet()
+                visibleDates.forEach { date ->
                         val x = xAtTime(date.atStartOfDay().plusHours(12))
                             .coerceIn(chartLeft + 6.dp.toPx(), chartRight - 6.dp.toPx())
                         if (date.dayOfMonth == 1 && date != visibleStartDate && x >= monthLabelMinX) {
@@ -618,7 +633,7 @@ private fun WeightTrendChart(
                                 monthLabelPaint,
                             )
                         }
-                        if (date.shouldShowChartDateNumber()) {
+                        if (date.shouldShowChartDateNumber() && date !in hiddenDateLabels) {
                             drawText(
                                 date.dayOfMonth.toString(),
                                 x,
@@ -633,7 +648,7 @@ private fun WeightTrendChart(
                                 labelPaint,
                             )
                         }
-                    }
+                }
                 trendLine?.let {
                     trendSummaryPaint.textAlign = Paint.Align.LEFT
                     drawText(
@@ -931,6 +946,17 @@ private data class StepBar(
     val centerAt: LocalDateTime,
     val steps: Long,
 )
+
+private data class ChartDateLabel(
+    val date: LocalDate,
+    val x: Float,
+    val width: Float,
+) {
+    val left: Float
+        get() = x - width / 2f
+    val right: Float
+        get() = x + width / 2f
+}
 
 private fun ChartWeightPoint.isMorning(): Boolean =
     timeBand == "朝"
