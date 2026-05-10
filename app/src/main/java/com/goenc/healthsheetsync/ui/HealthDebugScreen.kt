@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -795,7 +796,7 @@ private fun WeightTrendChart(
                 disabledInactiveTrackColor = SliderTrack,
             ),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             WeightChartRange.entries.forEach { range ->
                 WeightChartRangeButton(
                     range = range,
@@ -821,7 +822,8 @@ private fun WeightChartRangeButton(
                 containerColor = AppPrimary,
                 contentColor = Color.White,
             ),
-            modifier = Modifier.defaultMinSize(minWidth = 96.dp, minHeight = 48.dp),
+            modifier = Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 40.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Text(range.label)
         }
@@ -830,7 +832,8 @@ private fun WeightChartRangeButton(
             onClick = onClick,
             shape = CircleShape,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-            modifier = Modifier.defaultMinSize(minWidth = 96.dp, minHeight = 48.dp),
+            modifier = Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 40.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Text(range.label)
         }
@@ -896,6 +899,7 @@ private enum class WeightChartRange(
     private val startAt: (LocalDateTime) -> LocalDateTime,
     private val endAt: (LocalDateTime) -> LocalDateTime,
 ) {
+    SixMonths("半年", { latestAt -> latestAt.minusMonths(6) }, { startAt -> startAt.plusMonths(6) }),
     OneMonth("1か月", { latestAt -> latestAt.minusMonths(1) }, { startAt -> startAt.plusMonths(1) }),
     TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) }, { startAt -> startAt.plusWeeks(2) }),
     OneWeek("1週間", { latestAt -> latestAt.minusWeeks(1) }, { startAt -> startAt.plusWeeks(1) });
