@@ -213,8 +213,7 @@ private fun SettingsScreen(
     isSpreadsheetUploading: Boolean,
     onBack: () -> Unit,
 ) {
-    var showWeightList by remember { mutableStateOf(false) }
-    var showStepList by remember { mutableStateOf(false) }
+    var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -287,29 +286,36 @@ private fun SettingsScreen(
     }
     DebugSection(title = "記録一覧") {
         DebugLine("体重記録の件数", state.weightRecords.size.toString())
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
-                onClick = { showWeightList = !showWeightList },
-                shape = CircleShape,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-                modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
-            ) {
-                Text(if (showWeightList) "体重一覧を閉じる" else "体重一覧")
-            }
-            OutlinedButton(
-                onClick = { showStepList = !showStepList },
-                shape = CircleShape,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-                modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 48.dp),
-            ) {
-                Text(if (showStepList) "歩数一覧を閉じる" else "歩数一覧")
-            }
+        DebugLine("血糖値記録の件数", state.glucoseRecords.size.toString())
+        DebugLine("歩数記録の日数", state.stepDailyRecords.size.toString())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            RecordListButton(
+                label = "体重",
+                selected = selectedRecordList == RecordListType.Weight,
+                onClick = { selectedRecordList = RecordListType.Weight },
+            )
+            RecordListButton(
+                label = "血糖値",
+                selected = selectedRecordList == RecordListType.Glucose,
+                onClick = { selectedRecordList = RecordListType.Glucose },
+            )
+            RecordListButton(
+                label = "歩数",
+                selected = selectedRecordList == RecordListType.Steps,
+                onClick = { selectedRecordList = RecordListType.Steps },
+            )
         }
-        if (showWeightList) {
-            WeightDailySummary(state.weightRecords)
-        }
-        if (showStepList) {
-            StepDailySummary(state.stepDailyRecords)
+        when (selectedRecordList) {
+            RecordListType.Weight -> WeightDailySummary(state.weightRecords)
+            RecordListType.Glucose -> GlucoseRecordSummary(state.glucoseRecords)
+            RecordListType.Steps -> StepDailySummary(state.stepDailyRecords)
+            null -> {
+                Text(
+                    text = "表示する記録を選択してください",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppText,
+                )
+            }
         }
     }
     DebugSection(title = "アップロード先") {
@@ -355,6 +361,44 @@ private fun DebugSection(
 }
 
 private object ColumnScopeMarker
+
+private enum class RecordListType {
+    Weight,
+    Glucose,
+    Steps,
+}
+
+@Composable
+private fun RecordListButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AppPrimary,
+                contentColor = Color.White,
+            ),
+            modifier = Modifier.defaultMinSize(minWidth = 92.dp, minHeight = 44.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Text(label)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+            modifier = Modifier.defaultMinSize(minWidth = 92.dp, minHeight = 44.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Text(label)
+        }
+    }
+}
 
 @Composable
 private fun DebugLine(label: String, value: String) {
@@ -422,6 +466,26 @@ private fun StepDailySummary(dailySteps: List<DebugStepDaily>) {
         .forEach { steps ->
             Text(
                 text = "${steps.targetDate}  ${steps.steps}歩",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+}
+
+@Composable
+private fun GlucoseRecordSummary(records: List<DebugGlucoseRecord>) {
+    if (records.isEmpty()) {
+        Text(
+            text = "血糖値記録はありません",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        return
+    }
+
+    records
+        .sortedByDescending { it.measuredAt }
+        .forEach { record ->
+            Text(
+                text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.bloodGlucoseMgDl)} mg/dL  ${record.mealRelation}",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
