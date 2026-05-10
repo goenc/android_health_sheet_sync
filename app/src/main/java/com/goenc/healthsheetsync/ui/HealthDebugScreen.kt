@@ -519,6 +519,10 @@ private fun WeightTrendChart(
                     color = axisColor.toArgb()
                     textSize = 12.sp.toPx()
                 }
+                val monthLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = axisColor.toArgb()
+                    textSize = 9.sp.toPx()
+                }
                 val trendSummaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = trendLineColor.toArgb()
                     textSize = 13.sp.toPx()
@@ -591,11 +595,20 @@ private fun WeightTrendChart(
                 labelPaint.textAlign = Paint.Align.LEFT
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
                 labelPaint.textAlign = Paint.Align.CENTER
+                monthLabelPaint.textAlign = Paint.Align.LEFT
                 generateSequence(visibleWindow.startAt.toLocalDate()) { it.plusDays(1) }
                     .takeWhile { !it.isAfter(visibleWindow.endAt.toLocalDate()) }
                     .forEach { date ->
                         val x = xAtTime(date.atStartOfDay().plusHours(12))
                             .coerceIn(chartLeft + 6.dp.toPx(), chartRight - 6.dp.toPx())
+                        if (date.dayOfMonth == 1) {
+                            drawText(
+                                "${date.monthValue}月",
+                                x,
+                                chartBottom + 7.dp.toPx(),
+                                monthLabelPaint,
+                            )
+                        }
                         if (date.shouldShowChartDateNumber()) {
                             drawText(
                                 date.dayOfMonth.toString(),
@@ -977,8 +990,14 @@ private fun String.chartTimeBandOrder(): Int =
 private fun String.chartRepresentativeTime(): LocalTime =
     if (this == "朝") LocalTime.of(8, 0) else LocalTime.of(20, 0)
 
-private fun LocalDate.shouldShowChartDateNumber(): Boolean =
-    dayOfWeek == DayOfWeek.MONDAY || plusDays(1).dayOfMonth == 1
+private fun LocalDate.shouldShowChartDateNumber(): Boolean {
+    if (isMonthEnd()) return true
+    val isAroundMonthEnd = minusDays(1).isMonthEnd() || plusDays(1).isMonthEnd()
+    return dayOfWeek == DayOfWeek.MONDAY && !isAroundMonthEnd
+}
+
+private fun LocalDate.isMonthEnd(): Boolean =
+    plusDays(1).dayOfMonth == 1
 
 private fun calculateTrendLine(records: List<ChartWeightPoint>): WeightTrendLine? {
     if (records.size <= 1) return null
