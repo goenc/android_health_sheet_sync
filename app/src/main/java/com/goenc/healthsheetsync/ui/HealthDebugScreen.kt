@@ -767,6 +767,12 @@ private fun WeightTrendChart(
                     chartTop + 34.dp.toPx(),
                     trendSummaryPaint,
                 )
+                drawText(
+                    "平均血糖 ${glucoseChart?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL" } ?: "-"}",
+                    chartLeft + 8.dp.toPx(),
+                    chartTop + 52.dp.toPx(),
+                    trendSummaryPaint,
+                )
             }
 
             calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
