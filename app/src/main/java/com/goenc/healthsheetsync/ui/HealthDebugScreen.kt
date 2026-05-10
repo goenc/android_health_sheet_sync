@@ -169,13 +169,30 @@ private fun MainSummaryBar(
     val latestSteps = dailySteps.maxByOrNull { it.targetDate }
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryLabel("体重")
+                SummaryLabel("歩数")
+                SummaryLabel("血糖")
+            }
+            IconButton(onClick = onSettingsClick) {
+                SettingsGearIcon()
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -186,10 +203,18 @@ private fun MainSummaryBar(
                 latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
             )
         }
-        IconButton(onClick = onSettingsClick) {
-            SettingsGearIcon()
-        }
     }
+}
+
+@Composable
+private fun SummaryLabel(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.Bold,
+        color = AppText,
+        fontSize = 13.sp,
+    )
 }
 
 @Composable
