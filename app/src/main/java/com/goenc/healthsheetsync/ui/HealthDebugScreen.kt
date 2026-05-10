@@ -129,13 +129,6 @@ fun HealthDebugScreen(
                 WeightSummary(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
             }
 
-            DebugSection(title = "血糖値記録") {
-                DebugLine("件数", state.glucoseRecords.size.toString())
-                state.glucoseRecords.take(10).forEach { record ->
-                    GlucoseRecordRow(record)
-                }
-            }
-
             sharedText?.takeIf { it.isNotBlank() }?.let { text ->
                 DebugSection(title = "共有テキスト") {
                     sharedTextImportStatus?.let { status ->
