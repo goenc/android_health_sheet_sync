@@ -427,11 +427,20 @@ private fun WeightTrendChart(
         } ?: emptyList()
     }
     val chartPoints = remember(chartRecords) { chartRecords.toChartWeightPoints() }
-    var selectedIndex by remember(chartPoints) { mutableStateOf<Int?>(null) }
-    val selectedPoint = selectedIndex?.let { chartPoints.getOrNull(it) }
-    val selectedSteps = remember(dailySteps, selectedPoint) {
-        selectedPoint?.let { point ->
-            dailySteps.firstOrNull { it.targetDate == point.targetDate }
+    var selectedDate by remember(chartPoints) { mutableStateOf<LocalDate?>(null) }
+    val selectedDay = remember(chartPoints, dailySteps, selectedDate) {
+        selectedDate?.let { date ->
+            val dayPoints = chartPoints.filter { it.targetDate == date }
+            if (dayPoints.isEmpty()) {
+                null
+            } else {
+                ChartDaySelection(
+                    date = date,
+                    morning = dayPoints.firstOrNull { it.timeBand == "朝" },
+                    night = dayPoints.firstOrNull { it.timeBand == "夜" },
+                    steps = dailySteps.firstOrNull { it.targetDate == date },
+                )
+            }
         }
     }
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
@@ -477,7 +486,7 @@ private fun WeightTrendChart(
                         detectTapGestures { offset ->
                             if (chartPoints.isEmpty()) return@detectTapGestures
                             val visibleWindow = chartWindow ?: return@detectTapGestures
-                            selectedIndex = nearestChartIndex(
+                            selectedDate = nearestChartIndex(
                                 touchX = offset.x,
                                 width = size.width.toFloat(),
                                 records = chartPoints,
@@ -485,7 +494,7 @@ private fun WeightTrendChart(
                                 rangeEndAt = visibleWindow.endAt,
                                 leftPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
                                 rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx(),
-                            )
+                            ).let { chartPoints.getOrNull(it)?.targetDate }
                         }
                     }
             ) {
@@ -732,8 +741,8 @@ private fun WeightTrendChart(
                 }
             }
 
-                selectedIndex?.let { index ->
-                    chartPoints.getOrNull(index)?.let { record ->
+                selectedDay?.points?.forEach { record ->
+                    chartPoints.indexOf(record).takeIf { it >= 0 }?.let { index ->
                         val selectedPoint = Offset(xAt(index), yAt(record.weightKg))
                         drawLine(
                             color = selectedColor,
@@ -750,7 +759,7 @@ private fun WeightTrendChart(
                     }
                 }
             }
-            selectedPoint?.let { record ->
+            selectedDay?.let { day ->
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -764,18 +773,29 @@ private fun WeightTrendChart(
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Text(
-                            text = "${record.measuredAt.monthValue}月${record.measuredAt.dayOfMonth}日 ${record.timeBand}",
+                            text = "${day.date.monthValue}月${day.date.dayOfMonth}日",
                             style = MaterialTheme.typography.bodyMedium,
                             color = AppText,
                         )
                         Text(
-                            text = "${formatDecimal(record.weightKg)} kg",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = "朝 ${day.morning.weightText()}",
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = ChartBlue,
                         )
                         Text(
-                            text = "歩数 ${selectedSteps?.steps?.let { "${it}歩" } ?: "-"}",
+                            text = "夜 ${day.night.weightText()}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = ChartBlue,
+                        )
+                        Text(
+                            text = "差 ${day.weightDifferenceText()}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AppText,
+                        )
+                        Text(
+                            text = "歩数 ${day.steps?.steps?.let { "${it}歩" } ?: "-"}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = AppText,
                         )
@@ -928,6 +948,16 @@ private data class ChartWeightPoint(
         get() = sourceCount >= 2
 }
 
+private data class ChartDaySelection(
+    val date: LocalDate,
+    val morning: ChartWeightPoint?,
+    val night: ChartWeightPoint?,
+    val steps: DebugStepDaily?,
+) {
+    val points: List<ChartWeightPoint>
+        get() = listOfNotNull(morning, night)
+}
+
 private data class ChartTimeWindow(
     val startAt: LocalDateTime,
     val endAt: LocalDateTime,
@@ -951,6 +981,15 @@ private data class ChartDateLabel(
 
 private fun ChartWeightPoint.isMorning(): Boolean =
     timeBand == "朝"
+
+private fun ChartWeightPoint?.weightText(): String =
+    this?.let { "${formatDecimal(it.weightKg)} kg" } ?: "-"
+
+private fun ChartDaySelection.weightDifferenceText(): String {
+    val morningWeight = morning?.weightKg ?: return "-"
+    val nightWeight = night?.weightKg ?: return "-"
+    return "${formatDecimal(abs(nightWeight - morningWeight))} kg"
+}
 
 private fun List<DebugWeightRecord>.weightTextFor(timeBand: String): String {
     return filter { it.timeBand == timeBand }
