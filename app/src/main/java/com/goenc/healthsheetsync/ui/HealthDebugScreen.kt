@@ -129,12 +129,7 @@ fun HealthDebugScreen(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            MainSummaryBar(
-                records = state.weightRecords,
-                dailySteps = state.stepDailyRecords,
-                glucoseRecords = state.glucoseRecords,
-                onSettingsClick = { showSettings = true },
-            )
+            MainHeader(onSettingsClick = { showSettings = true })
 
             WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
@@ -159,76 +154,23 @@ fun HealthDebugScreen(
 }
 
 @Composable
-private fun MainSummaryBar(
-    records: List<DebugWeightRecord>,
-    dailySteps: List<DebugStepDaily>,
-    glucoseRecords: List<DebugGlucoseRecord>,
+private fun MainHeader(
     onSettingsClick: () -> Unit,
 ) {
-    val latestRecord = records.maxByOrNull { it.measuredAt }
-    val latestSteps = dailySteps.maxByOrNull { it.targetDate }
-    val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
-
-    Column(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SummaryLabel("体重")
-                SummaryLabel("歩数")
-                SummaryLabel("血糖")
-            }
-            IconButton(onClick = onSettingsClick) {
-                SettingsGearIcon()
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-")
-            SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-")
-            SummaryValue(
-                "血糖",
-                latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
-            )
+        Text(
+            text = "体重、歩数、血糖",
+            style = MaterialTheme.typography.titleMedium,
+            color = AppMutedBlue,
+        )
+        IconButton(onClick = onSettingsClick) {
+            SettingsGearIcon()
         }
     }
-}
-
-@Composable
-private fun SummaryLabel(label: String) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.Bold,
-        color = AppText,
-        fontSize = 13.sp,
-    )
-}
-
-@Composable
-private fun SummaryValue(
-    label: String,
-    value: String,
-) {
-    Text(
-        text = "$label $value",
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = AppText,
-        fontSize = 13.sp,
-    )
 }
 
 @Composable
@@ -607,11 +549,6 @@ private fun WeightTrendChart(
     val missingPointColor = ChartMissingPoint
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "体重、歩数、血糖",
-            style = MaterialTheme.typography.titleMedium,
-            color = AppMutedBlue,
-        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
