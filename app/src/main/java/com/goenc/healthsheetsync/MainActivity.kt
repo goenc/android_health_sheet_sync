@@ -17,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.data.OneTouchRevealTextParser
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
@@ -33,12 +35,14 @@ import java.security.MessageDigest
 
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
+    private lateinit var localStore: LocalHealthDataStore
     private val spreadsheetUploader = SpreadsheetUploader()
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var externalSaveStatus by mutableStateOf<String?>(null)
     private var spreadsheetUploadStatus by mutableStateOf<String?>(null)
     private var isSpreadsheetUploading by mutableStateOf(false)
     private var sharedText by mutableStateOf<String?>(null)
+    private var sharedTextImportStatus by mutableStateOf<String?>(null)
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
     ) { grantedPermissions ->
@@ -87,6 +91,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         healthReader = HealthConnectDebugReader(applicationContext)
+        localStore = LocalHealthDataStore(applicationContext)
         handleSharedText(intent)
         enableEdgeToEdge()
         setContent {
@@ -114,6 +119,7 @@ class MainActivity : ComponentActivity() {
                         isSpreadsheetUploading = isSpreadsheetUploading,
                         targetSpreadsheetUrl = SpreadsheetUploadSettings.TARGET_SPREADSHEET_URL,
                         sharedText = sharedText,
+                        sharedTextImportStatus = sharedTextImportStatus,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -130,7 +136,20 @@ class MainActivity : ComponentActivity() {
 
     private fun handleSharedText(intent: Intent?) {
         if (intent?.action != Intent.ACTION_SEND || intent.type != "text/plain") return
-        sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+        sharedText = text
+        val glucoseRecords = OneTouchRevealTextParser.parse(text)
+        if (glucoseRecords.isEmpty()) {
+            sharedTextImportStatus = "共有テキストから血糖値を読み取れませんでした"
+            return
+        }
+        localStore.save(
+            weightRecords = emptyList(),
+            glucoseRecords = glucoseRecords,
+            stepDailyRecords = emptyList(),
+        )
+        sharedTextImportStatus = "共有テキストから血糖${glucoseRecords.size}件を取り込みました"
+        refreshHealthData()
     }
 
     private fun refreshHealthData() {

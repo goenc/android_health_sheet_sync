@@ -79,6 +79,7 @@ fun HealthDebugScreen(
     isSpreadsheetUploading: Boolean,
     targetSpreadsheetUrl: String,
     sharedText: String?,
+    sharedTextImportStatus: String?,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -137,6 +138,13 @@ fun HealthDebugScreen(
 
             sharedText?.takeIf { it.isNotBlank() }?.let { text ->
                 DebugSection(title = "共有テキスト") {
+                    sharedTextImportStatus?.let { status ->
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AppMutedBlue,
+                        )
+                    }
                     Text(
                         text = text,
                         style = MaterialTheme.typography.bodySmall,
