@@ -598,7 +598,7 @@ private fun WeightTrendChart(
                 monthLabelPaint.textAlign = Paint.Align.LEFT
                 val visibleStartDate = visibleWindow.startAt.toLocalDate()
                 drawText(
-                    "${visibleStartDate.year}年${visibleStartDate.monthValue}月",
+                    "${visibleStartDate.monthValue}月",
                     chartLeft,
                     chartBottom + 7.dp.toPx(),
                     monthLabelPaint,
