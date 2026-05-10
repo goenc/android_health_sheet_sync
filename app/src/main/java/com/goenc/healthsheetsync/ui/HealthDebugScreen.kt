@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -123,6 +124,19 @@ fun HealthDebugScreen(
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                IconButton(onClick = { showSettings = true }) {
+                    Text(
+                        text = "⚙",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = AppText,
+                    )
+                }
+            }
+
             WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
 
             WeightSummary(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
@@ -143,8 +157,6 @@ fun HealthDebugScreen(
                     )
                 }
             }
-
-            SettingsButton(onClick = { showSettings = true })
         }
     }
 }
@@ -169,23 +181,6 @@ private fun LoadingScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-        }
-    }
-}
-
-@Composable
-private fun SettingsButton(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        OutlinedButton(
-            onClick = onClick,
-            shape = CircleShape,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-            modifier = Modifier.defaultMinSize(minWidth = 120.dp, minHeight = 52.dp),
-        ) {
-            Text("設定")
         }
     }
 }
