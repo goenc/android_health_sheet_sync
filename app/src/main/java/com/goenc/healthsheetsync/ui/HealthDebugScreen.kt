@@ -498,7 +498,7 @@ private fun WeightTrendChart(
                 val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
                 val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
                 val topPadding = 28.dp.toPx()
-                val bottomPadding = 24.dp.toPx()
+                val bottomPadding = 28.dp.toPx()
                 val chartLeft = leftPadding
                 val chartRight = size.width - rightPadding
                 val chartTop = topPadding
@@ -600,7 +600,7 @@ private fun WeightTrendChart(
                 drawText(
                     "${visibleStartDate.monthValue}月",
                     chartLeft,
-                    chartBottom + 7.dp.toPx(),
+                    chartBottom + 11.dp.toPx(),
                     monthLabelPaint,
                 )
                 generateSequence(visibleWindow.startAt.toLocalDate()) { it.plusDays(1) }
@@ -612,7 +612,7 @@ private fun WeightTrendChart(
                             drawText(
                                 "${date.monthValue}月",
                                 x,
-                                chartBottom + 7.dp.toPx(),
+                                chartBottom + 11.dp.toPx(),
                                 monthLabelPaint,
                             )
                         }
@@ -620,13 +620,13 @@ private fun WeightTrendChart(
                             drawText(
                                 date.dayOfMonth.toString(),
                                 x,
-                                chartBottom + 16.dp.toPx(),
+                                chartBottom + 22.dp.toPx(),
                                 labelPaint,
                             )
                         } else {
                             drawCircle(
                                 x,
-                                chartBottom + 11.dp.toPx(),
+                                chartBottom + 17.dp.toPx(),
                                 1.5.dp.toPx(),
                                 labelPaint,
                             )
