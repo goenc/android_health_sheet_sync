@@ -425,15 +425,12 @@ private fun WeightSummary(
         return
     }
 
+    val latestSteps = dailySteps.maxByOrNull { it.targetDate }
+    val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
+
     DebugLine("最新の体重", "${formatDecimal(latestRecord.weightKg)} kg")
-    DebugLine("測定日時", "${latestRecord.measuredAt.formatDateTime()} / ${latestRecord.timeBand}")
-    LatestStepsLine(dailySteps)
-    Text(
-        text = "平均血糖 ${calculateWeightedAverageFastingGlucose(glucoseRecords)?.let { "${formatDecimal(it)} mg/dL" } ?: "-"}",
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = AppText,
-    )
+    DebugLine("最新の歩数", latestSteps?.let { "${it.steps}歩" } ?: "-")
+    DebugLine("最新の空腹時血糖", latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)} mg/dL" } ?: "-")
 }
 
 @Composable
@@ -447,16 +444,6 @@ private fun WeightDailySummary(records: List<DebugWeightRecord>) {
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-}
-
-@Composable
-private fun LatestStepsLine(dailySteps: List<DebugStepDaily>) {
-    val steps = dailySteps.maxByOrNull { it.targetDate }
-    Text(
-        text = steps?.let { "${it.targetDate}  ${it.steps}歩" } ?: "歩数記録はありません",
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.SemiBold,
-    )
 }
 
 @Composable
@@ -799,7 +786,7 @@ private fun WeightTrendChart(
                     drawText(
                         "${formatDecimal(chart.weightedAverageMgDl)}",
                         chartRight - 4.dp.toPx(),
-                        glucoseY + 4.dp.toPx(),
+                        glucoseY - 4.dp.toPx(),
                         glucosePaint,
                     )
                 }
