@@ -596,12 +596,19 @@ private fun WeightTrendChart(
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
                 labelPaint.textAlign = Paint.Align.CENTER
                 monthLabelPaint.textAlign = Paint.Align.LEFT
+                val visibleStartDate = visibleWindow.startAt.toLocalDate()
+                drawText(
+                    "${visibleStartDate.year}年${visibleStartDate.monthValue}月",
+                    chartLeft,
+                    chartBottom + 7.dp.toPx(),
+                    monthLabelPaint,
+                )
                 generateSequence(visibleWindow.startAt.toLocalDate()) { it.plusDays(1) }
                     .takeWhile { !it.isAfter(visibleWindow.endAt.toLocalDate()) }
                     .forEach { date ->
                         val x = xAtTime(date.atStartOfDay().plusHours(12))
                             .coerceIn(chartLeft + 6.dp.toPx(), chartRight - 6.dp.toPx())
-                        if (date.dayOfMonth == 1) {
+                        if (date.dayOfMonth == 1 && date != visibleStartDate) {
                             drawText(
                                 "${date.monthValue}月",
                                 x,
