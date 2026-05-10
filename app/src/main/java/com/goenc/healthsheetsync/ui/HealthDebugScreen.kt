@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +43,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -63,10 +65,13 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
+import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+import kotlin.math.sin
 
 @Composable
 fun HealthDebugScreen(
@@ -126,14 +131,17 @@ fun HealthDebugScreen(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Text(
+                    text = "Health Sheet Sync",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = AppText,
+                )
                 IconButton(onClick = { showSettings = true }) {
-                    Text(
-                        text = "⚙",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = AppText,
-                    )
+                    SettingsGearIcon()
                 }
             }
 
@@ -158,6 +166,51 @@ fun HealthDebugScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsGearIcon(
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier.size(24.dp)) {
+        val strokeWidth = 2.dp.toPx()
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val innerRadius = size.minDimension * 0.14f
+        val ringRadius = size.minDimension * 0.26f
+        val toothStartRadius = size.minDimension * 0.36f
+        val toothEndRadius = size.minDimension * 0.44f
+
+        repeat(8) { index ->
+            val angle = (PI / 4.0 * index).toFloat()
+            val start = Offset(
+                x = center.x + cos(angle) * toothStartRadius,
+                y = center.y + sin(angle) * toothStartRadius,
+            )
+            val end = Offset(
+                x = center.x + cos(angle) * toothEndRadius,
+                y = center.y + sin(angle) * toothEndRadius,
+            )
+            drawLine(
+                color = AppText,
+                start = start,
+                end = end,
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round,
+            )
+        }
+
+        drawCircle(
+            color = AppText,
+            radius = ringRadius,
+            center = center,
+            style = Stroke(width = strokeWidth),
+        )
+        drawCircle(
+            color = AppText,
+            radius = innerRadius,
+            center = center,
+        )
     }
 }
 
