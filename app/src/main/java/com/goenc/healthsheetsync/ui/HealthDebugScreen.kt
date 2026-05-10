@@ -508,6 +508,7 @@ private fun WeightTrendChart(
                 val minWeight = floor(chartPoints.minOf { it.weightKg } - CHART_WEIGHT_LOWER_PADDING_KG)
                 val maxWeight = ceil(chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_UPPER_PADDING_KG)
                 val weightRange = max(1.0, maxWeight - minWeight)
+                val trendLine = calculateTrendLine(chartPoints)
                 val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
@@ -517,6 +518,10 @@ private fun WeightTrendChart(
                 val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisColor.toArgb()
                     textSize = 12.sp.toPx()
+                }
+                val trendSummaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = trendLineColor.toArgb()
+                    textSize = 13.sp.toPx()
                 }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
 
@@ -585,6 +590,15 @@ private fun WeightTrendChart(
                 }
                 labelPaint.textAlign = Paint.Align.LEFT
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
+                trendLine?.let {
+                    trendSummaryPaint.textAlign = Paint.Align.LEFT
+                    drawText(
+                        formatTrendChange(it, selectedRange),
+                        chartLeft + 8.dp.toPx(),
+                        chartTop + 16.dp.toPx(),
+                        trendSummaryPaint,
+                    )
+                }
             }
 
             calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
@@ -623,11 +637,11 @@ private fun WeightTrendChart(
                 )
             }
 
-            calculateTrendLine(chartPoints)?.let { trendLine ->
+            trendLine?.let {
                 drawLine(
                     color = trendLineColor,
-                    start = Offset(xAt(0), yAt(trendLine.startWeightKg)),
-                    end = Offset(xAt(chartPoints.lastIndex), yAt(trendLine.endWeightKg)),
+                    start = Offset(xAt(0), yAt(it.startWeightKg)),
+                    end = Offset(xAt(chartPoints.lastIndex), yAt(it.endWeightKg)),
                     strokeWidth = 1.dp.toPx(),
                 )
             }
@@ -964,6 +978,15 @@ private fun calculateTrendLine(records: List<ChartWeightPoint>): WeightTrendLine
         startWeightKg = intercept,
         endWeightKg = slope * lastX + intercept,
     )
+}
+
+private fun formatTrendChange(
+    trendLine: WeightTrendLine,
+    range: WeightChartRange,
+): String {
+    val changeKg = trendLine.endWeightKg - trendLine.startWeightKg
+    val sign = if (changeKg > 0.0) "+" else ""
+    return "$sign${formatDecimal(changeKg)}kg/${range.label}"
 }
 
 private fun calculateStepBars(
