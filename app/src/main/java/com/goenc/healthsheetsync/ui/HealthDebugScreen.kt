@@ -552,7 +552,7 @@ private fun WeightTrendChart(
     glucoseRecords: List<DebugGlucoseRecord>,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
-    var selectedRange by remember { mutableStateOf(WeightChartRange.OneMonth) }
+    var selectedRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var chartEndAt by remember(sortedRecords, selectedRange) {
         mutableStateOf(sortedRecords.lastOrNull()?.measuredAt)
     }

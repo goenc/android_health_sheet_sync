@@ -25,6 +25,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.HealthSheetSync">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -81,6 +82,7 @@
             android:name=".PermissionsRationaleActivity"
             android:exported="true"
             android:label="@string/permissions_rationale_title"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.HealthSheetSync">
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
