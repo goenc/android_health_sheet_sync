@@ -886,7 +886,10 @@ private enum class WeightChartRange(
     fun window(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): ChartTimeWindow? {
         val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return null
         val rangeStartAt = startAt(rangeEndAt)
-        return ChartTimeWindow(rangeStartAt, rangeEndAt)
+        return ChartTimeWindow(
+            startAt = rangeStartAt.minusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
+            endAt = rangeEndAt.plusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
+        )
     }
 
     fun durationAt(endAt: LocalDateTime): Duration {
@@ -1139,6 +1142,7 @@ private const val CHART_TIME_BAND_NIGHT = 1
 private const val CHART_TIME_BAND_COUNT = 2
 private const val CHART_WEIGHT_LOWER_PADDING_KG = 1.0
 private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
+private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)
