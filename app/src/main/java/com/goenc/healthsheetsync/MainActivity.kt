@@ -2,6 +2,7 @@ package com.goenc.healthsheetsync
 
 import android.content.pm.PackageManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -135,8 +136,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleSharedText(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_SEND || intent.type != "text/plain") return
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+        if (intent == null || intent.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) return
+        val text = readSharedText(intent)
+        if (text.isBlank()) return
         sharedText = text
         val glucoseRecords = OneTouchRevealTextParser.parse(text)
         if (glucoseRecords.isEmpty()) {
@@ -150,6 +152,30 @@ class MainActivity : ComponentActivity() {
         )
         sharedTextImportStatus = "共有テキストから血糖${glucoseRecords.size}件を取り込みました"
         refreshHealthData()
+    }
+
+    private fun readSharedText(intent: Intent): String {
+        val extraText = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+        val streamTexts = buildList {
+            intent.getParcelableExtraCompat<Uri>(Intent.EXTRA_STREAM)?.let { uri ->
+                readTextFromUri(uri)?.let(::add)
+            }
+            intent.getParcelableArrayListExtraCompat<Uri>(Intent.EXTRA_STREAM)
+                ?.mapNotNull(::readTextFromUri)
+                ?.let(::addAll)
+        }
+        return (listOf(extraText) + streamTexts)
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
+    }
+
+    private fun readTextFromUri(uri: Uri): String? {
+        return runCatching {
+            contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+        }.getOrElse { error ->
+            Log.e(TAG, "Failed to read shared file: $uri", error)
+            null
+        }
     }
 
     private fun refreshHealthData() {
@@ -243,6 +269,26 @@ class MainActivity : ComponentActivity() {
         val digest = MessageDigest.getInstance("SHA-1").digest(signature.toByteArray())
         digest.joinToString(":") { byte -> "%02X".format(byte.toInt() and 0xFF) }
     }.getOrNull()
+
+    private inline fun <reified T : android.os.Parcelable> Intent.getParcelableExtraCompat(name: String): T? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableExtra(name, T::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            getParcelableExtra(name) as? T
+        }
+    }
+
+    private inline fun <reified T : android.os.Parcelable> Intent.getParcelableArrayListExtraCompat(
+        name: String,
+    ): ArrayList<T>? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableArrayListExtra(name, T::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            getParcelableArrayListExtra(name)
+        }
+    }
 }
 
 private const val TAG = "HealthSheetSync"
