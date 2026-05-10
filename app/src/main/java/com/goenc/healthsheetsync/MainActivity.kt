@@ -136,7 +136,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleSharedText(intent: Intent?) {
-        if (intent == null || intent.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) return
+        if (intent == null || intent.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE, Intent.ACTION_VIEW)) {
+            return
+        }
         val text = readSharedText(intent)
         if (text.isBlank()) return
         sharedText = text
@@ -157,12 +159,22 @@ class MainActivity : ComponentActivity() {
     private fun readSharedText(intent: Intent): String {
         val extraText = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
         val streamTexts = buildList {
+            intent.data?.let { uri ->
+                readTextFromUri(uri)?.let(::add)
+            }
             intent.getParcelableExtraCompat<Uri>(Intent.EXTRA_STREAM)?.let { uri ->
                 readTextFromUri(uri)?.let(::add)
             }
             intent.getParcelableArrayListExtraCompat<Uri>(Intent.EXTRA_STREAM)
                 ?.mapNotNull(::readTextFromUri)
                 ?.let(::addAll)
+            intent.clipData?.let { clipData ->
+                for (index in 0 until clipData.itemCount) {
+                    clipData.getItemAt(index).uri?.let { uri ->
+                        readTextFromUri(uri)?.let(::add)
+                    }
+                }
+            }
         }
         return (listOf(extraText) + streamTexts)
             .filter { it.isNotBlank() }
