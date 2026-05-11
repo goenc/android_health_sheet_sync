@@ -275,6 +275,21 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         )
     }
 
+    fun deleteStoredRecord(recordType: String, uniqueKey: String) {
+        writableDatabase.runInTransaction {
+            delete(
+                TABLE_INVALIDATED,
+                "record_type = ? AND unique_key = ?",
+                arrayOf(recordType, uniqueKey),
+            )
+            when (recordType) {
+                "weight" -> delete(TABLE_WEIGHT, "unique_key = ?", arrayOf(uniqueKey))
+                "glucose" -> delete(TABLE_GLUCOSE, "unique_key = ?", arrayOf(uniqueKey))
+                "steps" -> delete(TABLE_STEPS, "target_date = ?", arrayOf(uniqueKey))
+            }
+        }
+    }
+
     private fun loadWeightRecords(): List<DebugWeightRecord> {
         readableDatabase.rawQuery(
             """

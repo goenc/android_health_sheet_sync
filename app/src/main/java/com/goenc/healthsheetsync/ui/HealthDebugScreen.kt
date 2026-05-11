@@ -86,6 +86,7 @@ import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.math.sin
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun HealthDebugScreen(
@@ -103,6 +104,7 @@ fun HealthDebugScreen(
     onSaveManualRecord: (ManualHealthRecordDraft) -> Unit,
     onInvalidateStoredRecord: (String, String) -> Unit,
     onRestoreStoredRecord: (String, String) -> Unit,
+    onDeleteStoredRecord: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -138,6 +140,7 @@ fun HealthDebugScreen(
                         onSave = onSaveManualRecord,
                         onInvalidate = onInvalidateStoredRecord,
                         onRestore = onRestoreStoredRecord,
+                        onDelete = onDeleteStoredRecord,
                         onBack = {
                             showManualInput = false
                             onRefresh()
@@ -555,6 +558,7 @@ private fun ManualDataScreen(
     onSave: (ManualHealthRecordDraft) -> Unit,
     onInvalidate: (String, String) -> Unit,
     onRestore: (String, String) -> Unit,
+    onDelete: (String, String) -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedType by remember { mutableStateOf(ManualRecordType.Weight) }
@@ -730,7 +734,7 @@ private fun ManualDataScreen(
             )
         } else {
             selectedRecords.forEach { record ->
-                ManualRecordRow(record, onInvalidate, onRestore)
+                ManualRecordRow(record, onInvalidate, onRestore, onDelete)
             }
         }
     }
@@ -741,9 +745,11 @@ private fun ManualRecordRow(
     record: GraphDataItem,
     onInvalidate: (String, String) -> Unit,
     onRestore: (String, String) -> Unit,
+    onDelete: (String, String) -> Unit,
 ) {
     var showInvalidateConfirm by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -773,6 +779,19 @@ private fun ManualRecordRow(
                 onClick = { showRestoreConfirm = true },
                 shape = CircleShape,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.pointerInput(record.uniqueKey) {
+                    detectTapGestures(
+                        onPress = {
+                            val releasedBeforeDeleteMode = withTimeoutOrNull(DELETE_PRESS_MILLIS) {
+                                tryAwaitRelease()
+                            }
+                            if (releasedBeforeDeleteMode == null) {
+                                showDeleteConfirm = true
+                                tryAwaitRelease()
+                            }
+                        },
+                    )
+                },
             ) {
                 Text("復活")
             }
@@ -821,6 +840,40 @@ private fun ManualRecordRow(
             },
             dismissButton = {
                 OutlinedButton(onClick = { showRestoreConfirm = false }) {
+                    Text("キャンセル")
+                }
+            },
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = {
+                Text(
+                    text = "削除しますか",
+                    color = DeleteOrange,
+                )
+            },
+            text = {
+                Text(
+                    text = record.text,
+                    color = DeleteOrange,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete(record.recordType, record.uniqueKey)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DeleteOrange),
+                ) {
+                    Text("削除する")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDeleteConfirm = false }) {
                     Text("キャンセル")
                 }
             },
@@ -1888,6 +1941,7 @@ private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 private const val GLUCOSE_WEIGHT_COUNT = 3
 private const val UNKNOWN_HEALTH_VALUE = "不明"
+private const val DELETE_PRESS_MILLIS = 5_000L
 private val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 private val AppBackground = Color(0xFFFAFAFC)
@@ -1903,6 +1957,7 @@ private val ChartSummary = Color(0xFF043C5A)
 private val ChartStepBar = Color(0x337E57B2)
 private val ChartStepText = Color(0xFF5E3F91)
 private val ChartGlucose = Color(0xFFC33A2B)
+private val DeleteOrange = Color(0xFFD26A00)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
 private val PopupBackground = Color(0xF7FFFFFF)

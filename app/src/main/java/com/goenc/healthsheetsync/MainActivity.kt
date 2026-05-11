@@ -129,6 +129,9 @@ class MainActivity : ComponentActivity() {
                         onRestoreStoredRecord = { recordType, uniqueKey ->
                             restoreStoredRecord(recordType, uniqueKey)
                         },
+                        onDeleteStoredRecord = { recordType, uniqueKey ->
+                            deleteStoredRecord(recordType, uniqueKey)
+                        },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -217,6 +220,11 @@ class MainActivity : ComponentActivity() {
 
     private fun restoreStoredRecord(recordType: String, uniqueKey: String) {
         localStore.restoreStoredRecord(recordType, uniqueKey)
+        refreshHealthData()
+    }
+
+    private fun deleteStoredRecord(recordType: String, uniqueKey: String) {
+        localStore.deleteStoredRecord(recordType, uniqueKey)
         refreshHealthData()
     }
 
