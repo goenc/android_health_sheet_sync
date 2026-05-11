@@ -10,6 +10,7 @@ data class HealthDebugUiState(
     val weightRecords: List<DebugWeightRecord> = emptyList(),
     val glucoseRecords: List<DebugGlucoseRecord> = emptyList(),
     val stepDailyRecords: List<DebugStepDaily> = emptyList(),
+    val manualRecords: List<ManualHealthRecord> = emptyList(),
     val yesterdaySteps: DebugStepDaily? = null,
     val sourceSummaries: List<String> = emptyList(),
     val debugMessages: List<String> = emptyList(),
@@ -60,4 +61,28 @@ data class DebugStepDaily(
     val steps: Long,
     val aggregationStartAt: LocalDateTime,
     val aggregationEndAt: LocalDateTime,
+)
+
+enum class ManualRecordType(
+    val label: String,
+) {
+    Weight("体重"),
+    Steps("歩数"),
+    BloodPressure("血圧"),
+    Waist("腹囲"),
+    A1c("A1c"),
+}
+
+data class ManualHealthRecord(
+    val id: String,
+    val type: ManualRecordType,
+    val measuredAt: LocalDateTime,
+    val valueText: String,
+    val invalidatedAt: LocalDateTime?,
+)
+
+data class ManualHealthRecordDraft(
+    val type: ManualRecordType,
+    val measuredAt: LocalDateTime,
+    val valueText: String,
 )

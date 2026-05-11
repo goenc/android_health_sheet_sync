@@ -32,6 +32,7 @@ class HealthConnectDebugReader(private val context: Context) {
                 availability = availability,
                 permissions = PermissionState.Unknown,
                 isLoading = false,
+                manualRecords = localStore.load().manualRecords,
                 debugMessages = debugMessages,
             )
         }
@@ -59,6 +60,7 @@ class HealthConnectDebugReader(private val context: Context) {
                 availability = availability,
                 permissions = permissionState,
                 isLoading = false,
+                manualRecords = localStore.load().manualRecords,
                 debugMessages = debugMessages,
             )
         }
@@ -100,6 +102,7 @@ class HealthConnectDebugReader(private val context: Context) {
             weightRecords = storedData.weightRecords,
             glucoseRecords = storedData.glucoseRecords,
             stepDailyRecords = storedData.stepDailyRecords,
+            manualRecords = storedData.manualRecords,
             yesterdaySteps = yesterdaySteps,
             sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
             debugMessages = debugMessages,

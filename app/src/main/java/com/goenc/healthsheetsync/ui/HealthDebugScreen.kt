@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,10 +26,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +52,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
@@ -56,6 +60,9 @@ import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
+import com.goenc.healthsheetsync.health.ManualHealthRecord
+import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
+import com.goenc.healthsheetsync.health.ManualRecordType
 import com.goenc.healthsheetsync.health.PermissionState
 import java.time.DayOfWeek
 import java.time.Duration
@@ -86,75 +93,114 @@ fun HealthDebugScreen(
     targetSpreadsheetUrl: String,
     sharedText: String?,
     sharedTextImportStatus: String?,
+    onSaveManualRecord: (ManualHealthRecordDraft) -> Unit,
+    onInvalidateManualRecord: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
+    var showManualInput by remember { mutableStateOf(false) }
 
     if (state.isLoading && state.availability == HealthConnectAvailability.Checking) {
         LoadingScreen(modifier = modifier)
         return
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(AppBackground)
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+            .background(AppBackground),
     ) {
-        if (showSettings) {
-            Column(
-                modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                SettingsScreen(
-                    state = state,
-                    onRequestPermissions = onRequestPermissions,
-                    onRefresh = onRefresh,
-                    onSaveExternalWorkbook = onSaveExternalWorkbook,
-                    externalSaveStatus = externalSaveStatus,
-                    targetSpreadsheetUrl = targetSpreadsheetUrl,
-                    onUploadSpreadsheet = onUploadSpreadsheet,
-                    spreadsheetUploadStatus = spreadsheetUploadStatus,
-                    canUploadSpreadsheet = !state.isLoading && !isSpreadsheetUploading,
-                    isSpreadsheetUploading = isSpreadsheetUploading,
-                    onBack = { showSettings = false },
-                )
-            }
-            return@Column
-        }
-
         Column(
-            modifier = Modifier.padding(start = 22.dp, top = 10.dp, end = 22.dp, bottom = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 88.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                MainHeader(onSettingsClick = { showSettings = true })
-                MainSummaryValues(
-                    records = state.weightRecords,
-                    dailySteps = state.stepDailyRecords,
-                    glucoseRecords = state.glucoseRecords,
-                )
-            }
-
-            WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
-
-            sharedText?.takeIf { it.isNotBlank() }?.let { text ->
-                DebugSection(title = "共有テキスト") {
-                    sharedTextImportStatus?.let { status ->
-                        Text(
-                            text = status,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppMutedBlue,
-                        )
-                    }
-                    Text(
-                        text = text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppText,
+            if (showManualInput) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    ManualDataScreen(
+                        records = state.manualRecords,
+                        onSave = onSaveManualRecord,
+                        onInvalidate = onInvalidateManualRecord,
+                        onBack = { showManualInput = false },
                     )
                 }
+                return@Column
+            }
+
+            if (showSettings) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    SettingsScreen(
+                        state = state,
+                        onRequestPermissions = onRequestPermissions,
+                        onRefresh = onRefresh,
+                        onSaveExternalWorkbook = onSaveExternalWorkbook,
+                        externalSaveStatus = externalSaveStatus,
+                        targetSpreadsheetUrl = targetSpreadsheetUrl,
+                        onUploadSpreadsheet = onUploadSpreadsheet,
+                        spreadsheetUploadStatus = spreadsheetUploadStatus,
+                        canUploadSpreadsheet = !state.isLoading && !isSpreadsheetUploading,
+                        isSpreadsheetUploading = isSpreadsheetUploading,
+                        onBack = { showSettings = false },
+                    )
+                }
+                return@Column
+            }
+
+            Column(
+                modifier = Modifier.padding(start = 22.dp, top = 10.dp, end = 22.dp, bottom = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    MainHeader(onSettingsClick = { showSettings = true })
+                    MainSummaryValues(
+                        records = state.weightRecords,
+                        dailySteps = state.stepDailyRecords,
+                        glucoseRecords = state.glucoseRecords,
+                    )
+                }
+
+                WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
+
+                sharedText?.takeIf { it.isNotBlank() }?.let { text ->
+                    DebugSection(title = "共有テキスト") {
+                        sharedTextImportStatus?.let { status ->
+                            Text(
+                                text = status,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = AppMutedBlue,
+                            )
+                        }
+                        Text(
+                            text = text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppText,
+                        )
+                    }
+                }
+            }
+        }
+        if (!showSettings && !showManualInput) {
+            FloatingActionButton(
+                onClick = { showManualInput = true },
+                containerColor = AppPrimary,
+                contentColor = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(22.dp),
+            ) {
+                Text(
+                    text = "+",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }
@@ -481,6 +527,209 @@ private fun RecordListButton(
         ) {
             Text(label)
         }
+    }
+}
+
+@Composable
+private fun ManualDataScreen(
+    records: List<ManualHealthRecord>,
+    onSave: (ManualHealthRecordDraft) -> Unit,
+    onInvalidate: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    var selectedType by remember { mutableStateOf(ManualRecordType.Weight) }
+    var dateText by remember { mutableStateOf(LocalDate.now().toString()) }
+    var timeText by remember { mutableStateOf(LocalTime.now().format(MANUAL_TIME_FORMATTER)) }
+    var primaryValue by remember { mutableStateOf("") }
+    var secondaryValue by remember { mutableStateOf("") }
+    var inputError by remember { mutableStateOf<String?>(null) }
+    val labels = selectedType.inputLabels()
+    val selectedRecords = records.filter { it.type == selectedType }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "手入力",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        OutlinedButton(onClick = onBack) {
+            Text("戻る")
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ManualRecordType.entries.chunked(3).forEach { rowTypes ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowTypes.forEach { type ->
+                    if (type == selectedType) {
+                        Button(
+                            onClick = {
+                                selectedType = type
+                                inputError = null
+                            },
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
+                        ) {
+                            Text(type.label)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = {
+                                selectedType = type
+                                inputError = null
+                            },
+                            shape = CircleShape,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+                        ) {
+                            Text(type.label)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    DebugSection(title = "${selectedType.label}の入力") {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(
+                value = dateText,
+                onValueChange = { dateText = it },
+                label = { Text("日付") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = timeText,
+                onValueChange = { timeText = it },
+                label = { Text("時刻") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        OutlinedTextField(
+            value = primaryValue,
+            onValueChange = { primaryValue = it },
+            label = { Text(labels.first) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        labels.second?.let { label ->
+            OutlinedTextField(
+                value = secondaryValue,
+                onValueChange = { secondaryValue = it },
+                label = { Text(label) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        inputError?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = ChartGlucose,
+            )
+        }
+        Button(
+            onClick = {
+                val measuredAt = parseManualMeasuredAt(dateText, timeText)
+                val valueText = selectedType.formatManualValue(primaryValue, secondaryValue)
+                if (measuredAt == null || valueText == null) {
+                    inputError = "日付、時刻、値を確認してください"
+                } else {
+                    onSave(
+                        ManualHealthRecordDraft(
+                            type = selectedType,
+                            measuredAt = measuredAt,
+                            valueText = valueText,
+                        ),
+                    )
+                    primaryValue = ""
+                    secondaryValue = ""
+                    inputError = null
+                }
+            },
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
+        ) {
+            Text("保存")
+        }
+    }
+
+    DebugSection(title = "${selectedType.label}のデータ一覧") {
+        if (selectedRecords.isEmpty()) {
+            Text(
+                text = "データはありません",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        } else {
+            selectedRecords.forEach { record ->
+                ManualRecordRow(record, onInvalidate)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManualRecordRow(
+    record: ManualHealthRecord,
+    onInvalidate: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "${record.measuredAt.formatDateTime()}  ${record.valueText}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (record.invalidatedAt == null) AppText else ChartLabel,
+            )
+            if (record.invalidatedAt != null) {
+                Text(
+                    text = "無効",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = ChartLabel,
+                )
+            }
+        }
+        if (record.invalidatedAt == null) {
+            IconButton(onClick = { onInvalidate(record.id) }) {
+                TrashIcon()
+            }
+        } else {
+            Text(
+                text = "無効",
+                style = MaterialTheme.typography.labelMedium,
+                color = ChartLabel,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrashIcon(
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier.size(22.dp)) {
+        val strokeWidth = 2.dp.toPx()
+        val left = size.width * 0.28f
+        val right = size.width * 0.72f
+        val top = size.height * 0.34f
+        val bottom = size.height * 0.78f
+        drawLine(ChartGlucose, Offset(size.width * 0.25f, top), Offset(size.width * 0.75f, top), strokeWidth, cap = StrokeCap.Round)
+        drawLine(ChartGlucose, Offset(size.width * 0.42f, size.height * 0.22f), Offset(size.width * 0.58f, size.height * 0.22f), strokeWidth, cap = StrokeCap.Round)
+        drawLine(ChartGlucose, Offset(left, top), Offset(left + 1.dp.toPx(), bottom), strokeWidth, cap = StrokeCap.Round)
+        drawLine(ChartGlucose, Offset(right, top), Offset(right - 1.dp.toPx(), bottom), strokeWidth, cap = StrokeCap.Round)
+        drawLine(ChartGlucose, Offset(left + 1.dp.toPx(), bottom), Offset(right - 1.dp.toPx(), bottom), strokeWidth, cap = StrokeCap.Round)
+        drawLine(ChartGlucose, Offset(size.width * 0.43f, top + 4.dp.toPx()), Offset(size.width * 0.43f, bottom - 3.dp.toPx()), strokeWidth * 0.75f, cap = StrokeCap.Round)
+        drawLine(ChartGlucose, Offset(size.width * 0.57f, top + 4.dp.toPx()), Offset(size.width * 0.57f, bottom - 3.dp.toPx()), strokeWidth * 0.75f, cap = StrokeCap.Round)
     }
 }
 
@@ -1062,6 +1311,47 @@ private fun String.toPermissionLabel(): String {
 private fun LocalDateTime.formatDateTime(): String =
     format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
+private fun parseManualMeasuredAt(dateText: String, timeText: String): LocalDateTime? {
+    val date = runCatching { LocalDate.parse(dateText.trim()) }.getOrNull() ?: return null
+    val time = runCatching { LocalTime.parse(timeText.trim(), MANUAL_TIME_FORMATTER) }
+        .getOrElse { runCatching { LocalTime.parse(timeText.trim()) }.getOrNull() }
+        ?: return null
+    return date.atTime(time)
+}
+
+private fun ManualRecordType.inputLabels(): Pair<String, String?> {
+    return when (this) {
+        ManualRecordType.Weight -> "体重 kg" to null
+        ManualRecordType.Steps -> "歩数" to null
+        ManualRecordType.BloodPressure -> "上 mmHg" to "下 mmHg"
+        ManualRecordType.Waist -> "腹囲 cm" to null
+        ManualRecordType.A1c -> "A1c %" to null
+    }
+}
+
+private fun ManualRecordType.formatManualValue(
+    primaryValue: String,
+    secondaryValue: String,
+): String? {
+    val primary = primaryValue.trim()
+    val secondary = secondaryValue.trim()
+    return when (this) {
+        ManualRecordType.Weight ->
+            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} kg" }
+        ManualRecordType.Steps ->
+            primary.toLongOrNull()?.let { "${it}歩" }
+        ManualRecordType.BloodPressure -> {
+            val systolic = primary.toLongOrNull()
+            val diastolic = secondary.toLongOrNull()
+            if (systolic == null || diastolic == null) null else "$systolic/$diastolic mmHg"
+        }
+        ManualRecordType.Waist ->
+            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} cm" }
+        ManualRecordType.A1c ->
+            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} %" }
+    }
+}
+
 private fun formatDecimal(value: Double): String {
     val roundedOneDecimal = (value * 10.0).roundToInt() / 10.0
     return if (roundedOneDecimal % 1.0 == 0.0) {
@@ -1409,6 +1699,7 @@ private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 private const val GLUCOSE_WEIGHT_COUNT = 3
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
+private val MANUAL_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)

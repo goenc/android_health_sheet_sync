@@ -7,8 +7,12 @@ import android.database.sqlite.SQLiteOpenHelper
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.ManualHealthRecord
+import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
+import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.UUID
 
 class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     context,
@@ -17,6 +21,11 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     DATABASE_VERSION,
 ) {
     override fun onCreate(db: SQLiteDatabase) {
+        createHealthConnectTables(db)
+        createManualRecordsTable(db)
+    }
+
+    private fun createHealthConnectTables(db: SQLiteDatabase) {
         db.execSQL(
             """
             CREATE TABLE weight_records (
@@ -62,10 +71,9 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS weight_records")
-        db.execSQL("DROP TABLE IF EXISTS glucose_records")
-        db.execSQL("DROP TABLE IF EXISTS step_daily_records")
-        onCreate(db)
+        if (oldVersion < 2) {
+            createManualRecordsTable(db)
+        }
     }
 
     fun save(
@@ -131,6 +139,36 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             weightRecords = loadWeightRecords(),
             glucoseRecords = loadGlucoseRecords(),
             stepDailyRecords = loadStepDailyRecords(),
+            manualRecords = loadManualRecords(),
+        )
+    }
+
+    fun saveManualRecord(draft: ManualHealthRecordDraft) {
+        val now = LocalDateTime.now().toString()
+        writableDatabase.replace(
+            TABLE_MANUAL,
+            null,
+            ContentValues().apply {
+                put("id", "manual|${UUID.randomUUID()}")
+                put("type", draft.type.name)
+                put("measured_at", draft.measuredAt.toString())
+                put("value_text", draft.valueText)
+                put("created_at", now)
+                put("updated_at", now)
+                putNull("invalidated_at")
+            },
+        )
+    }
+
+    fun invalidateManualRecord(id: String) {
+        writableDatabase.update(
+            TABLE_MANUAL,
+            ContentValues().apply {
+                put("invalidated_at", LocalDateTime.now().toString())
+                put("updated_at", LocalDateTime.now().toString())
+            },
+            "id = ? AND invalidated_at IS NULL",
+            arrayOf(id),
         )
     }
 
@@ -213,6 +251,51 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         }
     }
 
+    private fun loadManualRecords(): List<ManualHealthRecord> {
+        readableDatabase.rawQuery(
+            """
+            SELECT id, type, measured_at, value_text, invalidated_at
+            FROM manual_records
+            ORDER BY measured_at DESC
+            """.trimIndent(),
+            emptyArray(),
+        ).use { cursor ->
+            return buildList {
+                while (cursor.moveToNext()) {
+                    val type = runCatching { ManualRecordType.valueOf(cursor.getString(1)) }.getOrNull()
+                    if (type == null) {
+                        continue
+                    }
+                    add(
+                        ManualHealthRecord(
+                            id = cursor.getString(0),
+                            type = type,
+                            measuredAt = LocalDateTime.parse(cursor.getString(2)),
+                            valueText = cursor.getString(3),
+                            invalidatedAt = cursor.getString(4)?.let(LocalDateTime::parse),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun createManualRecordsTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS manual_records (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                measured_at TEXT NOT NULL,
+                value_text TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                invalidated_at TEXT
+            )
+            """.trimIndent(),
+        )
+    }
+
     private fun DebugWeightRecord.uniqueKey(recordType: String, value: String): String {
         return stableHealthConnectKey(recordType, healthConnectId)
             ?: "$recordType|$measuredAt|$sourcePackageName|$value"
@@ -240,10 +323,11 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
 
     companion object {
         private const val DATABASE_NAME = "health_sheet_sync.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
         private const val TABLE_WEIGHT = "weight_records"
         private const val TABLE_GLUCOSE = "glucose_records"
         private const val TABLE_STEPS = "step_daily_records"
+        private const val TABLE_MANUAL = "manual_records"
         private const val UNKNOWN = "不明"
     }
 }
@@ -252,4 +336,5 @@ data class StoredHealthData(
     val weightRecords: List<DebugWeightRecord>,
     val glucoseRecords: List<DebugGlucoseRecord>,
     val stepDailyRecords: List<DebugStepDaily>,
+    val manualRecords: List<ManualHealthRecord>,
 )

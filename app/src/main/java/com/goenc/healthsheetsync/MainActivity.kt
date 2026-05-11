@@ -29,6 +29,7 @@ import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import com.goenc.healthsheetsync.health.HealthConnectDebugReader
 import com.goenc.healthsheetsync.health.HealthDebugUiState
+import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
 import kotlinx.coroutines.launch
@@ -121,6 +122,8 @@ class MainActivity : ComponentActivity() {
                         targetSpreadsheetUrl = SpreadsheetUploadSettings.TARGET_SPREADSHEET_URL,
                         sharedText = sharedText,
                         sharedTextImportStatus = sharedTextImportStatus,
+                        onSaveManualRecord = { draft -> saveManualRecord(draft) },
+                        onInvalidateManualRecord = { id -> invalidateManualRecord(id) },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -195,6 +198,16 @@ class MainActivity : ComponentActivity() {
             healthState = healthState.copy(isLoading = true)
             healthState = healthReader.load()
         }
+    }
+
+    private fun saveManualRecord(draft: ManualHealthRecordDraft) {
+        localStore.saveManualRecord(draft)
+        refreshHealthData()
+    }
+
+    private fun invalidateManualRecord(id: String) {
+        localStore.invalidateManualRecord(id)
+        refreshHealthData()
     }
 
     private fun uploadSpreadsheetData() {
