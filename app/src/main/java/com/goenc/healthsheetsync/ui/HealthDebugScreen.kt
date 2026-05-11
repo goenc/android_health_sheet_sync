@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -131,7 +132,10 @@ fun HealthDebugScreen(
                         onSave = onSaveManualRecord,
                         onInvalidate = onInvalidateStoredRecord,
                         onRestore = onRestoreStoredRecord,
-                        onBack = { showManualInput = false },
+                        onBack = {
+                            showManualInput = false
+                            onRefresh()
+                        },
                     )
                 }
                 return@Column
@@ -703,6 +707,9 @@ private fun ManualRecordRow(
     onInvalidate: (String, String) -> Unit,
     onRestore: (String, String) -> Unit,
 ) {
+    var showInvalidateConfirm by remember { mutableStateOf(false) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -723,18 +730,66 @@ private fun ManualRecordRow(
             }
         }
         if (record.invalidatedAt == null) {
-            IconButton(onClick = { onInvalidate(record.recordType, record.uniqueKey) }) {
+            IconButton(onClick = { showInvalidateConfirm = true }) {
                 TrashIcon()
             }
         } else {
             OutlinedButton(
-                onClick = { onRestore(record.recordType, record.uniqueKey) },
+                onClick = { showRestoreConfirm = true },
                 shape = CircleShape,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Text("復活")
             }
         }
+    }
+
+    if (showInvalidateConfirm) {
+        AlertDialog(
+            onDismissRequest = { showInvalidateConfirm = false },
+            title = { Text("データを無効にしますか") },
+            text = { Text(record.text) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showInvalidateConfirm = false
+                        onInvalidate(record.recordType, record.uniqueKey)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ChartGlucose),
+                ) {
+                    Text("無効にする")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showInvalidateConfirm = false }) {
+                    Text("キャンセル")
+                }
+            },
+        )
+    }
+
+    if (showRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirm = false },
+            title = { Text("データを復活しますか") },
+            text = { Text(record.text) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestoreConfirm = false
+                        onRestore(record.recordType, record.uniqueKey)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
+                ) {
+                    Text("復活する")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showRestoreConfirm = false }) {
+                    Text("キャンセル")
+                }
+            },
+        )
     }
 }
 
