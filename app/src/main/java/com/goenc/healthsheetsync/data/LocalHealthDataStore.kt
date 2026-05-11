@@ -239,6 +239,7 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
                         },
                     )
                 }
+                ManualRecordType.A1c -> Unit
             }
         }
     }
@@ -253,6 +254,22 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             "id = ? AND invalidated_at IS NULL",
             arrayOf(id),
         )
+    }
+
+    fun restoreManualRecord(id: String) {
+        writableDatabase.update(
+            TABLE_MANUAL,
+            ContentValues().apply {
+                putNull("invalidated_at")
+                put("updated_at", LocalDateTime.now().toString())
+            },
+            "id = ?",
+            arrayOf(id),
+        )
+    }
+
+    fun deleteManualRecord(id: String) {
+        writableDatabase.delete(TABLE_MANUAL, "id = ?", arrayOf(id))
     }
 
     fun invalidateStoredRecord(recordType: String, uniqueKey: String) {

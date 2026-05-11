@@ -123,6 +123,9 @@ class MainActivity : ComponentActivity() {
                         sharedText = sharedText,
                         sharedTextImportStatus = sharedTextImportStatus,
                         onSaveManualRecord = { draft -> saveManualRecord(draft) },
+                        onInvalidateManualRecord = { id -> invalidateManualRecord(id) },
+                        onRestoreManualRecord = { id -> restoreManualRecord(id) },
+                        onDeleteManualRecord = { id -> deleteManualRecord(id) },
                         onInvalidateStoredRecord = { recordType, uniqueKey ->
                             invalidateStoredRecord(recordType, uniqueKey)
                         },
@@ -210,6 +213,21 @@ class MainActivity : ComponentActivity() {
 
     private fun saveManualRecord(draft: ManualHealthRecordDraft) {
         localStore.saveManualRecord(draft)
+        refreshHealthData()
+    }
+
+    private fun invalidateManualRecord(id: String) {
+        localStore.invalidateManualRecord(id)
+        refreshHealthData()
+    }
+
+    private fun restoreManualRecord(id: String) {
+        localStore.restoreManualRecord(id)
+        refreshHealthData()
+    }
+
+    private fun deleteManualRecord(id: String) {
+        localStore.deleteManualRecord(id)
         refreshHealthData()
     }
 

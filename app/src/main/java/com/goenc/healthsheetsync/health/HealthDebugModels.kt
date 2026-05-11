@@ -70,6 +70,7 @@ enum class ManualRecordType(
     Weight("体重"),
     Steps("歩数"),
     BloodGlucose("血糖値"),
+    A1c("A1c"),
 }
 
 data class ManualHealthRecord(

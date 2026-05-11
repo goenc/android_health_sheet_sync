@@ -67,6 +67,7 @@ import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
+import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
 import com.goenc.healthsheetsync.health.PermissionState
@@ -103,6 +104,9 @@ fun HealthDebugScreen(
     sharedText: String?,
     sharedTextImportStatus: String?,
     onSaveManualRecord: (ManualHealthRecordDraft) -> Unit,
+    onInvalidateManualRecord: (String) -> Unit,
+    onRestoreManualRecord: (String) -> Unit,
+    onDeleteManualRecord: (String) -> Unit,
     onInvalidateStoredRecord: (String, String) -> Unit,
     onRestoreStoredRecord: (String, String) -> Unit,
     onDeleteStoredRecord: (String, String) -> Unit,
@@ -137,8 +141,12 @@ fun HealthDebugScreen(
                         weightRecords = state.weightRecords,
                         dailySteps = state.stepDailyRecords,
                         glucoseRecords = state.glucoseRecords,
+                        manualRecords = state.manualRecords,
                         invalidatedRecords = state.invalidatedGraphRecords,
                         onSave = onSaveManualRecord,
+                        onInvalidateManual = onInvalidateManualRecord,
+                        onRestoreManual = onRestoreManualRecord,
+                        onDeleteManual = onDeleteManualRecord,
                         onInvalidate = onInvalidateStoredRecord,
                         onRestore = onRestoreStoredRecord,
                         onDelete = onDeleteStoredRecord,
@@ -186,7 +194,7 @@ fun HealthDebugScreen(
                     )
                 }
 
-                WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords)
+                WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords, state.manualRecords)
 
                 sharedText?.takeIf { it.isNotBlank() }?.let { text ->
                     DebugSection(title = "共有テキスト") {
@@ -555,8 +563,12 @@ private fun ManualDataScreen(
     weightRecords: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
+    manualRecords: List<ManualHealthRecord>,
     invalidatedRecords: List<InvalidatedGraphRecord>,
     onSave: (ManualHealthRecordDraft) -> Unit,
+    onInvalidateManual: (String) -> Unit,
+    onRestoreManual: (String) -> Unit,
+    onDeleteManual: (String) -> Unit,
     onInvalidate: (String, String) -> Unit,
     onRestore: (String, String) -> Unit,
     onDelete: (String, String) -> Unit,
@@ -569,8 +581,8 @@ private fun ManualDataScreen(
     var primaryValue by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
     val labels = selectedType.inputLabels()
-    val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords, invalidatedRecords) {
-        selectedType.toGraphDataItems(weightRecords, dailySteps, glucoseRecords, invalidatedRecords)
+    val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords) {
+        selectedType.toGraphDataItems(weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords)
     }
 
     Row(
@@ -735,7 +747,15 @@ private fun ManualDataScreen(
             )
         } else {
             selectedRecords.forEach { record ->
-                ManualRecordRow(record, onInvalidate, onRestore, onDelete)
+                ManualRecordRow(
+                    record = record,
+                    onInvalidate = onInvalidate,
+                    onRestore = onRestore,
+                    onDelete = onDelete,
+                    onInvalidateManual = onInvalidateManual,
+                    onRestoreManual = onRestoreManual,
+                    onDeleteManual = onDeleteManual,
+                )
             }
         }
     }
@@ -747,6 +767,9 @@ private fun ManualRecordRow(
     onInvalidate: (String, String) -> Unit,
     onRestore: (String, String) -> Unit,
     onDelete: (String, String) -> Unit,
+    onInvalidateManual: (String) -> Unit,
+    onRestoreManual: (String) -> Unit,
+    onDeleteManual: (String) -> Unit,
 ) {
     var showInvalidateConfirm by remember { mutableStateOf(false) }
     var showRestoreConfirm by remember { mutableStateOf(false) }
@@ -793,7 +816,11 @@ private fun ManualRecordRow(
                 Button(
                     onClick = {
                         showInvalidateConfirm = false
-                        onInvalidate(record.recordType, record.uniqueKey)
+                        if (record.recordType == MANUAL_RECORD_TYPE) {
+                            onInvalidateManual(record.uniqueKey)
+                        } else {
+                            onInvalidate(record.recordType, record.uniqueKey)
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ChartGlucose),
                 ) {
@@ -817,7 +844,11 @@ private fun ManualRecordRow(
                 Button(
                     onClick = {
                         showRestoreConfirm = false
-                        onRestore(record.recordType, record.uniqueKey)
+                        if (record.recordType == MANUAL_RECORD_TYPE) {
+                            onRestoreManual(record.uniqueKey)
+                        } else {
+                            onRestore(record.recordType, record.uniqueKey)
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
                 ) {
@@ -851,7 +882,11 @@ private fun ManualRecordRow(
                 Button(
                     onClick = {
                         showDeleteConfirm = false
-                        onDelete(record.recordType, record.uniqueKey)
+                        if (record.recordType == MANUAL_RECORD_TYPE) {
+                            onDeleteManual(record.uniqueKey)
+                        } else {
+                            onDelete(record.recordType, record.uniqueKey)
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = DeleteOrange),
                 ) {
@@ -991,6 +1026,7 @@ private fun WeightTrendChart(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
+    manualRecords: List<ManualHealthRecord>,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
@@ -1091,6 +1127,7 @@ private fun WeightTrendChart(
                 val trendLine = calculateTrendLine(chartPoints)
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
                 val glucoseChart = calculateFastingGlucoseChart(glucoseRecords, visibleWindow)
+                val a1cChart = calculateA1cChart(manualRecords, visibleWindow)
                 val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
@@ -1135,6 +1172,12 @@ private fun WeightTrendChart(
 
             fun stepYAt(steps: Float): Float {
                 val ratio = (steps / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)
+                return chartBottom - chartHeight * ratio
+            }
+
+            fun a1cYAt(value: Double): Float {
+                val ratio = ((value - A1C_CHART_MIN) / (A1C_CHART_MAX - A1C_CHART_MIN)).toFloat()
+                    .coerceIn(0f, 1f)
                 return chartBottom - chartHeight * ratio
             }
 
@@ -1291,6 +1334,43 @@ private fun WeightTrendChart(
                         chartRight - 4.dp.toPx(),
                         glucoseY - 4.dp.toPx(),
                         glucosePaint,
+                    )
+                }
+            }
+
+            a1cChart?.let { chart ->
+                val visiblePoints = chart.visibleRecords
+                if (visiblePoints.isNotEmpty()) {
+                    val a1cPath = Path()
+                    visiblePoints.forEachIndexed { index, record ->
+                        val point = Offset(xAtTime(record.measuredAt), a1cYAt(record.value))
+                        if (index == 0) {
+                            a1cPath.moveTo(point.x, point.y)
+                        } else {
+                            a1cPath.lineTo(point.x, point.y)
+                        }
+                    }
+                    drawPath(
+                        path = a1cPath,
+                        color = ChartA1c,
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                    visiblePoints.forEach { record ->
+                        drawCircle(
+                            color = ChartA1c,
+                            radius = 4.dp.toPx(),
+                            center = Offset(xAtTime(record.measuredAt), a1cYAt(record.value)),
+                        )
+                    }
+                }
+                chart.latestRecord?.let { latest ->
+                    val latestX = xAtTime(latest.measuredAt)
+                    val latestY = a1cYAt(latest.value)
+                    drawLine(
+                        color = ChartA1c,
+                        start = Offset(latestX, latestY),
+                        end = Offset(chartRight, latestY),
+                        strokeWidth = 1.5.dp.toPx(),
                     )
                 }
             }
@@ -1514,6 +1594,7 @@ private fun ManualRecordType.inputLabels(): Pair<String, String?> {
         ManualRecordType.Weight -> "体重 kg" to null
         ManualRecordType.Steps -> "歩数" to null
         ManualRecordType.BloodGlucose -> "血糖値 mg/dL" to null
+        ManualRecordType.A1c -> "A1c %" to null
     }
 }
 
@@ -1526,6 +1607,8 @@ private fun ManualRecordType.formatManualValue(primaryValue: String): String? {
             primary.toLongOrNull()?.let { "${it}歩" }
         ManualRecordType.BloodGlucose ->
             primary.toDoubleOrNull()?.let { "${formatDecimal(it)} mg/dL" }
+        ManualRecordType.A1c ->
+            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} %" }
     }
 }
 
@@ -1544,6 +1627,7 @@ private fun ManualRecordType.toGraphDataItems(
     weightRecords: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
+    manualRecords: List<ManualHealthRecord>,
     invalidatedRecords: List<InvalidatedGraphRecord>,
 ): List<GraphDataItem> {
     val activeItems = when (this) {
@@ -1578,6 +1662,18 @@ private fun ManualRecordType.toGraphDataItems(
                     text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.bloodGlucoseMgDl)} mg/dL / ${record.mealRelation}",
                     measuredAt = record.measuredAt,
                     invalidatedAt = null,
+                )
+            }
+        ManualRecordType.A1c -> manualRecords
+            .filter { it.type == ManualRecordType.A1c }
+            .sortedByDescending { it.measuredAt }
+            .map { record ->
+                GraphDataItem(
+                    recordType = MANUAL_RECORD_TYPE,
+                    uniqueKey = record.id,
+                    text = "${record.measuredAt.formatDateTime()}  ${record.valueText}",
+                    measuredAt = record.measuredAt,
+                    invalidatedAt = record.invalidatedAt,
                 )
             }
     }
@@ -1689,6 +1785,16 @@ private data class StepBar(
 private data class FastingGlucoseChart(
     val weightedAverageMgDl: Double,
     val visibleRecords: List<DebugGlucoseRecord>,
+)
+
+private data class A1cChart(
+    val visibleRecords: List<A1cChartRecord>,
+    val latestRecord: A1cChartRecord?,
+)
+
+private data class A1cChartRecord(
+    val measuredAt: LocalDateTime,
+    val value: Double,
 )
 
 private data class ChartDateLabel(
@@ -1888,6 +1994,29 @@ private fun List<DebugGlucoseRecord>.fastingGlucoseRecords(): List<DebugGlucoseR
 private fun String.isFastingGlucoseRelation(): Boolean =
     this == "空腹時" || this == "食前"
 
+private fun calculateA1cChart(
+    manualRecords: List<ManualHealthRecord>,
+    window: ChartTimeWindow,
+): A1cChart? {
+    val records = manualRecords
+        .filter { it.type == ManualRecordType.A1c && it.invalidatedAt == null }
+        .mapNotNull { record ->
+            record.valueText.removeSuffix(" %").toDoubleOrNull()?.let { value ->
+                A1cChartRecord(record.measuredAt, value)
+            }
+        }
+        .sortedBy { it.measuredAt }
+    if (records.isEmpty()) return null
+    val visibleRecords = records.filter { record ->
+        !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
+    }
+    val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
+    return A1cChart(
+        visibleRecords = visibleRecords,
+        latestRecord = latestRecord,
+    )
+}
+
 private fun calculateStepBars(
     dailySteps: List<DebugStepDaily>,
     window: ChartTimeWindow,
@@ -1965,7 +2094,10 @@ private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 private const val GLUCOSE_WEIGHT_COUNT = 3
 private const val UNKNOWN_HEALTH_VALUE = "不明"
+private const val MANUAL_RECORD_TYPE = "manual"
 private const val DELETE_PRESS_MILLIS = 5_000L
+private const val A1C_CHART_MIN = 4.0
+private const val A1C_CHART_MAX = 8.0
 private val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 private val AppBackground = Color(0xFFFAFAFC)
@@ -1981,6 +2113,7 @@ private val ChartSummary = Color(0xFF043C5A)
 private val ChartStepBar = Color(0x337E57B2)
 private val ChartStepText = Color(0xFF5E3F91)
 private val ChartGlucose = Color(0xFFC33A2B)
+private val ChartA1c = Color(0xFFD26A00)
 private val DeleteOrange = Color(0xFFD26A00)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
