@@ -60,7 +60,6 @@ import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
-import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
 import com.goenc.healthsheetsync.health.PermissionState
@@ -94,7 +93,7 @@ fun HealthDebugScreen(
     sharedText: String?,
     sharedTextImportStatus: String?,
     onSaveManualRecord: (ManualHealthRecordDraft) -> Unit,
-    onInvalidateManualRecord: (String) -> Unit,
+    onInvalidateStoredRecord: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -123,9 +122,11 @@ fun HealthDebugScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     ManualDataScreen(
-                        records = state.manualRecords,
+                        weightRecords = state.weightRecords,
+                        dailySteps = state.stepDailyRecords,
+                        glucoseRecords = state.glucoseRecords,
                         onSave = onSaveManualRecord,
-                        onInvalidate = onInvalidateManualRecord,
+                        onInvalidate = onInvalidateStoredRecord,
                         onBack = { showManualInput = false },
                     )
                 }
@@ -532,19 +533,22 @@ private fun RecordListButton(
 
 @Composable
 private fun ManualDataScreen(
-    records: List<ManualHealthRecord>,
+    weightRecords: List<DebugWeightRecord>,
+    dailySteps: List<DebugStepDaily>,
+    glucoseRecords: List<DebugGlucoseRecord>,
     onSave: (ManualHealthRecordDraft) -> Unit,
-    onInvalidate: (String) -> Unit,
+    onInvalidate: (String, String) -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedType by remember { mutableStateOf(ManualRecordType.Weight) }
-    var dateText by remember { mutableStateOf(LocalDate.now().toString()) }
-    var timeText by remember { mutableStateOf(LocalTime.now().format(MANUAL_TIME_FORMATTER)) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var selectedTimeBand by remember { mutableStateOf("朝") }
     var primaryValue by remember { mutableStateOf("") }
-    var secondaryValue by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
     val labels = selectedType.inputLabels()
-    val selectedRecords = records.filter { it.type == selectedType }
+    val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords) {
+        selectedType.toGraphDataItems(weightRecords, dailySteps, glucoseRecords)
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -594,21 +598,44 @@ private fun ManualDataScreen(
     }
 
     DebugSection(title = "${selectedType.label}の入力") {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(
-                value = dateText,
-                onValueChange = { dateText = it },
-                label = { Text("日付") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(onClick = { selectedDate = selectedDate.minusDays(1) }) {
+                Text("前日")
+            }
+            Text(
+                text = selectedDate.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
             )
-            OutlinedTextField(
-                value = timeText,
-                onValueChange = { timeText = it },
-                label = { Text("時刻") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
+            OutlinedButton(onClick = { selectedDate = selectedDate.plusDays(1) }) {
+                Text("翌日")
+            }
+        }
+        if (selectedType != ManualRecordType.Steps) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("朝", "昼", "夜").forEach { timeBand ->
+                    if (timeBand == selectedTimeBand) {
+                        Button(
+                            onClick = { selectedTimeBand = timeBand },
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
+                        ) {
+                            Text(timeBand)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { selectedTimeBand = timeBand },
+                            shape = CircleShape,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+                        ) {
+                            Text(timeBand)
+                        }
+                    }
+                }
+            }
         }
         OutlinedTextField(
             value = primaryValue,
@@ -618,16 +645,6 @@ private fun ManualDataScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
-        labels.second?.let { label ->
-            OutlinedTextField(
-                value = secondaryValue,
-                onValueChange = { secondaryValue = it },
-                label = { Text(label) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
         inputError?.let { message ->
             Text(
                 text = message,
@@ -637,10 +654,10 @@ private fun ManualDataScreen(
         }
         Button(
             onClick = {
-                val measuredAt = parseManualMeasuredAt(dateText, timeText)
-                val valueText = selectedType.formatManualValue(primaryValue, secondaryValue)
-                if (measuredAt == null || valueText == null) {
-                    inputError = "日付、時刻、値を確認してください"
+                val measuredAt = selectedDate.atTime(selectedType.manualInputTime(selectedTimeBand))
+                val valueText = selectedType.formatManualValue(primaryValue)
+                if (valueText == null) {
+                    inputError = "値を確認してください"
                 } else {
                     onSave(
                         ManualHealthRecordDraft(
@@ -650,7 +667,6 @@ private fun ManualDataScreen(
                         ),
                     )
                     primaryValue = ""
-                    secondaryValue = ""
                     inputError = null
                 }
             },
@@ -677,8 +693,8 @@ private fun ManualDataScreen(
 
 @Composable
 private fun ManualRecordRow(
-    record: ManualHealthRecord,
-    onInvalidate: (String) -> Unit,
+    record: GraphDataItem,
+    onInvalidate: (String, String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -687,28 +703,13 @@ private fun ManualRecordRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${record.measuredAt.formatDateTime()}  ${record.valueText}",
+                text = record.text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (record.invalidatedAt == null) AppText else ChartLabel,
+                color = AppText,
             )
-            if (record.invalidatedAt != null) {
-                Text(
-                    text = "無効",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = ChartLabel,
-                )
-            }
         }
-        if (record.invalidatedAt == null) {
-            IconButton(onClick = { onInvalidate(record.id) }) {
-                TrashIcon()
-            }
-        } else {
-            Text(
-                text = "無効",
-                style = MaterialTheme.typography.labelMedium,
-                color = ChartLabel,
-            )
+        IconButton(onClick = { onInvalidate(record.recordType, record.uniqueKey) }) {
+            TrashIcon()
         }
     }
 }
@@ -1311,45 +1312,86 @@ private fun String.toPermissionLabel(): String {
 private fun LocalDateTime.formatDateTime(): String =
     format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
-private fun parseManualMeasuredAt(dateText: String, timeText: String): LocalDateTime? {
-    val date = runCatching { LocalDate.parse(dateText.trim()) }.getOrNull() ?: return null
-    val time = runCatching { LocalTime.parse(timeText.trim(), MANUAL_TIME_FORMATTER) }
-        .getOrElse { runCatching { LocalTime.parse(timeText.trim()) }.getOrNull() }
-        ?: return null
-    return date.atTime(time)
-}
-
 private fun ManualRecordType.inputLabels(): Pair<String, String?> {
     return when (this) {
         ManualRecordType.Weight -> "体重 kg" to null
         ManualRecordType.Steps -> "歩数" to null
-        ManualRecordType.BloodPressure -> "上 mmHg" to "下 mmHg"
-        ManualRecordType.Waist -> "腹囲 cm" to null
-        ManualRecordType.A1c -> "A1c %" to null
+        ManualRecordType.BloodGlucose -> "血糖値 mg/dL" to null
     }
 }
 
-private fun ManualRecordType.formatManualValue(
-    primaryValue: String,
-    secondaryValue: String,
-): String? {
+private fun ManualRecordType.formatManualValue(primaryValue: String): String? {
     val primary = primaryValue.trim()
-    val secondary = secondaryValue.trim()
     return when (this) {
         ManualRecordType.Weight ->
             primary.toDoubleOrNull()?.let { "${formatDecimal(it)} kg" }
         ManualRecordType.Steps ->
             primary.toLongOrNull()?.let { "${it}歩" }
-        ManualRecordType.BloodPressure -> {
-            val systolic = primary.toLongOrNull()
-            val diastolic = secondary.toLongOrNull()
-            if (systolic == null || diastolic == null) null else "$systolic/$diastolic mmHg"
-        }
-        ManualRecordType.Waist ->
-            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} cm" }
-        ManualRecordType.A1c ->
-            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} %" }
+        ManualRecordType.BloodGlucose ->
+            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} mg/dL" }
     }
+}
+
+private fun ManualRecordType.manualInputTime(timeBand: String): LocalTime {
+    return when (this) {
+        ManualRecordType.Steps -> LocalTime.NOON
+        else -> when (timeBand) {
+            "朝" -> LocalTime.of(7, 0)
+            "昼" -> LocalTime.of(12, 0)
+            else -> LocalTime.of(20, 0)
+        }
+    }
+}
+
+private fun ManualRecordType.toGraphDataItems(
+    weightRecords: List<DebugWeightRecord>,
+    dailySteps: List<DebugStepDaily>,
+    glucoseRecords: List<DebugGlucoseRecord>,
+): List<GraphDataItem> {
+    return when (this) {
+        ManualRecordType.Weight -> weightRecords
+            .sortedByDescending { it.measuredAt }
+            .map { record ->
+                GraphDataItem(
+                    recordType = "weight",
+                    uniqueKey = record.weightUniqueKey(),
+                    text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.weightKg)} kg / ${record.timeBand}",
+                )
+            }
+        ManualRecordType.Steps -> dailySteps
+            .sortedByDescending { it.targetDate }
+            .map { steps ->
+                GraphDataItem(
+                    recordType = "steps",
+                    uniqueKey = steps.targetDate.toString(),
+                    text = "${steps.targetDate}  ${steps.steps}歩",
+                )
+            }
+        ManualRecordType.BloodGlucose -> glucoseRecords
+            .sortedByDescending { it.measuredAt }
+            .map { record ->
+                GraphDataItem(
+                    recordType = "glucose",
+                    uniqueKey = record.glucoseUniqueKey(),
+                    text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.bloodGlucoseMgDl)} mg/dL / ${record.mealRelation}",
+                )
+            }
+    }
+}
+
+private fun DebugWeightRecord.weightUniqueKey(): String {
+    return stableHealthRecordKey("weight", healthConnectId)
+        ?: "weight|$measuredAt|$sourcePackageName|$weightKg"
+}
+
+private fun DebugGlucoseRecord.glucoseUniqueKey(): String {
+    return stableHealthRecordKey("glucose", healthConnectId)
+        ?: "glucose|$measuredAt|$sourcePackageName|$bloodGlucoseMgDl|$mealRelation"
+}
+
+private fun stableHealthRecordKey(recordType: String, healthConnectId: String): String? {
+    if (healthConnectId.isBlank() || healthConnectId == UNKNOWN_HEALTH_VALUE) return null
+    return "$recordType|$healthConnectId"
 }
 
 private fun formatDecimal(value: Double): String {
@@ -1443,6 +1485,12 @@ private data class ChartDateLabel(
     val right: Float
         get() = x + width / 2f
 }
+
+private data class GraphDataItem(
+    val recordType: String,
+    val uniqueKey: String,
+    val text: String,
+)
 
 private fun ChartWeightPoint.isMorning(): Boolean =
     timeBand == "朝"
@@ -1698,8 +1746,8 @@ private const val CHART_WEIGHT_LOWER_PADDING_KG = 1.0
 private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 private const val GLUCOSE_WEIGHT_COUNT = 3
+private const val UNKNOWN_HEALTH_VALUE = "不明"
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
-private val MANUAL_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)

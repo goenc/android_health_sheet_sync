@@ -123,7 +123,9 @@ class MainActivity : ComponentActivity() {
                         sharedText = sharedText,
                         sharedTextImportStatus = sharedTextImportStatus,
                         onSaveManualRecord = { draft -> saveManualRecord(draft) },
-                        onInvalidateManualRecord = { id -> invalidateManualRecord(id) },
+                        onInvalidateStoredRecord = { recordType, uniqueKey ->
+                            invalidateStoredRecord(recordType, uniqueKey)
+                        },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -205,8 +207,8 @@ class MainActivity : ComponentActivity() {
         refreshHealthData()
     }
 
-    private fun invalidateManualRecord(id: String) {
-        localStore.invalidateManualRecord(id)
+    private fun invalidateStoredRecord(recordType: String, uniqueKey: String) {
+        localStore.invalidateStoredRecord(recordType, uniqueKey)
         refreshHealthData()
     }
 

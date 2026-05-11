@@ -68,9 +68,7 @@ enum class ManualRecordType(
 ) {
     Weight("体重"),
     Steps("歩数"),
-    BloodPressure("血圧"),
-    Waist("腹囲"),
-    A1c("A1c"),
+    BloodGlucose("血糖値"),
 }
 
 data class ManualHealthRecord(

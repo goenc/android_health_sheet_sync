@@ -68,11 +68,15 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             )
             """.trimIndent(),
         )
+        createInvalidatedRecordsTable(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             createManualRecordsTable(db)
+        }
+        if (oldVersion < 3) {
+            createInvalidatedRecordsTable(db)
         }
     }
 
@@ -145,19 +149,95 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
 
     fun saveManualRecord(draft: ManualHealthRecordDraft) {
         val now = LocalDateTime.now().toString()
-        writableDatabase.replace(
-            TABLE_MANUAL,
-            null,
-            ContentValues().apply {
-                put("id", "manual|${UUID.randomUUID()}")
-                put("type", draft.type.name)
-                put("measured_at", draft.measuredAt.toString())
-                put("value_text", draft.valueText)
-                put("created_at", now)
-                put("updated_at", now)
-                putNull("invalidated_at")
-            },
-        )
+        val manualId = "manual|${UUID.randomUUID()}"
+        writableDatabase.runInTransaction {
+            replace(
+                TABLE_MANUAL,
+                null,
+                ContentValues().apply {
+                    put("id", manualId)
+                    put("type", draft.type.name)
+                    put("measured_at", draft.measuredAt.toString())
+                    put("value_text", draft.valueText)
+                    put("created_at", now)
+                    put("updated_at", now)
+                    putNull("invalidated_at")
+                },
+            )
+            when (draft.type) {
+                ManualRecordType.Weight -> {
+                    val weightKg = draft.valueText.removeSuffix(" kg").toDoubleOrNull() ?: return@runInTransaction
+                    val record = DebugWeightRecord(
+                        measuredAt = draft.measuredAt,
+                        targetDate = draft.measuredAt.toLocalDate(),
+                        timeBand = draft.measuredAt.toTimeBand(),
+                        weightKg = weightKg,
+                        healthConnectId = manualId,
+                        sourceAppName = MANUAL_SOURCE,
+                        sourcePackageName = MANUAL_PACKAGE,
+                    )
+                    replace(
+                        TABLE_WEIGHT,
+                        null,
+                        ContentValues().apply {
+                            put("unique_key", record.uniqueKey("weight", record.weightKg.toString()))
+                            put("health_connect_id", record.healthConnectId)
+                            put("measured_at", record.measuredAt.toString())
+                            put("target_date", record.targetDate.toString())
+                            put("time_band", record.timeBand)
+                            put("weight_kg", record.weightKg)
+                            put("source_app_name", record.sourceAppName)
+                            put("source_package_name", record.sourcePackageName)
+                            put("updated_at", now)
+                        },
+                    )
+                }
+                ManualRecordType.Steps -> {
+                    val steps = draft.valueText.removeSuffix("歩").toLongOrNull() ?: return@runInTransaction
+                    val targetDate = draft.measuredAt.toLocalDate()
+                    replace(
+                        TABLE_STEPS,
+                        null,
+                        ContentValues().apply {
+                            put("target_date", targetDate.toString())
+                            put("steps", steps)
+                            put("aggregation_start_at", targetDate.atStartOfDay().toString())
+                            put("aggregation_end_at", targetDate.plusDays(1).atStartOfDay().toString())
+                            put("updated_at", now)
+                        },
+                    )
+                }
+                ManualRecordType.BloodGlucose -> {
+                    val glucose = draft.valueText.removeSuffix(" mg/dL").toDoubleOrNull() ?: return@runInTransaction
+                    val record = DebugGlucoseRecord(
+                        measuredAt = draft.measuredAt,
+                        targetDate = draft.measuredAt.toLocalDate(),
+                        timeBand = draft.measuredAt.toTimeBand(),
+                        bloodGlucoseMgDl = glucose,
+                        mealRelation = "空腹時",
+                        healthConnectId = manualId,
+                        sourceAppName = MANUAL_SOURCE,
+                        sourcePackageName = MANUAL_PACKAGE,
+                    )
+                    replace(
+                        TABLE_GLUCOSE,
+                        null,
+                        ContentValues().apply {
+                            put("unique_key", record.uniqueKey("glucose", record.bloodGlucoseMgDl.toString()))
+                            put("health_connect_id", record.healthConnectId)
+                            put("measured_at", record.measuredAt.toString())
+                            put("target_date", record.targetDate.toString())
+                            put("time_band", record.timeBand)
+                            put("blood_glucose_mg_dl", record.bloodGlucoseMgDl)
+                            put("meal_relation", record.mealRelation)
+                            put("source_app_name", record.sourceAppName)
+                            put("source_package_name", record.sourcePackageName)
+                            put("updated_at", now)
+                        },
+                    )
+                }
+            }
+        }
     }
 
     fun invalidateManualRecord(id: String) {
@@ -172,11 +252,28 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         )
     }
 
+    fun invalidateStoredRecord(recordType: String, uniqueKey: String) {
+        writableDatabase.replace(
+            TABLE_INVALIDATED,
+            null,
+            ContentValues().apply {
+                put("record_type", recordType)
+                put("unique_key", uniqueKey)
+                put("invalidated_at", LocalDateTime.now().toString())
+            },
+        )
+    }
+
     private fun loadWeightRecords(): List<DebugWeightRecord> {
         readableDatabase.rawQuery(
             """
             SELECT health_connect_id, measured_at, target_date, time_band, weight_kg, source_app_name, source_package_name
             FROM weight_records
+            WHERE NOT EXISTS (
+                SELECT 1 FROM invalidated_record_keys
+                WHERE invalidated_record_keys.record_type = 'weight'
+                AND invalidated_record_keys.unique_key = weight_records.unique_key
+            )
             ORDER BY measured_at DESC
             """.trimIndent(),
             emptyArray(),
@@ -204,6 +301,11 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             """
             SELECT health_connect_id, measured_at, target_date, time_band, blood_glucose_mg_dl, meal_relation, source_app_name, source_package_name
             FROM glucose_records
+            WHERE NOT EXISTS (
+                SELECT 1 FROM invalidated_record_keys
+                WHERE invalidated_record_keys.record_type = 'glucose'
+                AND invalidated_record_keys.unique_key = glucose_records.unique_key
+            )
             ORDER BY measured_at DESC
             """.trimIndent(),
             emptyArray(),
@@ -232,6 +334,11 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             """
             SELECT target_date, steps, aggregation_start_at, aggregation_end_at
             FROM step_daily_records
+            WHERE NOT EXISTS (
+                SELECT 1 FROM invalidated_record_keys
+                WHERE invalidated_record_keys.record_type = 'steps'
+                AND invalidated_record_keys.unique_key = step_daily_records.target_date
+            )
             ORDER BY target_date DESC
             """.trimIndent(),
             emptyArray(),
@@ -296,6 +403,19 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         )
     }
 
+    private fun createInvalidatedRecordsTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS invalidated_record_keys (
+                record_type TEXT NOT NULL,
+                unique_key TEXT NOT NULL,
+                invalidated_at TEXT NOT NULL,
+                PRIMARY KEY(record_type, unique_key)
+            )
+            """.trimIndent(),
+        )
+    }
+
     private fun DebugWeightRecord.uniqueKey(recordType: String, value: String): String {
         return stableHealthConnectKey(recordType, healthConnectId)
             ?: "$recordType|$measuredAt|$sourcePackageName|$value"
@@ -311,6 +431,15 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         return "$recordType|$healthConnectId"
     }
 
+    private fun LocalDateTime.toTimeBand(): String {
+        val hour = hour
+        return when (hour) {
+            in 4..11 -> "朝"
+            in 12..17 -> "昼"
+            else -> "夜"
+        }
+    }
+
     private inline fun SQLiteDatabase.runInTransaction(block: SQLiteDatabase.() -> Unit) {
         beginTransaction()
         try {
@@ -323,11 +452,14 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
 
     companion object {
         private const val DATABASE_NAME = "health_sheet_sync.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
         private const val TABLE_WEIGHT = "weight_records"
         private const val TABLE_GLUCOSE = "glucose_records"
         private const val TABLE_STEPS = "step_daily_records"
         private const val TABLE_MANUAL = "manual_records"
+        private const val TABLE_INVALIDATED = "invalidated_record_keys"
+        private const val MANUAL_SOURCE = "手入力"
+        private const val MANUAL_PACKAGE = "manual"
         private const val UNKNOWN = "不明"
     }
 }
