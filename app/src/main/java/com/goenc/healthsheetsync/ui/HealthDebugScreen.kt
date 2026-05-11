@@ -27,6 +27,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
@@ -35,6 +38,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +74,8 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -539,6 +545,7 @@ private fun RecordListButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ManualDataScreen(
     weightRecords: List<DebugWeightRecord>,
@@ -553,6 +560,7 @@ private fun ManualDataScreen(
     var selectedType by remember { mutableStateOf(ManualRecordType.Weight) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedTimeBand by remember { mutableStateOf("朝") }
+    var showDatePicker by remember { mutableStateOf(false) }
     var primaryValue by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
     val labels = selectedType.inputLabels()
@@ -615,11 +623,9 @@ private fun ManualDataScreen(
             OutlinedButton(onClick = { selectedDate = selectedDate.minusDays(1) }) {
                 Text("前日")
             }
-            Text(
-                text = selectedDate.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+            OutlinedButton(onClick = { showDatePicker = true }) {
+                Text(selectedDate.toString())
+            }
             OutlinedButton(onClick = { selectedDate = selectedDate.plusDays(1) }) {
                 Text("翌日")
             }
@@ -684,6 +690,35 @@ private fun ManualDataScreen(
             colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
         ) {
             Text("保存")
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedDate.toEpochMillis(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.toLocalDateFromEpochMillis()?.let { date ->
+                            selectedDate = date
+                        }
+                        showDatePicker = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
+                ) {
+                    Text("選択")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showDatePicker = false }) {
+                    Text("キャンセル")
+                }
+            },
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 
@@ -1391,6 +1426,12 @@ private fun String.toPermissionLabel(): String {
 private fun LocalDateTime.formatDateTime(): String =
     format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
+private fun LocalDate.toEpochMillis(): Long =
+    atStartOfDay(DATE_PICKER_ZONE).toInstant().toEpochMilli()
+
+private fun Long.toLocalDateFromEpochMillis(): LocalDate =
+    Instant.ofEpochMilli(this).atZone(DATE_PICKER_ZONE).toLocalDate()
+
 private fun ManualRecordType.inputLabels(): Pair<String, String?> {
     return when (this) {
         ManualRecordType.Weight -> "体重 kg" to null
@@ -1847,6 +1888,7 @@ private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 private const val GLUCOSE_WEIGHT_COUNT = 3
 private const val UNKNOWN_HEALTH_VALUE = "不明"
+private val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
