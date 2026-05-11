@@ -60,6 +60,7 @@ import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
+import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
 import com.goenc.healthsheetsync.health.PermissionState
@@ -94,6 +95,7 @@ fun HealthDebugScreen(
     sharedTextImportStatus: String?,
     onSaveManualRecord: (ManualHealthRecordDraft) -> Unit,
     onInvalidateStoredRecord: (String, String) -> Unit,
+    onRestoreStoredRecord: (String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -125,8 +127,10 @@ fun HealthDebugScreen(
                         weightRecords = state.weightRecords,
                         dailySteps = state.stepDailyRecords,
                         glucoseRecords = state.glucoseRecords,
+                        invalidatedRecords = state.invalidatedGraphRecords,
                         onSave = onSaveManualRecord,
                         onInvalidate = onInvalidateStoredRecord,
+                        onRestore = onRestoreStoredRecord,
                         onBack = { showManualInput = false },
                     )
                 }
@@ -536,8 +540,10 @@ private fun ManualDataScreen(
     weightRecords: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
+    invalidatedRecords: List<InvalidatedGraphRecord>,
     onSave: (ManualHealthRecordDraft) -> Unit,
     onInvalidate: (String, String) -> Unit,
+    onRestore: (String, String) -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedType by remember { mutableStateOf(ManualRecordType.Weight) }
@@ -546,8 +552,8 @@ private fun ManualDataScreen(
     var primaryValue by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
     val labels = selectedType.inputLabels()
-    val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords) {
-        selectedType.toGraphDataItems(weightRecords, dailySteps, glucoseRecords)
+    val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords, invalidatedRecords) {
+        selectedType.toGraphDataItems(weightRecords, dailySteps, glucoseRecords, invalidatedRecords)
     }
 
     Row(
@@ -685,7 +691,7 @@ private fun ManualDataScreen(
             )
         } else {
             selectedRecords.forEach { record ->
-                ManualRecordRow(record, onInvalidate)
+                ManualRecordRow(record, onInvalidate, onRestore)
             }
         }
     }
@@ -695,6 +701,7 @@ private fun ManualDataScreen(
 private fun ManualRecordRow(
     record: GraphDataItem,
     onInvalidate: (String, String) -> Unit,
+    onRestore: (String, String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -705,11 +712,28 @@ private fun ManualRecordRow(
             Text(
                 text = record.text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = AppText,
+                color = if (record.invalidatedAt == null) AppText else ChartLabel,
             )
+            record.invalidatedAt?.let {
+                Text(
+                    text = "無効",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = ChartLabel,
+                )
+            }
         }
-        IconButton(onClick = { onInvalidate(record.recordType, record.uniqueKey) }) {
-            TrashIcon()
+        if (record.invalidatedAt == null) {
+            IconButton(onClick = { onInvalidate(record.recordType, record.uniqueKey) }) {
+                TrashIcon()
+            }
+        } else {
+            OutlinedButton(
+                onClick = { onRestore(record.recordType, record.uniqueKey) },
+                shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text("復活")
+            }
         }
     }
 }
@@ -1347,8 +1371,9 @@ private fun ManualRecordType.toGraphDataItems(
     weightRecords: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
+    invalidatedRecords: List<InvalidatedGraphRecord>,
 ): List<GraphDataItem> {
-    return when (this) {
+    val activeItems = when (this) {
         ManualRecordType.Weight -> weightRecords
             .sortedByDescending { it.measuredAt }
             .map { record ->
@@ -1356,6 +1381,8 @@ private fun ManualRecordType.toGraphDataItems(
                     recordType = "weight",
                     uniqueKey = record.weightUniqueKey(),
                     text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.weightKg)} kg / ${record.timeBand}",
+                    measuredAt = record.measuredAt,
+                    invalidatedAt = null,
                 )
             }
         ManualRecordType.Steps -> dailySteps
@@ -1365,6 +1392,8 @@ private fun ManualRecordType.toGraphDataItems(
                     recordType = "steps",
                     uniqueKey = steps.targetDate.toString(),
                     text = "${steps.targetDate}  ${steps.steps}歩",
+                    measuredAt = steps.targetDate.atStartOfDay(),
+                    invalidatedAt = null,
                 )
             }
         ManualRecordType.BloodGlucose -> glucoseRecords
@@ -1374,9 +1403,23 @@ private fun ManualRecordType.toGraphDataItems(
                     recordType = "glucose",
                     uniqueKey = record.glucoseUniqueKey(),
                     text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.bloodGlucoseMgDl)} mg/dL / ${record.mealRelation}",
+                    measuredAt = record.measuredAt,
+                    invalidatedAt = null,
                 )
             }
     }
+    val invalidatedItems = invalidatedRecords
+        .filter { it.manualType == this }
+        .map { record ->
+            GraphDataItem(
+                recordType = record.recordType,
+                uniqueKey = record.uniqueKey,
+                text = record.text,
+                measuredAt = record.measuredAt,
+                invalidatedAt = record.invalidatedAt,
+            )
+        }
+    return (activeItems + invalidatedItems).sortedByDescending { it.measuredAt }
 }
 
 private fun DebugWeightRecord.weightUniqueKey(): String {
@@ -1490,6 +1533,8 @@ private data class GraphDataItem(
     val recordType: String,
     val uniqueKey: String,
     val text: String,
+    val measuredAt: LocalDateTime,
+    val invalidatedAt: LocalDateTime?,
 )
 
 private fun ChartWeightPoint.isMorning(): Boolean =

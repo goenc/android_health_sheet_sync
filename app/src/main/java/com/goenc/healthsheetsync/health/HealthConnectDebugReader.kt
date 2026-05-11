@@ -33,6 +33,7 @@ class HealthConnectDebugReader(private val context: Context) {
                 permissions = PermissionState.Unknown,
                 isLoading = false,
                 manualRecords = localStore.load().manualRecords,
+                invalidatedGraphRecords = localStore.load().invalidatedGraphRecords,
                 debugMessages = debugMessages,
             )
         }
@@ -61,6 +62,7 @@ class HealthConnectDebugReader(private val context: Context) {
                 permissions = permissionState,
                 isLoading = false,
                 manualRecords = localStore.load().manualRecords,
+                invalidatedGraphRecords = localStore.load().invalidatedGraphRecords,
                 debugMessages = debugMessages,
             )
         }
@@ -103,6 +105,7 @@ class HealthConnectDebugReader(private val context: Context) {
             glucoseRecords = storedData.glucoseRecords,
             stepDailyRecords = storedData.stepDailyRecords,
             manualRecords = storedData.manualRecords,
+            invalidatedGraphRecords = storedData.invalidatedGraphRecords,
             yesterdaySteps = yesterdaySteps,
             sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
             debugMessages = debugMessages,

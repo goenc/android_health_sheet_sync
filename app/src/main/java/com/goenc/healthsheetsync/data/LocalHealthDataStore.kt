@@ -7,12 +7,14 @@ import android.database.sqlite.SQLiteOpenHelper
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
+import kotlin.math.roundToInt
 
 class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     context,
@@ -144,6 +146,7 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             glucoseRecords = loadGlucoseRecords(),
             stepDailyRecords = loadStepDailyRecords(),
             manualRecords = loadManualRecords(),
+            invalidatedGraphRecords = loadInvalidatedGraphRecords(),
         )
     }
 
@@ -261,6 +264,14 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
                 put("unique_key", uniqueKey)
                 put("invalidated_at", LocalDateTime.now().toString())
             },
+        )
+    }
+
+    fun restoreStoredRecord(recordType: String, uniqueKey: String) {
+        writableDatabase.delete(
+            TABLE_INVALIDATED,
+            "record_type = ? AND unique_key = ?",
+            arrayOf(recordType, uniqueKey),
         )
     }
 
@@ -387,6 +398,100 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         }
     }
 
+    private fun loadInvalidatedGraphRecords(): List<InvalidatedGraphRecord> {
+        return loadInvalidatedWeightRecords() + loadInvalidatedStepRecords() + loadInvalidatedGlucoseRecords()
+    }
+
+    private fun loadInvalidatedWeightRecords(): List<InvalidatedGraphRecord> {
+        readableDatabase.rawQuery(
+            """
+            SELECT weight_records.unique_key, measured_at, weight_kg, time_band, invalidated_record_keys.invalidated_at
+            FROM weight_records
+            INNER JOIN invalidated_record_keys
+            ON invalidated_record_keys.record_type = 'weight'
+            AND invalidated_record_keys.unique_key = weight_records.unique_key
+            ORDER BY measured_at DESC
+            """.trimIndent(),
+            emptyArray(),
+        ).use { cursor ->
+            return buildList {
+                while (cursor.moveToNext()) {
+                    val measuredAt = LocalDateTime.parse(cursor.getString(1))
+                    add(
+                        InvalidatedGraphRecord(
+                            recordType = "weight",
+                            uniqueKey = cursor.getString(0),
+                            manualType = ManualRecordType.Weight,
+                            measuredAt = measuredAt,
+                            text = "${measuredAt.formatDateTime()}  ${formatDecimal(cursor.getDouble(2))} kg / ${cursor.getString(3)}",
+                            invalidatedAt = LocalDateTime.parse(cursor.getString(4)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadInvalidatedStepRecords(): List<InvalidatedGraphRecord> {
+        readableDatabase.rawQuery(
+            """
+            SELECT step_daily_records.target_date, steps, invalidated_record_keys.invalidated_at
+            FROM step_daily_records
+            INNER JOIN invalidated_record_keys
+            ON invalidated_record_keys.record_type = 'steps'
+            AND invalidated_record_keys.unique_key = step_daily_records.target_date
+            ORDER BY step_daily_records.target_date DESC
+            """.trimIndent(),
+            emptyArray(),
+        ).use { cursor ->
+            return buildList {
+                while (cursor.moveToNext()) {
+                    val targetDate = LocalDate.parse(cursor.getString(0))
+                    add(
+                        InvalidatedGraphRecord(
+                            recordType = "steps",
+                            uniqueKey = cursor.getString(0),
+                            manualType = ManualRecordType.Steps,
+                            measuredAt = targetDate.atStartOfDay(),
+                            text = "$targetDate  ${cursor.getLong(1)}歩",
+                            invalidatedAt = LocalDateTime.parse(cursor.getString(2)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadInvalidatedGlucoseRecords(): List<InvalidatedGraphRecord> {
+        readableDatabase.rawQuery(
+            """
+            SELECT glucose_records.unique_key, measured_at, blood_glucose_mg_dl, meal_relation, invalidated_record_keys.invalidated_at
+            FROM glucose_records
+            INNER JOIN invalidated_record_keys
+            ON invalidated_record_keys.record_type = 'glucose'
+            AND invalidated_record_keys.unique_key = glucose_records.unique_key
+            ORDER BY measured_at DESC
+            """.trimIndent(),
+            emptyArray(),
+        ).use { cursor ->
+            return buildList {
+                while (cursor.moveToNext()) {
+                    val measuredAt = LocalDateTime.parse(cursor.getString(1))
+                    add(
+                        InvalidatedGraphRecord(
+                            recordType = "glucose",
+                            uniqueKey = cursor.getString(0),
+                            manualType = ManualRecordType.BloodGlucose,
+                            measuredAt = measuredAt,
+                            text = "${measuredAt.formatDateTime()}  ${formatDecimal(cursor.getDouble(2))} mg/dL / ${cursor.getString(3)}",
+                            invalidatedAt = LocalDateTime.parse(cursor.getString(4)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
     private fun createManualRecordsTable(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -440,6 +545,18 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         }
     }
 
+    private fun LocalDateTime.formatDateTime(): String =
+        toString().replace("T", " ")
+
+    private fun formatDecimal(value: Double): String {
+        val roundedOneDecimal = (value * 10.0).roundToInt() / 10.0
+        return if (roundedOneDecimal % 1.0 == 0.0) {
+            roundedOneDecimal.toInt().toString()
+        } else {
+            roundedOneDecimal.toString()
+        }
+    }
+
     private inline fun SQLiteDatabase.runInTransaction(block: SQLiteDatabase.() -> Unit) {
         beginTransaction()
         try {
@@ -469,4 +586,5 @@ data class StoredHealthData(
     val glucoseRecords: List<DebugGlucoseRecord>,
     val stepDailyRecords: List<DebugStepDaily>,
     val manualRecords: List<ManualHealthRecord>,
+    val invalidatedGraphRecords: List<InvalidatedGraphRecord>,
 )

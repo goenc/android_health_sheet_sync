@@ -11,6 +11,7 @@ data class HealthDebugUiState(
     val glucoseRecords: List<DebugGlucoseRecord> = emptyList(),
     val stepDailyRecords: List<DebugStepDaily> = emptyList(),
     val manualRecords: List<ManualHealthRecord> = emptyList(),
+    val invalidatedGraphRecords: List<InvalidatedGraphRecord> = emptyList(),
     val yesterdaySteps: DebugStepDaily? = null,
     val sourceSummaries: List<String> = emptyList(),
     val debugMessages: List<String> = emptyList(),
@@ -83,4 +84,13 @@ data class ManualHealthRecordDraft(
     val type: ManualRecordType,
     val measuredAt: LocalDateTime,
     val valueText: String,
+)
+
+data class InvalidatedGraphRecord(
+    val recordType: String,
+    val uniqueKey: String,
+    val manualType: ManualRecordType,
+    val measuredAt: LocalDateTime,
+    val text: String,
+    val invalidatedAt: LocalDateTime,
 )

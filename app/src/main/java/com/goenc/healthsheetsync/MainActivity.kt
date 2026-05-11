@@ -126,6 +126,9 @@ class MainActivity : ComponentActivity() {
                         onInvalidateStoredRecord = { recordType, uniqueKey ->
                             invalidateStoredRecord(recordType, uniqueKey)
                         },
+                        onRestoreStoredRecord = { recordType, uniqueKey ->
+                            restoreStoredRecord(recordType, uniqueKey)
+                        },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -209,6 +212,11 @@ class MainActivity : ComponentActivity() {
 
     private fun invalidateStoredRecord(recordType: String, uniqueKey: String) {
         localStore.invalidateStoredRecord(recordType, uniqueKey)
+        refreshHealthData()
+    }
+
+    private fun restoreStoredRecord(recordType: String, uniqueKey: String) {
+        localStore.restoreStoredRecord(recordType, uniqueKey)
         refreshHealthData()
     }
 
