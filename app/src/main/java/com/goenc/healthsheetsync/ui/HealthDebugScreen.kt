@@ -1150,6 +1150,10 @@ private fun WeightTrendChart(
                     color = ChartGlucose.toArgb()
                     textSize = 12.sp.toPx()
                 }
+                val a1cPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = ChartA1c.toArgb()
+                    textSize = 12.sp.toPx()
+                }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
 
             fun xAtTime(measuredAt: LocalDateTime): Float {
@@ -1339,10 +1343,10 @@ private fun WeightTrendChart(
             }
 
             a1cChart?.let { chart ->
-                val visiblePoints = chart.visibleRecords
-                if (visiblePoints.isNotEmpty()) {
+                val linePoints = chart.lineRecords
+                if (linePoints.isNotEmpty()) {
                     val a1cPath = Path()
-                    visiblePoints.forEachIndexed { index, record ->
+                    linePoints.forEachIndexed { index, record ->
                         val point = Offset(xAtTime(record.measuredAt), a1cYAt(record.value))
                         if (index == 0) {
                             a1cPath.moveTo(point.x, point.y)
@@ -1355,7 +1359,9 @@ private fun WeightTrendChart(
                         color = ChartA1c,
                         style = Stroke(width = 2.dp.toPx()),
                     )
-                    visiblePoints.forEach { record ->
+                }
+                if (chart.visibleRecords.isNotEmpty()) {
+                    chart.visibleRecords.forEach { record ->
                         drawCircle(
                             color = ChartA1c,
                             radius = 4.dp.toPx(),
@@ -1372,6 +1378,15 @@ private fun WeightTrendChart(
                         end = Offset(chartRight, latestY),
                         strokeWidth = 1.5.dp.toPx(),
                     )
+                    drawContext.canvas.nativeCanvas.apply {
+                        a1cPaint.textAlign = Paint.Align.RIGHT
+                        drawText(
+                            formatDecimal(latest.value),
+                            chartRight - 4.dp.toPx(),
+                            latestY - 4.dp.toPx(),
+                            a1cPaint,
+                        )
+                    }
                 }
             }
 
@@ -1789,6 +1804,7 @@ private data class FastingGlucoseChart(
 
 private data class A1cChart(
     val visibleRecords: List<A1cChartRecord>,
+    val lineRecords: List<A1cChartRecord>,
     val latestRecord: A1cChartRecord?,
 )
 
@@ -2010,9 +2026,13 @@ private fun calculateA1cChart(
     val visibleRecords = records.filter { record ->
         !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
     }
+    val previousRecord = records.lastOrNull { it.measuredAt.isBefore(window.startAt) }
+    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
+        .distinctBy { it.measuredAt to it.value }
     val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
     return A1cChart(
         visibleRecords = visibleRecords,
+        lineRecords = lineRecords,
         latestRecord = latestRecord,
     )
 }
@@ -2097,7 +2117,7 @@ private const val UNKNOWN_HEALTH_VALUE = "不明"
 private const val MANUAL_RECORD_TYPE = "manual"
 private const val DELETE_PRESS_MILLIS = 5_000L
 private const val A1C_CHART_MIN = 4.0
-private const val A1C_CHART_MAX = 8.0
+private const val A1C_CHART_MAX = 14.0
 private val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 private val AppBackground = Color(0xFFFAFAFC)
