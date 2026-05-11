@@ -2,6 +2,7 @@ package com.goenc.healthsheetsync.ui
 
 import android.graphics.Paint
 import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -775,26 +776,11 @@ private fun ManualRecordRow(
                 TrashIcon()
             }
         } else {
-            OutlinedButton(
-                onClick = { showRestoreConfirm = true },
-                shape = CircleShape,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                modifier = Modifier.pointerInput(record.uniqueKey) {
-                    detectTapGestures(
-                        onPress = {
-                            val releasedBeforeDeleteMode = withTimeoutOrNull(DELETE_PRESS_MILLIS) {
-                                tryAwaitRelease()
-                            }
-                            if (releasedBeforeDeleteMode == null) {
-                                showDeleteConfirm = true
-                                tryAwaitRelease()
-                            }
-                        },
-                    )
-                },
-            ) {
-                Text("復活")
-            }
+            RestoreHoldButton(
+                onRestoreClick = { showRestoreConfirm = true },
+                onDeleteHold = { showDeleteConfirm = true },
+                holdKey = record.uniqueKey,
+            )
         }
     }
 
@@ -878,6 +864,44 @@ private fun ManualRecordRow(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun RestoreHoldButton(
+    onRestoreClick: () -> Unit,
+    onDeleteHold: () -> Unit,
+    holdKey: String,
+) {
+    Surface(
+        modifier = Modifier
+            .defaultMinSize(minWidth = 64.dp, minHeight = 36.dp)
+            .pointerInput(holdKey) {
+                detectTapGestures(
+                    onPress = {
+                        val releasedBeforeDeleteMode = withTimeoutOrNull(DELETE_PRESS_MILLIS) {
+                            tryAwaitRelease()
+                        }
+                        if (releasedBeforeDeleteMode == null) {
+                            onDeleteHold()
+                            tryAwaitRelease()
+                        } else if (releasedBeforeDeleteMode) {
+                            onRestoreClick()
+                        }
+                    },
+                )
+            },
+        shape = CircleShape,
+        color = Color.Transparent,
+        contentColor = AppText,
+        border = BorderStroke(1.dp, AppText),
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("復活")
+        }
     }
 }
 
