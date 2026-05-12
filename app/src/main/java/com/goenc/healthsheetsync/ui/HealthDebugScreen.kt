@@ -1115,7 +1115,7 @@ private fun WeightTrendChart(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(500.dp),
+                .height(460.dp),
         ) {
             Canvas(
                 modifier = Modifier
@@ -1683,28 +1683,6 @@ private fun WeightTrendChart(
                     }
                 }
             }
-            selectedDay?.let { day ->
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 8.dp, bottom = 6.dp)
-                        .background(PopupBackground, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                ) {
-                    Text(
-                        text = "${day.date.monthValue}月${day.date.dayOfMonth}日  朝 ${day.morning.weightText()}  夜 ${day.night.weightText()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = ChartBlue,
-                    )
-                    Text(
-                        text = "差 ${day.weightDifferenceText()}  歩数 ${day.steps?.steps?.let { "${it}歩" } ?: "-"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppText,
-                    )
-                }
-            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             WeightChartRange.entries.forEach { range ->
@@ -1715,6 +1693,34 @@ private fun WeightTrendChart(
                 )
             }
         }
+        SelectedDaySummary(day = selectedDay)
+    }
+}
+
+@Composable
+private fun SelectedDaySummary(day: ChartDaySelection?) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PopupBackground, RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(
+            text = day?.let {
+                "${it.date.monthValue}月${it.date.dayOfMonth}日  朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}"
+            } ?: "日付を選択  朝 -  夜 -",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
+            color = ChartBlue,
+        )
+        Text(
+            text = day?.let {
+                "差 ${it.weightDifferenceText()}  歩数 ${it.steps?.steps?.let { steps -> "${steps}歩" } ?: "-"}"
+            } ?: "差 -  歩数 -",
+            style = MaterialTheme.typography.bodySmall,
+            color = AppText,
+        )
     }
 }
 
