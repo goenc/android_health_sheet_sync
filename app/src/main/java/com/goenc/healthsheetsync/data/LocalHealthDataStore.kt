@@ -239,6 +239,8 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
                         },
                     )
                 }
+                ManualRecordType.BloodPressure,
+                ManualRecordType.Waist,
                 ManualRecordType.A1c -> Unit
             }
         }
