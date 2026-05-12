@@ -184,7 +184,7 @@ fun HealthDebugScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 22.dp, top = 4.dp, end = 22.dp, bottom = 22.dp),
+                    .padding(start = 22.dp, top = 4.dp, end = 22.dp, bottom = 8.dp),
             ) {
                 IconButton(
                     onClick = { showSettings = true },
@@ -1113,7 +1113,7 @@ private fun WeightTrendChart(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(390.dp),
+                .height(465.dp),
         ) {
             Canvas(
                 modifier = Modifier
