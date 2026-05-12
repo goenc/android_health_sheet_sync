@@ -1115,7 +1115,7 @@ private fun WeightTrendChart(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(520.dp),
+                .height(500.dp),
         ) {
             Canvas(
                 modifier = Modifier
@@ -1684,46 +1684,25 @@ private fun WeightTrendChart(
                 }
             }
             selectedDay?.let { day ->
-                Surface(
+                Column(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 42.dp, end = 16.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = PopupBackground,
-                    shadowElevation = 6.dp,
+                        .align(Alignment.BottomStart)
+                        .padding(start = 8.dp, bottom = 6.dp)
+                        .background(PopupBackground, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text = "${day.date.monthValue}月${day.date.dayOfMonth}日",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppText,
-                        )
-                        Text(
-                            text = "朝 ${day.morning.weightText()}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = ChartBlue,
-                        )
-                        Text(
-                            text = "夜 ${day.night.weightText()}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = ChartBlue,
-                        )
-                        Text(
-                            text = "差 ${day.weightDifferenceText()}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppText,
-                        )
-                        Text(
-                            text = "歩数 ${day.steps?.steps?.let { "${it}歩" } ?: "-"}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppText,
-                        )
-                    }
+                    Text(
+                        text = "${day.date.monthValue}月${day.date.dayOfMonth}日  朝 ${day.morning.weightText()}  夜 ${day.night.weightText()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = ChartBlue,
+                    )
+                    Text(
+                        text = "差 ${day.weightDifferenceText()}  歩数 ${day.steps?.steps?.let { "${it}歩" } ?: "-"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppText,
+                    )
                 }
             }
         }
