@@ -297,7 +297,7 @@ class MainActivity : ComponentActivity() {
                 )
             ) {
                 is SpreadsheetUploadResult.Success ->
-                    "アップロード完了: 体重${result.weightCount}件、血糖${result.glucoseCount}件、歩数${result.stepCount}件"
+                    "アップロード完了: 体重${result.weightCount}件、血糖${result.glucoseCount}件、歩数${result.stepCount}件、A1c${result.a1cCount}件"
                 is SpreadsheetUploadResult.Failure ->
                     "アップロード失敗: ${result.message}"
             }

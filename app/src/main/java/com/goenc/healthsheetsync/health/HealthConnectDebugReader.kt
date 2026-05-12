@@ -104,6 +104,7 @@ class HealthConnectDebugReader(private val context: Context) {
             weightRecords = storedData.weightRecords,
             glucoseRecords = storedData.glucoseRecords,
             stepDailyRecords = storedData.stepDailyRecords,
+            a1cDailyRecords = storedData.a1cDailyRecords,
             manualRecords = storedData.manualRecords,
             invalidatedGraphRecords = storedData.invalidatedGraphRecords,
             yesterdaySteps = yesterdaySteps,

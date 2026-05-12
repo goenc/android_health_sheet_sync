@@ -10,6 +10,7 @@ data class HealthDebugUiState(
     val weightRecords: List<DebugWeightRecord> = emptyList(),
     val glucoseRecords: List<DebugGlucoseRecord> = emptyList(),
     val stepDailyRecords: List<DebugStepDaily> = emptyList(),
+    val a1cDailyRecords: List<DebugA1cDaily> = emptyList(),
     val manualRecords: List<ManualHealthRecord> = emptyList(),
     val invalidatedGraphRecords: List<InvalidatedGraphRecord> = emptyList(),
     val yesterdaySteps: DebugStepDaily? = null,
@@ -62,6 +63,13 @@ data class DebugStepDaily(
     val steps: Long,
     val aggregationStartAt: LocalDateTime,
     val aggregationEndAt: LocalDateTime,
+)
+
+data class DebugA1cDaily(
+    val targetDate: LocalDate,
+    val measuredAt: LocalDateTime,
+    val a1cPercent: Double,
+    val manualId: String,
 )
 
 enum class ManualRecordType(

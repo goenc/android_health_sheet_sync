@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
@@ -25,6 +26,7 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     override fun onCreate(db: SQLiteDatabase) {
         createHealthConnectTables(db)
         createManualRecordsTable(db)
+        createA1cDailyRecordsTable(db)
     }
 
     private fun createHealthConnectTables(db: SQLiteDatabase) {
@@ -79,6 +81,10 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         }
         if (oldVersion < 3) {
             createInvalidatedRecordsTable(db)
+        }
+        if (oldVersion < 4) {
+            createA1cDailyRecordsTable(db)
+            backfillA1cDailyRecords(db)
         }
     }
 
@@ -146,6 +152,7 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             glucoseRecords = loadGlucoseRecords(),
             stepDailyRecords = loadStepDailyRecords(),
             manualRecords = loadManualRecords(),
+            a1cDailyRecords = loadA1cDailyRecords(),
             invalidatedGraphRecords = loadInvalidatedGraphRecords(),
         )
     }
@@ -239,9 +246,22 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
                         },
                     )
                 }
+                ManualRecordType.A1c -> {
+                    val a1cPercent = draft.valueText.removeSuffix(" %").toDoubleOrNull() ?: return@runInTransaction
+                    replace(
+                        TABLE_A1C_DAILY,
+                        null,
+                        ContentValues().apply {
+                            put("target_date", draft.measuredAt.toLocalDate().toString())
+                            put("measured_at", draft.measuredAt.toString())
+                            put("a1c_percent", a1cPercent)
+                            put("manual_id", manualId)
+                            put("updated_at", now)
+                        },
+                    )
+                }
                 ManualRecordType.BloodPressure,
-                ManualRecordType.Waist,
-                ManualRecordType.A1c -> Unit
+                ManualRecordType.Waist -> Unit
             }
         }
     }
@@ -271,7 +291,10 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     }
 
     fun deleteManualRecord(id: String) {
-        writableDatabase.delete(TABLE_MANUAL, "id = ?", arrayOf(id))
+        writableDatabase.runInTransaction {
+            delete(TABLE_A1C_DAILY, "manual_id = ?", arrayOf(id))
+            delete(TABLE_MANUAL, "id = ?", arrayOf(id))
+        }
     }
 
     fun invalidateStoredRecord(recordType: String, uniqueKey: String) {
@@ -396,6 +419,33 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
                             steps = cursor.getLong(1),
                             aggregationStartAt = LocalDateTime.parse(cursor.getString(2)),
                             aggregationEndAt = LocalDateTime.parse(cursor.getString(3)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadA1cDailyRecords(): List<DebugA1cDaily> {
+        readableDatabase.rawQuery(
+            """
+            SELECT a1c_daily_records.target_date, a1c_daily_records.measured_at, a1c_percent, manual_id
+            FROM a1c_daily_records
+            INNER JOIN manual_records
+            ON manual_records.id = a1c_daily_records.manual_id
+            WHERE manual_records.invalidated_at IS NULL
+            ORDER BY a1c_daily_records.target_date DESC
+            """.trimIndent(),
+            emptyArray(),
+        ).use { cursor ->
+            return buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        DebugA1cDaily(
+                            targetDate = LocalDate.parse(cursor.getString(0)),
+                            measuredAt = LocalDateTime.parse(cursor.getString(1)),
+                            a1cPercent = cursor.getDouble(2),
+                            manualId = cursor.getString(3),
                         ),
                     )
                 }
@@ -555,6 +605,49 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         )
     }
 
+    private fun createA1cDailyRecordsTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS a1c_daily_records (
+                target_date TEXT PRIMARY KEY,
+                measured_at TEXT NOT NULL,
+                a1c_percent REAL NOT NULL,
+                manual_id TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun backfillA1cDailyRecords(db: SQLiteDatabase) {
+        val now = LocalDateTime.now().toString()
+        db.rawQuery(
+            """
+            SELECT id, measured_at, value_text
+            FROM manual_records
+            WHERE type = ?
+            ORDER BY measured_at ASC
+            """.trimIndent(),
+            arrayOf(ManualRecordType.A1c.name),
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val measuredAt = LocalDateTime.parse(cursor.getString(1))
+                val a1cPercent = cursor.getString(2).removeSuffix(" %").toDoubleOrNull() ?: continue
+                db.replace(
+                    TABLE_A1C_DAILY,
+                    null,
+                    ContentValues().apply {
+                        put("target_date", measuredAt.toLocalDate().toString())
+                        put("measured_at", measuredAt.toString())
+                        put("a1c_percent", a1cPercent)
+                        put("manual_id", cursor.getString(0))
+                        put("updated_at", now)
+                    },
+                )
+            }
+        }
+    }
+
     private fun DebugWeightRecord.uniqueKey(recordType: String, value: String): String {
         return stableHealthConnectKey(recordType, healthConnectId)
             ?: "$recordType|$measuredAt|$sourcePackageName|$value"
@@ -603,10 +696,11 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
 
     companion object {
         private const val DATABASE_NAME = "health_sheet_sync.db"
-        private const val DATABASE_VERSION = 3
+        private const val DATABASE_VERSION = 4
         private const val TABLE_WEIGHT = "weight_records"
         private const val TABLE_GLUCOSE = "glucose_records"
         private const val TABLE_STEPS = "step_daily_records"
+        private const val TABLE_A1C_DAILY = "a1c_daily_records"
         private const val TABLE_MANUAL = "manual_records"
         private const val TABLE_INVALIDATED = "invalidated_record_keys"
         private const val MANUAL_SOURCE = "手入力"
@@ -619,6 +713,7 @@ data class StoredHealthData(
     val weightRecords: List<DebugWeightRecord>,
     val glucoseRecords: List<DebugGlucoseRecord>,
     val stepDailyRecords: List<DebugStepDaily>,
+    val a1cDailyRecords: List<DebugA1cDaily>,
     val manualRecords: List<ManualHealthRecord>,
     val invalidatedGraphRecords: List<InvalidatedGraphRecord>,
 )

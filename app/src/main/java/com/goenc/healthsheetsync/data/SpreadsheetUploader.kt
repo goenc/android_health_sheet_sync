@@ -31,6 +31,7 @@ class SpreadsheetUploader {
                 weightCount = state.weightRecords.size,
                 glucoseCount = state.glucoseRecords.size,
                 stepCount = state.stepDailyRecords.size,
+                a1cCount = state.a1cDailyRecords.size,
             )
         }.getOrElse { error ->
             SpreadsheetUploadResult.Failure(error.message ?: "原因不明")
@@ -101,6 +102,23 @@ class SpreadsheetUploader {
                         record.steps,
                         record.aggregationStartAt.toString(),
                         record.aggregationEndAt.toString(),
+                    )
+                },
+            ),
+            SpreadsheetUploadTable(
+                sheetName = "a1cDailyRecords",
+                headers = listOf(
+                    "targetDate",
+                    "measuredAt",
+                    "a1cPercent",
+                    "manualId",
+                ),
+                values = state.a1cDailyRecords.map { record ->
+                    listOf(
+                        record.targetDate.toString(),
+                        record.measuredAt.toString(),
+                        record.a1cPercent,
+                        record.manualId,
                     )
                 },
             ),
@@ -257,6 +275,7 @@ sealed interface SpreadsheetUploadResult {
         val weightCount: Int,
         val glucoseCount: Int,
         val stepCount: Int,
+        val a1cCount: Int,
     ) : SpreadsheetUploadResult
 
     data class Failure(val message: String) : SpreadsheetUploadResult

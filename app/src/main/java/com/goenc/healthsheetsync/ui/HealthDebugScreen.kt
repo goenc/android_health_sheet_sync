@@ -62,6 +62,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
@@ -194,7 +195,12 @@ fun HealthDebugScreen(
                     )
                 }
 
-                WeightTrendChart(state.weightRecords, state.stepDailyRecords, state.glucoseRecords, state.manualRecords)
+                WeightTrendChart(
+                    state.weightRecords,
+                    state.stepDailyRecords,
+                    state.glucoseRecords,
+                    state.a1cDailyRecords,
+                )
 
                 sharedText?.takeIf { it.isNotBlank() }?.let { text ->
                     DebugSection(title = "共有テキスト") {
@@ -1043,7 +1049,7 @@ private fun WeightTrendChart(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
-    manualRecords: List<ManualHealthRecord>,
+    a1cDailyRecords: List<DebugA1cDaily>,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
@@ -1144,7 +1150,7 @@ private fun WeightTrendChart(
                 val trendLine = calculateTrendLine(chartPoints)
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
                 val glucoseChart = calculateFastingGlucoseChart(glucoseRecords, visibleWindow)
-                val a1cChart = calculateA1cChart(manualRecords, visibleWindow)
+                val a1cChart = calculateA1cChart(a1cDailyRecords, visibleWindow)
                 val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
@@ -1657,7 +1663,8 @@ private fun ManualRecordType.formatManualValue(primaryValue: String, secondaryVa
 private fun ManualRecordType.manualInputTimeBandOptions(): List<String> {
     return when (this) {
         ManualRecordType.Steps,
-        ManualRecordType.Waist -> emptyList()
+        ManualRecordType.Waist,
+        ManualRecordType.A1c -> emptyList()
         ManualRecordType.BloodPressure -> listOf("朝", "夜")
         else -> listOf("朝", "昼", "夜")
     }
@@ -1673,7 +1680,8 @@ private fun ManualRecordType.defaultManualTimeBand(): String {
 private fun ManualRecordType.manualInputTime(timeBand: String): LocalTime {
     return when (this) {
         ManualRecordType.Steps,
-        ManualRecordType.Waist -> LocalTime.NOON
+        ManualRecordType.Waist,
+        ManualRecordType.A1c -> LocalTime.NOON
         else -> when (timeBand) {
             "朝" -> LocalTime.of(7, 0)
             "昼" -> LocalTime.of(12, 0)
@@ -2057,15 +2065,12 @@ private fun String.isFastingGlucoseRelation(): Boolean =
     this == "空腹時" || this == "食前"
 
 private fun calculateA1cChart(
-    manualRecords: List<ManualHealthRecord>,
+    a1cDailyRecords: List<DebugA1cDaily>,
     window: ChartTimeWindow,
 ): A1cChart? {
-    val records = manualRecords
-        .filter { it.type == ManualRecordType.A1c && it.invalidatedAt == null }
-        .mapNotNull { record ->
-            record.valueText.removeSuffix(" %").toDoubleOrNull()?.let { value ->
-                A1cChartRecord(record.measuredAt, value)
-            }
+    val records = a1cDailyRecords
+        .map { record ->
+            A1cChartRecord(record.measuredAt, record.a1cPercent)
         }
         .sortedBy { it.measuredAt }
     if (records.isEmpty()) return null
