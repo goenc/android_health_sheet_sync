@@ -182,40 +182,52 @@ fun HealthDebugScreen(
                 return@Column
             }
 
-            Column(
-                modifier = Modifier.padding(start = 22.dp, top = 10.dp, end = 22.dp, bottom = 22.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 22.dp, top = 4.dp, end = 22.dp, bottom = 22.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    MainHeader(onSettingsClick = { showSettings = true })
+                IconButton(
+                    onClick = { showSettings = true },
+                    modifier = Modifier.align(Alignment.TopEnd),
+                ) {
+                    SettingsGearIcon()
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     MainSummaryValues(
                         records = state.weightRecords,
                         dailySteps = state.stepDailyRecords,
                         glucoseRecords = state.glucoseRecords,
+                        modifier = Modifier.padding(end = 52.dp),
                     )
-                }
 
-                WeightTrendChart(
-                    state.weightRecords,
-                    state.stepDailyRecords,
-                    state.glucoseRecords,
-                    state.a1cDailyRecords,
-                )
+                    WeightTrendChart(
+                        state.weightRecords,
+                        state.stepDailyRecords,
+                        state.glucoseRecords,
+                        state.a1cDailyRecords,
+                    )
 
-                sharedText?.takeIf { it.isNotBlank() }?.let { text ->
-                    DebugSection(title = "共有テキスト") {
-                        sharedTextImportStatus?.let { status ->
+                    sharedText?.takeIf { it.isNotBlank() }?.let { text ->
+                        DebugSection(title = "共有テキスト") {
+                            sharedTextImportStatus?.let { status ->
+                                Text(
+                                    text = status,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = AppMutedBlue,
+                                )
+                            }
                             Text(
-                                text = status,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = AppMutedBlue,
+                                text = text,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppText,
                             )
                         }
-                        Text(
-                            text = text,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AppText,
-                        )
                     }
                 }
             }
@@ -240,37 +252,18 @@ fun HealthDebugScreen(
 }
 
 @Composable
-private fun MainHeader(
-    onSettingsClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "最新データ",
-            style = MaterialTheme.typography.titleMedium,
-            color = AppMutedBlue,
-        )
-        IconButton(onClick = onSettingsClick) {
-            SettingsGearIcon()
-        }
-    }
-}
-
-@Composable
 private fun MainSummaryValues(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
+    modifier: Modifier = Modifier,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
     val latestSteps = dailySteps.maxByOrNull { it.targetDate }
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
