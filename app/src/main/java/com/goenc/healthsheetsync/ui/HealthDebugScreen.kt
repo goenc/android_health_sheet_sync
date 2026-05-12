@@ -214,6 +214,7 @@ fun HealthDebugScreen(
                         state.glucoseRecords,
                         state.a1cDailyRecords,
                         state.manualRecords,
+                        onAddManualRecord = { showManualInput = true },
                     )
 
                     sharedText?.takeIf { it.isNotBlank() }?.let { text ->
@@ -233,22 +234,6 @@ fun HealthDebugScreen(
                         }
                     }
                 }
-            }
-        }
-        if (!showSettings && !showManualInput) {
-            FloatingActionButton(
-                onClick = { showManualInput = true },
-                containerColor = AppPrimary,
-                contentColor = Color.White,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(22.dp),
-            ) {
-                Text(
-                    text = "+",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
             }
         }
     }
@@ -1066,6 +1051,7 @@ private fun WeightTrendChart(
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
     manualRecords: List<ManualHealthRecord>,
+    onAddManualRecord: () -> Unit,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
@@ -1693,34 +1679,61 @@ private fun WeightTrendChart(
                 )
             }
         }
-        SelectedDaySummary(day = selectedDay)
+        SelectedDaySummary(
+            day = selectedDay,
+            onAddManualRecord = onAddManualRecord,
+        )
     }
 }
 
 @Composable
-private fun SelectedDaySummary(day: ChartDaySelection?) {
-    Column(
+private fun SelectedDaySummary(
+    day: ChartDaySelection?,
+    onAddManualRecord: () -> Unit,
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(58.dp)
             .background(PopupBackground, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        verticalArrangement = Arrangement.spacedBy(1.dp),
+            .padding(start = 10.dp, top = 6.dp, end = 6.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = day?.let {
-                "${it.date.monthValue}月${it.date.dayOfMonth}日  朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}"
-            } ?: "日付を選択  朝 -  夜 -",
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold,
-            color = ChartBlue,
-        )
-        Text(
-            text = day?.let {
-                "差 ${it.weightDifferenceText()}  歩数 ${it.steps?.steps?.let { steps -> "${steps}歩" } ?: "-"}"
-            } ?: "差 -  歩数 -",
-            style = MaterialTheme.typography.bodySmall,
-            color = AppText,
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                text = day?.let {
+                    "${it.date.monthValue}月${it.date.dayOfMonth}日  朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}"
+                } ?: "日付を選択  朝 -  夜 -",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = ChartBlue,
+                maxLines = 1,
+            )
+            Text(
+                text = day?.let {
+                    "差 ${it.weightDifferenceText()}  歩数 ${it.steps?.steps?.let { steps -> "${steps}歩" } ?: "-"}"
+                } ?: "差 -  歩数 -",
+                style = MaterialTheme.typography.bodySmall,
+                color = AppText,
+                maxLines = 1,
+            )
+        }
+        FloatingActionButton(
+            onClick = onAddManualRecord,
+            containerColor = AppPrimary,
+            contentColor = Color.White,
+            modifier = Modifier.size(46.dp),
+        ) {
+            Text(
+                text = "+",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 
