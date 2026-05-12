@@ -1168,6 +1168,7 @@ private fun WeightTrendChart(
                 val glucoseChart = calculateFastingGlucoseChart(glucoseRecords, visibleWindow)
                 val a1cChart = calculateA1cChart(a1cDailyRecords, visibleWindow)
                 val waistChart = calculateWaistChart(manualRecords, visibleWindow)
+                val bloodPressureChart = calculateBloodPressureChart(manualRecords, visibleWindow)
                 val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
@@ -1196,6 +1197,10 @@ private fun WeightTrendChart(
                 }
                 val waistPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = ChartWaist.toArgb()
+                    textSize = 12.sp.toPx()
+                }
+                val bloodPressurePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = ChartBloodPressureSystolic.toArgb()
                     textSize = 12.sp.toPx()
                 }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
@@ -1235,6 +1240,15 @@ private fun WeightTrendChart(
                 return chartBottom - chartHeight * ratio
             }
 
+            fun bloodPressureYAt(value: Double): Float {
+                val bloodPressureBottom = chartTop + chartHeight * BLOOD_PRESSURE_CHART_HEIGHT_RATIO
+                val bloodPressureHeight = max(1f, bloodPressureBottom - chartTop)
+                val ratio = ((value - BLOOD_PRESSURE_CHART_MIN) /
+                    (BLOOD_PRESSURE_CHART_MAX - BLOOD_PRESSURE_CHART_MIN)).toFloat()
+                    .coerceIn(0f, 1f)
+                return bloodPressureBottom - bloodPressureHeight * ratio
+            }
+
             halfWeightLines.forEach { weightKg ->
                 val y = yAt(weightKg)
                 drawLine(
@@ -1258,6 +1272,16 @@ private fun WeightTrendChart(
                 val y = waistYAt(waistCm)
                 drawLine(
                     color = ChartWaist.copy(alpha = 0.28f),
+                    start = Offset(chartLeft, y),
+                    end = Offset(chartRight, y),
+                    strokeWidth = 1.dp.toPx(),
+                    pathEffect = dashedGrid,
+                )
+            }
+            BLOOD_PRESSURE_CHART_LINES.forEach { bloodPressure ->
+                val y = bloodPressureYAt(bloodPressure)
+                drawLine(
+                    color = ChartBloodPressureSystolic.copy(alpha = 0.22f),
                     start = Offset(chartLeft, y),
                     end = Offset(chartRight, y),
                     strokeWidth = 1.dp.toPx(),
@@ -1290,6 +1314,15 @@ private fun WeightTrendChart(
                 waistPaint.textAlign = Paint.Align.LEFT
                 WAIST_CHART_LINES_CM.forEach { waistCm ->
                     drawText("${waistCm.toInt()}", chartRight + 8.dp.toPx(), waistYAt(waistCm) + 4.dp.toPx(), waistPaint)
+                }
+                bloodPressurePaint.textAlign = Paint.Align.LEFT
+                BLOOD_PRESSURE_CHART_LINES.forEach { bloodPressure ->
+                    drawText(
+                        bloodPressure.toInt().toString(),
+                        chartRight + 8.dp.toPx(),
+                        bloodPressureYAt(bloodPressure) + 4.dp.toPx(),
+                        bloodPressurePaint,
+                    )
                 }
                 labelPaint.textAlign = Paint.Align.CENTER
                 monthLabelPaint.textAlign = Paint.Align.LEFT
@@ -1495,6 +1528,81 @@ private fun WeightTrendChart(
                             chartRight - 4.dp.toPx(),
                             latestY - 4.dp.toPx(),
                             waistPaint,
+                        )
+                    }
+                }
+            }
+
+            bloodPressureChart?.let { chart ->
+                val linePoints = chart.lineRecords
+                if (linePoints.isNotEmpty()) {
+                    val areaPath = Path()
+                    linePoints.forEachIndexed { index, record ->
+                        val point = Offset(xAtTime(record.measuredAt), bloodPressureYAt(record.systolic))
+                        if (index == 0) {
+                            areaPath.moveTo(point.x, point.y)
+                        } else {
+                            areaPath.lineTo(point.x, point.y)
+                        }
+                    }
+                    linePoints.asReversed().forEach { record ->
+                        areaPath.lineTo(
+                            xAtTime(record.measuredAt),
+                            bloodPressureYAt(record.diastolic),
+                        )
+                    }
+                    areaPath.close()
+                    drawPath(
+                        path = areaPath,
+                        color = ChartBloodPressureArea,
+                    )
+
+                    val systolicPath = Path()
+                    val diastolicPath = Path()
+                    linePoints.forEachIndexed { index, record ->
+                        val x = xAtTime(record.measuredAt)
+                        val systolicY = bloodPressureYAt(record.systolic)
+                        val diastolicY = bloodPressureYAt(record.diastolic)
+                        if (index == 0) {
+                            systolicPath.moveTo(x, systolicY)
+                            diastolicPath.moveTo(x, diastolicY)
+                        } else {
+                            systolicPath.lineTo(x, systolicY)
+                            diastolicPath.lineTo(x, diastolicY)
+                        }
+                    }
+                    drawPath(
+                        path = systolicPath,
+                        color = ChartBloodPressureSystolic,
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                    drawPath(
+                        path = diastolicPath,
+                        color = ChartBloodPressureDiastolic,
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                }
+                chart.visibleRecords.forEach { record ->
+                    val x = xAtTime(record.measuredAt)
+                    drawCircle(
+                        color = ChartBloodPressureSystolic,
+                        radius = 3.5.dp.toPx(),
+                        center = Offset(x, bloodPressureYAt(record.systolic)),
+                    )
+                    drawCircle(
+                        color = ChartBloodPressureDiastolic,
+                        radius = 3.5.dp.toPx(),
+                        center = Offset(x, bloodPressureYAt(record.diastolic)),
+                    )
+                }
+                chart.latestRecord?.let { latest ->
+                    drawContext.canvas.nativeCanvas.apply {
+                        bloodPressurePaint.textAlign = Paint.Align.RIGHT
+                        drawText(
+                            "${latest.systolic.roundToInt()}/${latest.diastolic.roundToInt()}",
+                            chartRight - 4.dp.toPx(),
+                            bloodPressureYAt(latest.systolic) - 4.dp.toPx(),
+                            bloodPressurePaint,
                         )
                     }
                 }
@@ -2018,6 +2126,18 @@ private data class WaistChartRecord(
     val value: Double,
 )
 
+private data class BloodPressureChart(
+    val visibleRecords: List<BloodPressureChartRecord>,
+    val lineRecords: List<BloodPressureChartRecord>,
+    val latestRecord: BloodPressureChartRecord?,
+)
+
+private data class BloodPressureChartRecord(
+    val measuredAt: LocalDateTime,
+    val systolic: Double,
+    val diastolic: Double,
+)
+
 private data class ChartDateLabel(
     val date: LocalDate,
     val x: Float,
@@ -2266,6 +2386,42 @@ private fun calculateWaistChart(
     )
 }
 
+private fun calculateBloodPressureChart(
+    manualRecords: List<ManualHealthRecord>,
+    window: ChartTimeWindow,
+): BloodPressureChart? {
+    val records = manualRecords
+        .filter { it.type == ManualRecordType.BloodPressure && it.invalidatedAt == null }
+        .groupBy { it.measuredAt.toLocalDate() }
+        .mapNotNull { (date, records) ->
+            val morning = records.latestBloodPressureInTimeBand("朝")
+            val night = records.latestBloodPressureInTimeBand("夜")
+            if (morning == null || night == null) {
+                null
+            } else {
+                BloodPressureChartRecord(
+                    measuredAt = date.atTime(LocalTime.NOON),
+                    systolic = (morning.systolic + night.systolic) / 2.0,
+                    diastolic = (morning.diastolic + night.diastolic) / 2.0,
+                )
+            }
+        }
+        .sortedBy { it.measuredAt }
+    if (records.isEmpty()) return null
+    val visibleRecords = records.filter { record ->
+        !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
+    }
+    val previousRecord = records.lastOrNull { it.measuredAt.isBefore(window.startAt) }
+    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
+        .distinctBy { it.measuredAt to it.systolic to it.diastolic }
+    val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
+    return BloodPressureChart(
+        visibleRecords = visibleRecords,
+        lineRecords = lineRecords,
+        latestRecord = latestRecord,
+    )
+}
+
 private fun calculateStepBars(
     dailySteps: List<DebugStepDaily>,
     window: ChartTimeWindow,
@@ -2349,9 +2505,13 @@ private const val A1C_CHART_MIN = 4.0
 private const val A1C_CHART_MAX = 14.0
 private const val WAIST_CHART_MIN_CM = 70.0
 private const val WAIST_CHART_MAX_CM = 160.0
+private const val BLOOD_PRESSURE_CHART_MIN = 40.0
+private const val BLOOD_PRESSURE_CHART_MAX = 200.0
+private const val BLOOD_PRESSURE_CHART_HEIGHT_RATIO = 0.42f
 private val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 private val WAIST_CHART_LINES_CM = listOf(70.0, 100.0, 130.0, 160.0)
+private val BLOOD_PRESSURE_CHART_LINES = listOf(80.0, 120.0, 160.0, 200.0)
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)
@@ -2367,6 +2527,9 @@ private val ChartStepText = Color(0xFF5E3F91)
 private val ChartGlucose = Color(0xFFC33A2B)
 private val ChartA1c = Color(0xFFD26A00)
 private val ChartWaist = Color(0xFF00897B)
+private val ChartBloodPressureSystolic = Color(0xFFB00020)
+private val ChartBloodPressureDiastolic = Color(0xFF7B3F98)
+private val ChartBloodPressureArea = Color(0x22B00020)
 private val DeleteOrange = Color(0xFFD26A00)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
