@@ -1083,6 +1083,19 @@ private fun WeightTrendChart(
             }
         }
     }
+    val selectedGraphValues = remember(selectedDate, chartWindow, glucoseRecords, a1cDailyRecords, manualRecords) {
+        chartWindow?.let { window ->
+            selectedDate?.let { date ->
+                selectedGraphValuesFor(
+                    date = date,
+                    glucoseRecords = glucoseRecords,
+                    a1cDailyRecords = a1cDailyRecords,
+                    manualRecords = manualRecords,
+                    window = window,
+                )
+            }
+        }
+    }
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
     val earliestEndAt = remember(sortedRecords, selectedRange) {
         selectedRange.minimumEndAt(sortedRecords)
@@ -1101,7 +1114,7 @@ private fun WeightTrendChart(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(460.dp),
+                .height(390.dp),
         ) {
             Canvas(
                 modifier = Modifier
@@ -1681,6 +1694,7 @@ private fun WeightTrendChart(
         }
         SelectedDaySummary(
             day = selectedDay,
+            graphValues = selectedGraphValues,
             onAddManualRecord = onAddManualRecord,
         )
     }
@@ -1689,12 +1703,13 @@ private fun WeightTrendChart(
 @Composable
 private fun SelectedDaySummary(
     day: ChartDaySelection?,
+    graphValues: SelectedGraphValues?,
     onAddManualRecord: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .height(126.dp)
             .background(PopupBackground, RoundedCornerShape(8.dp))
             .padding(start = 10.dp, top = 6.dp, end = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1702,25 +1717,19 @@ private fun SelectedDaySummary(
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(
-                text = day?.let {
-                    "${it.date.monthValue}月${it.date.dayOfMonth}日  朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}"
-                } ?: "日付を選択  朝 -  夜 -",
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Bold,
-                color = ChartBlue,
-                maxLines = 1,
+            SummaryInfoLine(day?.let { "${it.date.monthValue}月${it.date.dayOfMonth}日" } ?: "日付 -", ChartBlue, true)
+            SummaryInfoLine(
+                day?.let { "朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}  差 ${it.weightDifferenceText()}" }
+                    ?: "朝 -  夜 -  差 -",
+                ChartBlue,
+                true,
             )
-            Text(
-                text = day?.let {
-                    "差 ${it.weightDifferenceText()}  歩数 ${it.steps?.steps?.let { steps -> "${steps}歩" } ?: "-"}"
-                } ?: "差 -  歩数 -",
-                style = MaterialTheme.typography.bodySmall,
-                color = AppText,
-                maxLines = 1,
-            )
+            SummaryInfoLine("歩数 ${day?.steps?.steps?.let { "${it}歩" } ?: "-"}")
+            SummaryInfoLine("血糖値 ${graphValues?.glucoseText ?: "-"}  A1c ${graphValues?.a1cText ?: "-"}")
+            SummaryInfoLine("血圧 ${graphValues?.bloodPressureText ?: "-"}")
+            SummaryInfoLine("腹囲 ${graphValues?.waistText ?: "-"}")
         }
         FloatingActionButton(
             onClick = onAddManualRecord,
@@ -1735,6 +1744,21 @@ private fun SelectedDaySummary(
             )
         }
     }
+}
+
+@Composable
+private fun SummaryInfoLine(
+    text: String,
+    color: Color = AppText,
+    bold: Boolean = false,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+        color = color,
+        maxLines = 1,
+    )
 }
 
 @Composable
@@ -2146,6 +2170,13 @@ private data class BloodPressureChartRecord(
     val diastolic: Double,
 )
 
+private data class SelectedGraphValues(
+    val glucoseText: String?,
+    val a1cText: String?,
+    val bloodPressureText: String?,
+    val waistText: String?,
+)
+
 private data class ChartDateLabel(
     val date: LocalDate,
     val x: Float,
@@ -2338,6 +2369,40 @@ private fun calculateWeightedAverageFastingGlucose(
 private fun List<DebugGlucoseRecord>.fastingGlucoseRecords(): List<DebugGlucoseRecord> {
     return filter { it.mealRelation.isFastingGlucoseRelation() }
         .sortedByDescending { it.measuredAt }
+}
+
+private fun selectedGraphValuesFor(
+    date: LocalDate,
+    glucoseRecords: List<DebugGlucoseRecord>,
+    a1cDailyRecords: List<DebugA1cDaily>,
+    manualRecords: List<ManualHealthRecord>,
+    window: ChartTimeWindow,
+): SelectedGraphValues {
+    val fastingGlucose = calculateFastingGlucoseChart(glucoseRecords, window)
+        ?.visibleRecords
+        ?.lastOrNull { it.targetDate == date }
+        ?.bloodGlucoseMgDl
+        ?.let { "${formatDecimal(it)} mg/dL" }
+    val a1c = calculateA1cChart(a1cDailyRecords, window)
+        ?.visibleRecords
+        ?.lastOrNull { it.measuredAt.toLocalDate() == date }
+        ?.value
+        ?.let { "${formatDecimal(it)}%" }
+    val bloodPressure = calculateBloodPressureChart(manualRecords, window)
+        ?.visibleRecords
+        ?.lastOrNull { it.measuredAt.toLocalDate() == date }
+        ?.let { "${it.systolic.roundToInt()}/${it.diastolic.roundToInt()}" }
+    val waist = calculateWaistChart(manualRecords, window)
+        ?.visibleRecords
+        ?.lastOrNull { it.measuredAt.toLocalDate() == date }
+        ?.value
+        ?.let { "${formatDecimal(it)} cm" }
+    return SelectedGraphValues(
+        glucoseText = fastingGlucose,
+        a1cText = a1c,
+        bloodPressureText = bloodPressure,
+        waistText = waist,
+    )
 }
 
 private fun String.isFastingGlucoseRelation(): Boolean =
