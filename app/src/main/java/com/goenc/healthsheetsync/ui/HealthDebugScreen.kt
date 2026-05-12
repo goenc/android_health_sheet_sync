@@ -203,6 +203,8 @@ fun HealthDebugScreen(
                         records = state.weightRecords,
                         dailySteps = state.stepDailyRecords,
                         glucoseRecords = state.glucoseRecords,
+                        a1cDailyRecords = state.a1cDailyRecords,
+                        manualRecords = state.manualRecords,
                         modifier = Modifier.padding(end = 52.dp),
                     )
 
@@ -256,24 +258,43 @@ private fun MainSummaryValues(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
+    a1cDailyRecords: List<DebugA1cDaily>,
+    manualRecords: List<ManualHealthRecord>,
     modifier: Modifier = Modifier,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
     val latestSteps = dailySteps.maxByOrNull { it.targetDate }
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
+    val latestA1c = a1cDailyRecords.maxByOrNull { it.targetDate }
+    val latestWaist = manualRecords.latestManualValue(ManualRecordType.Waist)
+    val averageBloodPressure = manualRecords.latestDailyBloodPressureAverageText()
 
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-", ChartBlue)
-        SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-", ChartStepText)
-        SummaryValue(
-            "血糖",
-            latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
-            ChartGlucose,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-", ChartBlue)
+            SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-", ChartStepText)
+            SummaryValue(
+                "血糖",
+                latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
+                ChartGlucose,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SummaryValue("A1c", latestA1c?.let { "${formatDecimal(it.a1cPercent)}%" } ?: "-", ChartA1c)
+            SummaryValue("腹囲", latestWaist ?: "-", ChartSummary)
+            SummaryValue("血圧", averageBloodPressure ?: "-", AppMutedBlue)
+        }
     }
 }
 
@@ -1776,6 +1797,59 @@ private fun formatDecimal(value: Double): String {
         roundedOneDecimal.toString()
     }
 }
+
+private fun List<ManualHealthRecord>.latestManualValue(type: ManualRecordType): String? {
+    return filter { it.type == type && it.invalidatedAt == null }
+        .maxByOrNull { it.measuredAt }
+        ?.valueText
+}
+
+private fun List<ManualHealthRecord>.latestDailyBloodPressureAverageText(): String? {
+    return filter { it.type == ManualRecordType.BloodPressure && it.invalidatedAt == null }
+        .groupBy { it.measuredAt.toLocalDate() }
+        .toSortedMap(compareByDescending { it })
+        .values
+        .firstNotNullOfOrNull { records ->
+            val morning = records.latestBloodPressureInTimeBand("朝")
+            val night = records.latestBloodPressureInTimeBand("夜")
+            if (morning == null || night == null) {
+                null
+            } else {
+                val systolic = ((morning.systolic + night.systolic) / 2.0).roundToInt()
+                val diastolic = ((morning.diastolic + night.diastolic) / 2.0).roundToInt()
+                "$systolic/$diastolic"
+            }
+        }
+}
+
+private fun List<ManualHealthRecord>.latestBloodPressureInTimeBand(timeBand: String): BloodPressureValue? {
+    return filter { it.measuredAt.toTimeBand() == timeBand }
+        .maxByOrNull { it.measuredAt }
+        ?.valueText
+        ?.toBloodPressureValue()
+}
+
+private fun String.toBloodPressureValue(): BloodPressureValue? {
+    val values = removeSuffix(" mmHg").split("/")
+    if (values.size != 2) return null
+    return BloodPressureValue(
+        systolic = values[0].trim().toIntOrNull() ?: return null,
+        diastolic = values[1].trim().toIntOrNull() ?: return null,
+    )
+}
+
+private fun LocalDateTime.toTimeBand(): String {
+    return when (hour) {
+        in 4..11 -> "朝"
+        in 12..17 -> "昼"
+        else -> "夜"
+    }
+}
+
+private data class BloodPressureValue(
+    val systolic: Int,
+    val diastolic: Int,
+)
 
 private enum class WeightChartRange(
     val label: String,
