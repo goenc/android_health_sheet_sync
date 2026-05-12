@@ -1991,16 +1991,21 @@ private fun List<ManualHealthRecord>.latestDailyBloodPressureAverageText(): Stri
         .toSortedMap(compareByDescending { it })
         .values
         .firstNotNullOfOrNull { records ->
-            val morning = records.latestBloodPressureInTimeBand("朝")
-            val night = records.latestBloodPressureInTimeBand("夜")
-            if (morning == null || night == null) {
-                null
-            } else {
-                val systolic = ((morning.systolic + night.systolic) / 2.0).roundToInt()
-                val diastolic = ((morning.diastolic + night.diastolic) / 2.0).roundToInt()
-                "$systolic/$diastolic"
-            }
+            records.averageBloodPressureValue()
+                ?.let { "${it.systolic.roundToInt()}/${it.diastolic.roundToInt()}" }
         }
+}
+
+private fun List<ManualHealthRecord>.averageBloodPressureValue(): BloodPressureAverage? {
+    val values = listOfNotNull(
+        latestBloodPressureInTimeBand("朝"),
+        latestBloodPressureInTimeBand("夜"),
+    )
+    if (values.isEmpty()) return null
+    return BloodPressureAverage(
+        systolic = values.sumOf { it.systolic } / values.size.toDouble(),
+        diastolic = values.sumOf { it.diastolic } / values.size.toDouble(),
+    )
 }
 
 private fun List<ManualHealthRecord>.latestBloodPressureInTimeBand(timeBand: String): BloodPressureValue? {
@@ -2030,6 +2035,11 @@ private fun LocalDateTime.toTimeBand(): String {
 private data class BloodPressureValue(
     val systolic: Int,
     val diastolic: Int,
+)
+
+private data class BloodPressureAverage(
+    val systolic: Double,
+    val diastolic: Double,
 )
 
 private enum class WeightChartRange(
@@ -2394,15 +2404,12 @@ private fun calculateBloodPressureChart(
         .filter { it.type == ManualRecordType.BloodPressure && it.invalidatedAt == null }
         .groupBy { it.measuredAt.toLocalDate() }
         .mapNotNull { (date, records) ->
-            val morning = records.latestBloodPressureInTimeBand("朝")
-            val night = records.latestBloodPressureInTimeBand("夜")
-            if (morning == null || night == null) {
-                null
-            } else {
+            records.averageBloodPressureValue()
+                ?.let { average ->
                 BloodPressureChartRecord(
                     measuredAt = date.atTime(LocalTime.NOON),
-                    systolic = (morning.systolic + night.systolic) / 2.0,
-                    diastolic = (morning.diastolic + night.diastolic) / 2.0,
+                    systolic = average.systolic,
+                    diastolic = average.diastolic,
                 )
             }
         }
@@ -2505,13 +2512,13 @@ private const val A1C_CHART_MIN = 4.0
 private const val A1C_CHART_MAX = 14.0
 private const val WAIST_CHART_MIN_CM = 70.0
 private const val WAIST_CHART_MAX_CM = 160.0
-private const val BLOOD_PRESSURE_CHART_MIN = 40.0
-private const val BLOOD_PRESSURE_CHART_MAX = 200.0
+private const val BLOOD_PRESSURE_CHART_MIN = 70.0
+private const val BLOOD_PRESSURE_CHART_MAX = 140.0
 private const val BLOOD_PRESSURE_CHART_HEIGHT_RATIO = 0.42f
 private val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 private val WAIST_CHART_LINES_CM = listOf(70.0, 100.0, 130.0, 160.0)
-private val BLOOD_PRESSURE_CHART_LINES = listOf(80.0, 120.0, 160.0, 200.0)
+private val BLOOD_PRESSURE_CHART_LINES = listOf(70.0, 90.0, 110.0, 140.0)
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)
