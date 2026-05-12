@@ -129,8 +129,7 @@ fun HealthDebugScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 88.dp),
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             if (showManualInput) {
@@ -2177,6 +2176,11 @@ private data class SelectedGraphValues(
     val waistText: String?,
 )
 
+private data class GraphValue(
+    val date: LocalDate,
+    val value: Double,
+)
+
 private data class ChartDateLabel(
     val date: LocalDate,
     val x: Float,
@@ -2380,29 +2384,37 @@ private fun selectedGraphValuesFor(
 ): SelectedGraphValues {
     val fastingGlucose = calculateFastingGlucoseChart(glucoseRecords, window)
         ?.visibleRecords
-        ?.lastOrNull { it.targetDate == date }
-        ?.bloodGlucoseMgDl
-        ?.let { "${formatDecimal(it)} mg/dL" }
+        ?.map { GraphValue(it.targetDate, it.bloodGlucoseMgDl) }
+        ?.selectedOrAverageText(date, " mg/dL")
     val a1c = calculateA1cChart(a1cDailyRecords, window)
         ?.visibleRecords
-        ?.lastOrNull { it.measuredAt.toLocalDate() == date }
-        ?.value
-        ?.let { "${formatDecimal(it)}%" }
+        ?.map { GraphValue(it.measuredAt.toLocalDate(), it.value) }
+        ?.selectedOrAverageText(date, "%")
     val bloodPressure = calculateBloodPressureChart(manualRecords, window)
         ?.visibleRecords
         ?.lastOrNull { it.measuredAt.toLocalDate() == date }
         ?.let { "${it.systolic.roundToInt()}/${it.diastolic.roundToInt()}" }
     val waist = calculateWaistChart(manualRecords, window)
         ?.visibleRecords
-        ?.lastOrNull { it.measuredAt.toLocalDate() == date }
-        ?.value
-        ?.let { "${formatDecimal(it)} cm" }
+        ?.map { GraphValue(it.measuredAt.toLocalDate(), it.value) }
+        ?.selectedOrAverageText(date, " cm")
     return SelectedGraphValues(
         glucoseText = fastingGlucose,
         a1cText = a1c,
         bloodPressureText = bloodPressure,
         waistText = waist,
     )
+}
+
+private fun List<GraphValue>.selectedOrAverageText(date: LocalDate, suffix: String): String? {
+    val sortedValues = sortedBy { it.date }
+    sortedValues.lastOrNull { it.date == date }?.let { value ->
+        return "${formatDecimal(value.value)}$suffix"
+    }
+    val previous = sortedValues.lastOrNull { it.date.isBefore(date) }
+    val next = sortedValues.firstOrNull { it.date.isAfter(date) }
+    if (previous == null || next == null) return null
+    return "${formatDecimal((previous.value + next.value) / 2.0)}$suffix 平均"
 }
 
 private fun String.isFastingGlucoseRelation(): Boolean =
