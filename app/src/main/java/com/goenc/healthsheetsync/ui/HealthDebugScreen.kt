@@ -213,6 +213,7 @@ fun HealthDebugScreen(
                         state.stepDailyRecords,
                         state.glucoseRecords,
                         state.a1cDailyRecords,
+                        state.manualRecords,
                     )
 
                     sharedText?.takeIf { it.isNotBlank() }?.let { text ->
@@ -1064,6 +1065,7 @@ private fun WeightTrendChart(
     dailySteps: List<DebugStepDaily>,
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
+    manualRecords: List<ManualHealthRecord>,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var selectedRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
@@ -1165,6 +1167,7 @@ private fun WeightTrendChart(
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
                 val glucoseChart = calculateFastingGlucoseChart(glucoseRecords, visibleWindow)
                 val a1cChart = calculateA1cChart(a1cDailyRecords, visibleWindow)
+                val waistChart = calculateWaistChart(manualRecords, visibleWindow)
                 val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
@@ -1189,6 +1192,10 @@ private fun WeightTrendChart(
                 }
                 val a1cPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = ChartA1c.toArgb()
+                    textSize = 12.sp.toPx()
+                }
+                val waistPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = ChartWaist.toArgb()
                     textSize = 12.sp.toPx()
                 }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
@@ -1222,6 +1229,12 @@ private fun WeightTrendChart(
                 return chartBottom - chartHeight * ratio
             }
 
+            fun waistYAt(value: Double): Float {
+                val ratio = ((value - WAIST_CHART_MIN_CM) / (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
+                    .coerceIn(0f, 1f)
+                return chartBottom - chartHeight * ratio
+            }
+
             halfWeightLines.forEach { weightKg ->
                 val y = yAt(weightKg)
                 drawLine(
@@ -1239,6 +1252,16 @@ private fun WeightTrendChart(
                     start = Offset(chartLeft, y),
                     end = Offset(chartRight, y),
                     strokeWidth = 1.dp.toPx(),
+                )
+            }
+            WAIST_CHART_LINES_CM.forEach { waistCm ->
+                val y = waistYAt(waistCm)
+                drawLine(
+                    color = ChartWaist.copy(alpha = 0.28f),
+                    start = Offset(chartLeft, y),
+                    end = Offset(chartRight, y),
+                    strokeWidth = 1.dp.toPx(),
+                    pathEffect = dashedGrid,
                 )
             }
             chartPoints.zipWithNext().forEachIndexed { index, pair ->
@@ -1264,6 +1287,10 @@ private fun WeightTrendChart(
                 }
                 labelPaint.textAlign = Paint.Align.LEFT
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
+                waistPaint.textAlign = Paint.Align.LEFT
+                WAIST_CHART_LINES_CM.forEach { waistCm ->
+                    drawText("${waistCm.toInt()}", chartRight + 8.dp.toPx(), waistYAt(waistCm) + 4.dp.toPx(), waistPaint)
+                }
                 labelPaint.textAlign = Paint.Align.CENTER
                 monthLabelPaint.textAlign = Paint.Align.LEFT
                 val visibleStartDate = visibleWindow.startAt.toLocalDate()
@@ -1422,6 +1449,52 @@ private fun WeightTrendChart(
                             chartRight - 4.dp.toPx(),
                             latestY - 4.dp.toPx(),
                             a1cPaint,
+                        )
+                    }
+                }
+            }
+
+            waistChart?.let { chart ->
+                val linePoints = chart.lineRecords
+                if (linePoints.isNotEmpty()) {
+                    val waistPath = Path()
+                    linePoints.forEachIndexed { index, record ->
+                        val point = Offset(xAtTime(record.measuredAt), waistYAt(record.value))
+                        if (index == 0) {
+                            waistPath.moveTo(point.x, point.y)
+                        } else {
+                            waistPath.lineTo(point.x, point.y)
+                        }
+                    }
+                    drawPath(
+                        path = waistPath,
+                        color = ChartWaist,
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                }
+                chart.visibleRecords.forEach { record ->
+                    drawCircle(
+                        color = ChartWaist,
+                        radius = 4.dp.toPx(),
+                        center = Offset(xAtTime(record.measuredAt), waistYAt(record.value)),
+                    )
+                }
+                chart.latestRecord?.let { latest ->
+                    val latestX = xAtTime(latest.measuredAt)
+                    val latestY = waistYAt(latest.value)
+                    drawLine(
+                        color = ChartWaist,
+                        start = Offset(latestX, latestY),
+                        end = Offset(chartRight, latestY),
+                        strokeWidth = 1.5.dp.toPx(),
+                    )
+                    drawContext.canvas.nativeCanvas.apply {
+                        waistPaint.textAlign = Paint.Align.RIGHT
+                        drawText(
+                            formatDecimal(latest.value),
+                            chartRight - 4.dp.toPx(),
+                            latestY - 4.dp.toPx(),
+                            waistPaint,
                         )
                     }
                 }
@@ -1934,6 +2007,17 @@ private data class A1cChartRecord(
     val value: Double,
 )
 
+private data class WaistChart(
+    val visibleRecords: List<WaistChartRecord>,
+    val lineRecords: List<WaistChartRecord>,
+    val latestRecord: WaistChartRecord?,
+)
+
+private data class WaistChartRecord(
+    val measuredAt: LocalDateTime,
+    val value: Double,
+)
+
 private data class ChartDateLabel(
     val date: LocalDate,
     val x: Float,
@@ -2155,6 +2239,33 @@ private fun calculateA1cChart(
     )
 }
 
+private fun calculateWaistChart(
+    manualRecords: List<ManualHealthRecord>,
+    window: ChartTimeWindow,
+): WaistChart? {
+    val records = manualRecords
+        .filter { it.type == ManualRecordType.Waist && it.invalidatedAt == null }
+        .mapNotNull { record ->
+            record.valueText.removeSuffix(" cm").toDoubleOrNull()?.let { value ->
+                WaistChartRecord(record.measuredAt, value)
+            }
+        }
+        .sortedBy { it.measuredAt }
+    if (records.isEmpty()) return null
+    val visibleRecords = records.filter { record ->
+        !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
+    }
+    val previousRecord = records.lastOrNull { it.measuredAt.isBefore(window.startAt) }
+    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
+        .distinctBy { it.measuredAt to it.value }
+    val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
+    return WaistChart(
+        visibleRecords = visibleRecords,
+        lineRecords = lineRecords,
+        latestRecord = latestRecord,
+    )
+}
+
 private fun calculateStepBars(
     dailySteps: List<DebugStepDaily>,
     window: ChartTimeWindow,
@@ -2236,8 +2347,11 @@ private const val MANUAL_RECORD_TYPE = "manual"
 private const val DELETE_PRESS_MILLIS = 5_000L
 private const val A1C_CHART_MIN = 4.0
 private const val A1C_CHART_MAX = 14.0
+private const val WAIST_CHART_MIN_CM = 70.0
+private const val WAIST_CHART_MAX_CM = 160.0
 private val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
 private val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
+private val WAIST_CHART_LINES_CM = listOf(70.0, 100.0, 130.0, 160.0)
 private val AppBackground = Color(0xFFFAFAFC)
 private val HeaderBackground = Color(0xFFF2F2F3)
 private val AppText = Color(0xFF202128)
@@ -2252,6 +2366,7 @@ private val ChartStepBar = Color(0x337E57B2)
 private val ChartStepText = Color(0xFF5E3F91)
 private val ChartGlucose = Color(0xFFC33A2B)
 private val ChartA1c = Color(0xFFD26A00)
+private val ChartWaist = Color(0xFF00897B)
 private val DeleteOrange = Color(0xFFD26A00)
 private val ChartLabel = Color(0xFF7D7D84)
 private val ChartMissingPoint = Color(0xFFB0B0B0)
