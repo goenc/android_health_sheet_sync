@@ -57,8 +57,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
@@ -1751,8 +1754,18 @@ private fun SummaryInfoLine(
     color: Color = AppText,
     bold: Boolean = false,
 ) {
+    val displayText = buildAnnotatedString {
+        text.split(ASSUMED_VALUE_SUFFIX).forEachIndexed { index, part ->
+            if (index > 0) {
+                withStyle(SpanStyle(fontSize = 10.sp)) {
+                    append(ASSUMED_VALUE_SUFFIX)
+                }
+            }
+            append(part)
+        }
+    }
     Text(
-        text = text,
+        text = displayText,
         style = MaterialTheme.typography.bodySmall,
         fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
         color = color,
@@ -2383,9 +2396,7 @@ private fun selectedGraphValuesFor(
     window: ChartTimeWindow,
 ): SelectedGraphValues {
     val fastingGlucose = calculateFastingGlucoseChart(glucoseRecords, window)
-        ?.visibleRecords
-        ?.map { GraphValue(it.targetDate, it.bloodGlucoseMgDl) }
-        ?.selectedOrAverageText(date, " mg/dL")
+        ?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL$ASSUMED_VALUE_SUFFIX" }
     val a1c = calculateA1cChart(a1cDailyRecords, window)
         ?.visibleRecords
         ?.map { GraphValue(it.measuredAt.toLocalDate(), it.value) }
@@ -2395,9 +2406,8 @@ private fun selectedGraphValuesFor(
         ?.lastOrNull { it.measuredAt.toLocalDate() == date }
         ?.let { "${it.systolic.roundToInt()}/${it.diastolic.roundToInt()}" }
     val waist = calculateWaistChart(manualRecords, window)
-        ?.visibleRecords
-        ?.map { GraphValue(it.measuredAt.toLocalDate(), it.value) }
-        ?.selectedOrAverageText(date, " cm")
+        ?.estimatedValueAt(date)
+        ?.let { "${formatDecimal(it)} cm$ASSUMED_VALUE_SUFFIX" }
     return SelectedGraphValues(
         glucoseText = fastingGlucose,
         a1cText = a1c,
@@ -2415,6 +2425,23 @@ private fun List<GraphValue>.selectedOrAverageText(date: LocalDate, suffix: Stri
     val next = sortedValues.firstOrNull { it.date.isAfter(date) }
     if (previous == null || next == null) return null
     return "${formatDecimal((previous.value + next.value) / 2.0)}$suffix 平均"
+}
+
+private fun WaistChart.estimatedValueAt(date: LocalDate): Double? {
+    val sortedRecords = lineRecords.sortedBy { it.measuredAt }
+    if (sortedRecords.isEmpty()) return null
+    val targetAt = date.atTime(LocalTime.NOON)
+    val previous = sortedRecords.lastOrNull { !it.measuredAt.isAfter(targetAt) }
+    val next = sortedRecords.firstOrNull { !it.measuredAt.isBefore(targetAt) }
+    if (previous == null) return null
+    if (next == null || previous.measuredAt == next.measuredAt) return previous.value
+
+    val totalMillis = Duration.between(previous.measuredAt, next.measuredAt).toMillis()
+    if (totalMillis <= 0L) return previous.value
+    val elapsedMillis = Duration.between(previous.measuredAt, targetAt).toMillis()
+        .coerceIn(0L, totalMillis)
+    val ratio = elapsedMillis.toDouble() / totalMillis.toDouble()
+    return previous.value + (next.value - previous.value) * ratio
 }
 
 private fun String.isFastingGlucoseRelation(): Boolean =
@@ -2580,6 +2607,7 @@ private const val CHART_WEIGHT_LOWER_PADDING_KG = 1.0
 private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 private const val GLUCOSE_WEIGHT_COUNT = 3
+private const val ASSUMED_VALUE_SUFFIX = "（想定）"
 private const val UNKNOWN_HEALTH_VALUE = "不明"
 private const val MANUAL_RECORD_TYPE = "manual"
 private const val DELETE_PRESS_MILLIS = 5_000L
