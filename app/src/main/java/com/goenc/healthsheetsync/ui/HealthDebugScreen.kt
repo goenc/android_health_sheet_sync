@@ -2,6 +2,7 @@ package com.goenc.healthsheetsync.ui
 
 import android.graphics.Paint
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.Canvas
@@ -118,6 +119,15 @@ fun HealthDebugScreen(
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = showSettings || showManualInput) {
+        if (showManualInput) {
+            showManualInput = false
+            onRefresh()
+        } else {
+            showSettings = false
+        }
+    }
 
     if (state.isLoading && state.availability == HealthConnectAvailability.Checking) {
         LoadingScreen(modifier = modifier)
@@ -1721,7 +1731,7 @@ private fun SelectedDaySummary(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            SummaryInfoLine(day?.let { "${it.date.monthValue}月${it.date.dayOfMonth}日" } ?: "日付 -", ChartBlue, true)
+            SummaryInfoLine(day?.let { it.date.formatMonthDayWithWeekday() } ?: "日付 -", ChartBlue, true)
             SummaryInfoLine(
                 day?.let { "朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}  差 ${it.weightDifferenceText()}" }
                     ?: "朝 -  夜 -  差 -",
@@ -1849,6 +1859,21 @@ private fun String.toPermissionLabel(): String {
 
 private fun LocalDateTime.formatDateTime(): String =
     format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+
+private fun LocalDate.formatMonthDayWithWeekday(): String =
+    "${monthValue}月${dayOfMonth}日(${dayOfWeek.japaneseShortName()})"
+
+private fun DayOfWeek.japaneseShortName(): String {
+    return when (this) {
+        DayOfWeek.MONDAY -> "月"
+        DayOfWeek.TUESDAY -> "火"
+        DayOfWeek.WEDNESDAY -> "水"
+        DayOfWeek.THURSDAY -> "木"
+        DayOfWeek.FRIDAY -> "金"
+        DayOfWeek.SATURDAY -> "土"
+        DayOfWeek.SUNDAY -> "日"
+    }
+}
 
 private fun LocalDate.toEpochMillis(): Long =
     atStartOfDay(DATE_PICKER_ZONE).toInstant().toEpochMilli()
