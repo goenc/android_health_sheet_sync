@@ -1177,10 +1177,6 @@ private fun WeightTrendChart(
                     color = axisColor.toArgb()
                     textSize = 12.sp.toPx()
                 }
-                val weightLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = lineColor.toArgb()
-                    textSize = 12.sp.toPx()
-                }
                 val monthLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisColor.toArgb()
                     textSize = 9.sp.toPx()
@@ -1306,10 +1302,10 @@ private fun WeightTrendChart(
             }
 
             drawContext.canvas.nativeCanvas.apply {
-                weightLabelPaint.textAlign = Paint.Align.RIGHT
+                labelPaint.textAlign = Paint.Align.RIGHT
                 solidWeightLines.forEach { weightKg ->
                     val y = yAt(weightKg)
-                    drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), weightLabelPaint)
+                    drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), labelPaint)
                 }
                 labelPaint.textAlign = Paint.Align.LEFT
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
@@ -1431,10 +1427,10 @@ private fun WeightTrendChart(
                     )
                 }
                 drawContext.canvas.nativeCanvas.apply {
-                    glucosePaint.textAlign = Paint.Align.LEFT
+                    glucosePaint.textAlign = Paint.Align.RIGHT
                     drawText(
                         "${formatDecimal(chart.weightedAverageMgDl)}",
-                        chartRight + 6.dp.toPx(),
+                        chartRight - 4.dp.toPx(),
                         glucoseY - 4.dp.toPx(),
                         glucosePaint,
                     )
@@ -1478,10 +1474,10 @@ private fun WeightTrendChart(
                         strokeWidth = 1.5.dp.toPx(),
                     )
                     drawContext.canvas.nativeCanvas.apply {
-                        a1cPaint.textAlign = Paint.Align.LEFT
+                        a1cPaint.textAlign = Paint.Align.RIGHT
                         drawText(
                             formatDecimal(latest.value),
-                            chartRight + 6.dp.toPx(),
+                            chartRight - 4.dp.toPx(),
                             latestY - 4.dp.toPx(),
                             a1cPaint,
                         )
@@ -1524,10 +1520,10 @@ private fun WeightTrendChart(
                         strokeWidth = 1.5.dp.toPx(),
                     )
                     drawContext.canvas.nativeCanvas.apply {
-                        waistPaint.textAlign = Paint.Align.LEFT
+                        waistPaint.textAlign = Paint.Align.RIGHT
                         drawText(
                             formatDecimal(latest.value),
-                            chartRight + 6.dp.toPx(),
+                            chartRight - 4.dp.toPx(),
                             latestY - 4.dp.toPx(),
                             waistPaint,
                         )
@@ -1599,10 +1595,10 @@ private fun WeightTrendChart(
                 }
                 chart.latestRecord?.let { latest ->
                     drawContext.canvas.nativeCanvas.apply {
-                        bloodPressurePaint.textAlign = Paint.Align.LEFT
+                        bloodPressurePaint.textAlign = Paint.Align.RIGHT
                         drawText(
                             "${latest.systolic.roundToInt()}/${latest.diastolic.roundToInt()}",
-                            chartRight + 6.dp.toPx(),
+                            chartRight - 4.dp.toPx(),
                             bloodPressureYAt(latest.systolic) - 4.dp.toPx(),
                             bloodPressurePaint,
                         )
@@ -1624,25 +1620,6 @@ private fun WeightTrendChart(
                 color = lineColor,
                 style = Stroke(width = 2.dp.toPx()),
             )
-            chartPoints.lastOrNull()?.let { latest ->
-                val latestX = xAt(chartPoints.lastIndex)
-                val latestY = yAt(latest.weightKg)
-                drawLine(
-                    color = lineColor,
-                    start = Offset(latestX, latestY),
-                    end = Offset(chartRight, latestY),
-                    strokeWidth = 1.5.dp.toPx(),
-                )
-                drawContext.canvas.nativeCanvas.apply {
-                    weightLabelPaint.textAlign = Paint.Align.LEFT
-                    drawText(
-                        formatDecimal(latest.weightKg),
-                        chartRight + 6.dp.toPx(),
-                        latestY - 4.dp.toPx(),
-                        weightLabelPaint,
-                    )
-                }
-            }
 
             val missingPointStroke = Stroke(width = 2.dp.toPx())
             calculateMissingWeightPoints(chartPoints).forEach { missingPoint ->
@@ -2101,7 +2078,7 @@ private enum class WeightChartRange(
         val rangeStartAt = startAt(rangeEndAt)
         return ChartTimeWindow(
             startAt = rangeStartAt.minusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
-            endAt = rangeEndAt,
+            endAt = rangeEndAt.plusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
         )
     }
 
@@ -2594,8 +2571,8 @@ private fun nearestChartIndex(
 private const val TAG = "HealthSheetSync"
 private const val STEP_CHART_MAX_STEPS = 30_000f
 private const val STEP_REFERENCE_STEPS = 10_000f
-private const val CHART_LEFT_PADDING_DP = 38
-private const val CHART_RIGHT_PADDING_DP = 58
+private const val CHART_LEFT_PADDING_DP = 44
+private const val CHART_RIGHT_PADDING_DP = 8
 private const val CHART_TIME_BAND_MORNING = 0
 private const val CHART_TIME_BAND_NIGHT = 1
 private const val CHART_TIME_BAND_COUNT = 2
