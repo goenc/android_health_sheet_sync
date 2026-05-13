@@ -2397,10 +2397,9 @@ private fun selectedGraphValuesFor(
 ): SelectedGraphValues {
     val fastingGlucose = calculateFastingGlucoseChart(glucoseRecords, window)
         ?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL$ASSUMED_VALUE_SUFFIX" }
-    val a1c = calculateA1cChart(a1cDailyRecords, window)
-        ?.visibleRecords
-        ?.maxByOrNull { it.measuredAt }
-        ?.let { "${formatDecimal(it.value)}%" }
+    val a1c = a1cDailyRecords
+        .maxByOrNull { it.measuredAt }
+        ?.let { "${formatDecimal(it.a1cPercent)}%" }
     val bloodPressure = calculateBloodPressureChart(manualRecords, window)
         ?.visibleRecords
         ?.lastOrNull { it.measuredAt.toLocalDate() == date }
