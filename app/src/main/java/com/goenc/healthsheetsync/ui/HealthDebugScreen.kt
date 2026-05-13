@@ -2396,7 +2396,7 @@ private fun selectedGraphValuesFor(
     window: ChartTimeWindow,
 ): SelectedGraphValues {
     val fastingGlucose = calculateFastingGlucoseChart(glucoseRecords, window)
-        ?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL$ASSUMED_VALUE_SUFFIX" }
+        ?.selectedValueText(date)
     val a1c = a1cDailyRecords
         .maxByOrNull { it.measuredAt }
         ?.let { "${formatDecimal(it.a1cPercent)}%" }
@@ -2405,8 +2405,7 @@ private fun selectedGraphValuesFor(
         ?.lastOrNull { it.measuredAt.toLocalDate() == date }
         ?.let { "${it.systolic.roundToInt()}/${it.diastolic.roundToInt()}" }
     val waist = calculateWaistChart(manualRecords, window)
-        ?.estimatedValueAt(date)
-        ?.let { "${formatDecimal(it)} cm$ASSUMED_VALUE_SUFFIX" }
+        ?.selectedValueText(date)
     return SelectedGraphValues(
         glucoseText = fastingGlucose,
         a1cText = a1c,
@@ -2424,6 +2423,26 @@ private fun List<GraphValue>.selectedOrAverageText(date: LocalDate, suffix: Stri
     val next = sortedValues.firstOrNull { it.date.isAfter(date) }
     if (previous == null || next == null) return null
     return "${formatDecimal((previous.value + next.value) / 2.0)}$suffix 平均"
+}
+
+private fun FastingGlucoseChart.selectedValueText(date: LocalDate): String {
+    val actualValue = visibleRecords
+        .filter { it.targetDate == date }
+        .maxByOrNull { it.measuredAt }
+        ?.bloodGlucoseMgDl
+    return actualValue
+        ?.let { "${formatDecimal(it)} mg/dL" }
+        ?: "${formatDecimal(weightedAverageMgDl)} mg/dL$ASSUMED_VALUE_SUFFIX"
+}
+
+private fun WaistChart.selectedValueText(date: LocalDate): String? {
+    val actualValue = visibleRecords
+        .filter { it.measuredAt.toLocalDate() == date }
+        .maxByOrNull { it.measuredAt }
+        ?.value
+    return actualValue
+        ?.let { "${formatDecimal(it)} cm" }
+        ?: estimatedValueAt(date)?.let { "${formatDecimal(it)} cm$ASSUMED_VALUE_SUFFIX" }
 }
 
 private fun WaistChart.estimatedValueAt(date: LocalDate): Double? {
