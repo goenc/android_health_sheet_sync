@@ -2399,8 +2399,8 @@ private fun selectedGraphValuesFor(
         ?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL$ASSUMED_VALUE_SUFFIX" }
     val a1c = calculateA1cChart(a1cDailyRecords, window)
         ?.visibleRecords
-        ?.map { GraphValue(it.measuredAt.toLocalDate(), it.value) }
-        ?.selectedOrAverageText(date, "%")
+        ?.maxByOrNull { it.measuredAt }
+        ?.let { "${formatDecimal(it.value)}%" }
     val bloodPressure = calculateBloodPressureChart(manualRecords, window)
         ?.visibleRecords
         ?.lastOrNull { it.measuredAt.toLocalDate() == date }
