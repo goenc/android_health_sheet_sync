@@ -1177,6 +1177,10 @@ private fun WeightTrendChart(
                     color = axisColor.toArgb()
                     textSize = 12.sp.toPx()
                 }
+                val weightLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = lineColor.toArgb()
+                    textSize = 12.sp.toPx()
+                }
                 val monthLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisColor.toArgb()
                     textSize = 9.sp.toPx()
@@ -1302,10 +1306,10 @@ private fun WeightTrendChart(
             }
 
             drawContext.canvas.nativeCanvas.apply {
-                labelPaint.textAlign = Paint.Align.RIGHT
+                weightLabelPaint.textAlign = Paint.Align.RIGHT
                 solidWeightLines.forEach { weightKg ->
                     val y = yAt(weightKg)
-                    drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), labelPaint)
+                    drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), weightLabelPaint)
                 }
                 labelPaint.textAlign = Paint.Align.LEFT
                 drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
@@ -1620,6 +1624,25 @@ private fun WeightTrendChart(
                 color = lineColor,
                 style = Stroke(width = 2.dp.toPx()),
             )
+            chartPoints.lastOrNull()?.let { latest ->
+                val latestX = xAt(chartPoints.lastIndex)
+                val latestY = yAt(latest.weightKg)
+                drawLine(
+                    color = lineColor,
+                    start = Offset(latestX, latestY),
+                    end = Offset(chartRight, latestY),
+                    strokeWidth = 1.5.dp.toPx(),
+                )
+                drawContext.canvas.nativeCanvas.apply {
+                    weightLabelPaint.textAlign = Paint.Align.RIGHT
+                    drawText(
+                        formatDecimal(latest.weightKg),
+                        chartRight - 4.dp.toPx(),
+                        latestY - 4.dp.toPx(),
+                        weightLabelPaint,
+                    )
+                }
+            }
 
             val missingPointStroke = Stroke(width = 2.dp.toPx())
             calculateMissingWeightPoints(chartPoints).forEach { missingPoint ->
