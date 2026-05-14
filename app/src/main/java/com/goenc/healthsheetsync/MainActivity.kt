@@ -2,7 +2,6 @@ package com.goenc.healthsheetsync
 
 import android.content.pm.PackageManager
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -19,7 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
-import com.goenc.healthsheetsync.data.OneTouchRevealTextParser
+import com.goenc.healthsheetsync.data.WorkbookTemplateExporter
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
@@ -30,6 +29,7 @@ import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import com.goenc.healthsheetsync.health.HealthConnectDebugReader
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
+import com.goenc.healthsheetsync.share.SharedTextImporter
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
 import kotlinx.coroutines.launch
@@ -38,6 +38,8 @@ import java.security.MessageDigest
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
     private lateinit var localStore: LocalHealthDataStore
+    private lateinit var sharedTextImporter: SharedTextImporter
+    private lateinit var workbookTemplateExporter: WorkbookTemplateExporter
     private val spreadsheetUploader = SpreadsheetUploader()
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var externalSaveStatus by mutableStateOf<String?>(null)
@@ -65,16 +67,8 @@ class MainActivity : ComponentActivity() {
         }
 
         externalSaveStatus = runCatching {
-            assets.open(WORKBOOK_ASSET_NAME).use { input ->
-                contentResolver.openOutputStream(uri)?.use { output ->
-                    input.copyTo(output)
-                } ?: error("保存先を開けませんでした")
-            }
-            "外部保存が完了しました"
-        }.getOrElse { error ->
-            Log.e(TAG, "Failed to save workbook template externally.", error)
-            "外部保存に失敗しました: ${error.message ?: "原因不明"}"
-        }
+            workbookTemplateExporter.saveTemplate(uri)
+        }.getOrElse { error -> "外部保存に失敗しました: ${error.message ?: "原因不明"}" }
     }
     private val startGoogleAuthorization = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
@@ -94,6 +88,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         healthReader = HealthConnectDebugReader(applicationContext)
         localStore = LocalHealthDataStore(applicationContext)
+        sharedTextImporter = SharedTextImporter(applicationContext, localStore)
+        workbookTemplateExporter = WorkbookTemplateExporter(applicationContext)
         handleSharedText(intent)
         enableEdgeToEdge()
         setContent {
@@ -150,58 +146,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleSharedText(intent: Intent?) {
-        if (intent == null || intent.action !in setOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE, Intent.ACTION_VIEW)) {
-            return
-        }
-        val text = readSharedText(intent)
-        if (text.isBlank()) return
-        sharedText = text
-        val glucoseRecords = OneTouchRevealTextParser.parse(text)
-        if (glucoseRecords.isEmpty()) {
-            sharedTextImportStatus = "共有テキストから血糖値を読み取れませんでした"
-            return
-        }
-        localStore.save(
-            weightRecords = emptyList(),
-            glucoseRecords = glucoseRecords,
-            stepDailyRecords = emptyList(),
-        )
-        sharedTextImportStatus = "共有テキストから血糖${glucoseRecords.size}件を取り込みました"
-        refreshHealthData()
-    }
-
-    private fun readSharedText(intent: Intent): String {
-        val extraText = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-        val streamTexts = buildList {
-            intent.data?.let { uri ->
-                readTextFromUri(uri)?.let(::add)
-            }
-            intent.getParcelableExtraCompat<Uri>(Intent.EXTRA_STREAM)?.let { uri ->
-                readTextFromUri(uri)?.let(::add)
-            }
-            intent.getParcelableArrayListExtraCompat<Uri>(Intent.EXTRA_STREAM)
-                ?.mapNotNull(::readTextFromUri)
-                ?.let(::addAll)
-            intent.clipData?.let { clipData ->
-                for (index in 0 until clipData.itemCount) {
-                    clipData.getItemAt(index).uri?.let { uri ->
-                        readTextFromUri(uri)?.let(::add)
-                    }
-                }
-            }
-        }
-        return (listOf(extraText) + streamTexts)
-            .filter { it.isNotBlank() }
-            .joinToString("\n")
-    }
-
-    private fun readTextFromUri(uri: Uri): String? {
-        return runCatching {
-            contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-        }.getOrElse { error ->
-            Log.e(TAG, "Failed to read shared file: $uri", error)
-            null
-        }
+        val result = sharedTextImporter.importFrom(intent) ?: return
+        sharedText = result.text
+        sharedTextImportStatus = result.status
+        if (result.imported) refreshHealthData()
     }
 
     private fun refreshHealthData() {
@@ -331,30 +279,10 @@ class MainActivity : ComponentActivity() {
         digest.joinToString(":") { byte -> "%02X".format(byte.toInt() and 0xFF) }
     }.getOrNull()
 
-    private inline fun <reified T : android.os.Parcelable> Intent.getParcelableExtraCompat(name: String): T? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getParcelableExtra(name, T::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            getParcelableExtra(name) as? T
-        }
-    }
-
-    private inline fun <reified T : android.os.Parcelable> Intent.getParcelableArrayListExtraCompat(
-        name: String,
-    ): ArrayList<T>? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getParcelableArrayListExtra(name, T::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            getParcelableArrayListExtra(name)
-        }
-    }
 }
 
 private const val TAG = "HealthSheetSync"
 private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
-private const val WORKBOOK_ASSET_NAME = "health_sheet_sync_work_branch_template.xlsx"
 private const val DEFAULT_WORKBOOK_NAME = "health_sheet_sync.xlsx"
 private const val WORKBOOK_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
