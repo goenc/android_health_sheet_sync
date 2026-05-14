@@ -1109,6 +1109,7 @@ private fun WeightTrendChart(
         }
     }
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
+    val trendDuration = (chartEndAt ?: latestEndAt)?.let { selectedRange.durationAt(it) }
     val earliestEndAt = remember(sortedRecords, selectedRange) {
         selectedRange.minimumEndAt(sortedRecords)
     }
@@ -1401,7 +1402,7 @@ private fun WeightTrendChart(
                 trendLine?.let {
                     trendSummaryPaint.textAlign = Paint.Align.LEFT
                     drawText(
-                        formatTrendChange(it, selectedRange),
+                        formatTrendChange(it, selectedRange, trendDuration),
                         chartLeft + 8.dp.toPx(),
                         chartTop + 16.dp.toPx(),
                         trendSummaryPaint,
@@ -2143,6 +2144,7 @@ private enum class WeightChartRange(
 private data class WeightTrendLine(
     val startWeightKg: Double,
     val endWeightKg: Double,
+    val slopeKgPerDay: Double,
 )
 
 private data class ChartWeightPoint(
@@ -2337,14 +2339,17 @@ private fun LocalDate.isMonthEnd(): Boolean =
 private fun calculateTrendLine(records: List<ChartWeightPoint>): WeightTrendLine? {
     if (records.size <= 1) return null
 
+    val firstAt = records.first().measuredAt
     val count = records.size.toDouble()
-    val sumX = records.indices.sumOf { it.toDouble() }
+    val xValues = records.map { record ->
+        Duration.between(firstAt, record.measuredAt).toDaysDouble()
+    }
+    val sumX = xValues.sum()
     val sumY = records.sumOf { it.weightKg }
     val sumXY = records.foldIndexed(0.0) { index, total, record ->
-        total + index * record.weightKg
+        total + xValues[index] * record.weightKg
     }
-    val sumXX = records.indices.sumOf { index ->
-        val x = index.toDouble()
+    val sumXX = xValues.sumOf { x ->
         x * x
     }
     val denominator = count * sumXX - sumX * sumX
@@ -2352,21 +2357,26 @@ private fun calculateTrendLine(records: List<ChartWeightPoint>): WeightTrendLine
 
     val slope = (count * sumXY - sumX * sumY) / denominator
     val intercept = (sumY - slope * sumX) / count
-    val lastX = records.lastIndex.toDouble()
+    val lastX = xValues.last()
     return WeightTrendLine(
         startWeightKg = intercept,
         endWeightKg = slope * lastX + intercept,
+        slopeKgPerDay = slope,
     )
 }
 
 private fun formatTrendChange(
     trendLine: WeightTrendLine,
     range: WeightChartRange,
+    duration: Duration?,
 ): String {
-    val changeKg = trendLine.endWeightKg - trendLine.startWeightKg
+    val changeKg = trendLine.slopeKgPerDay * (duration?.toDaysDouble() ?: 0.0)
     val sign = if (changeKg > 0.0) "+" else ""
     return "$sign${formatDecimal(changeKg)}kg/${range.label}"
 }
+
+private fun Duration.toDaysDouble(): Double =
+    toMillis().toDouble() / MILLIS_PER_DAY
 
 private fun calculateAverageSteps(
     dailySteps: List<DebugStepDaily>,
@@ -2657,6 +2667,7 @@ private const val CHART_TIME_BAND_COUNT = 2
 private const val CHART_WEIGHT_LOWER_PADDING_KG = 1.0
 private const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 private const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
+private const val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L
 private const val GLUCOSE_WEIGHT_COUNT = 3
 private const val ASSUMED_VALUE_SUFFIX = "（想定）"
 private const val UNKNOWN_HEALTH_VALUE = "不明"
