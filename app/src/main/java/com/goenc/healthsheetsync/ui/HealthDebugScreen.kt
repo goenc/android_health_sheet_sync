@@ -1190,6 +1190,14 @@ private fun WeightTrendChart(
                     color = axisColor.toArgb()
                     textSize = 12.sp.toPx()
                 }
+                val weightLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = lineColor.toArgb()
+                    textSize = 12.sp.toPx()
+                }
+                val stepLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = ChartStepText.toArgb()
+                    textSize = 12.sp.toPx()
+                }
                 val monthLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisColor.toArgb()
                     textSize = 9.sp.toPx()
@@ -1315,13 +1323,13 @@ private fun WeightTrendChart(
             }
 
             drawContext.canvas.nativeCanvas.apply {
-                labelPaint.textAlign = Paint.Align.RIGHT
+                weightLabelPaint.textAlign = Paint.Align.RIGHT
                 solidWeightLines.forEach { weightKg ->
                     val y = yAt(weightKg)
-                    drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), labelPaint)
+                    drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), weightLabelPaint)
                 }
-                labelPaint.textAlign = Paint.Align.LEFT
-                drawText("1", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS), labelPaint)
+                stepLabelPaint.textAlign = Paint.Align.LEFT
+                drawText("1万", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS) - 8.dp.toPx(), stepLabelPaint)
                 waistPaint.textAlign = Paint.Align.LEFT
                 WAIST_CHART_LINES_CM.forEach { waistCm ->
                     drawText("${waistCm.toInt()}", chartRight + 8.dp.toPx(), waistYAt(waistCm) + 4.dp.toPx(), waistPaint)
@@ -2642,7 +2650,7 @@ private const val TAG = "HealthSheetSync"
 private const val STEP_CHART_MAX_STEPS = 30_000f
 private const val STEP_REFERENCE_STEPS = 10_000f
 private const val CHART_LEFT_PADDING_DP = 44
-private const val CHART_RIGHT_PADDING_DP = 8
+private const val CHART_RIGHT_PADDING_DP = 36
 private const val CHART_TIME_BAND_MORNING = 0
 private const val CHART_TIME_BAND_NIGHT = 1
 private const val CHART_TIME_BAND_COUNT = 2
