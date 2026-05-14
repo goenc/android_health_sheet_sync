@@ -1,7 +1,9 @@
-画面とデータ処理の責務を分割
+責務分離と import 整理を継続
 
-・メイン画面、設定画面、手入力画面、グラフ描画、表示補助を別ファイルへ分割
-・データベース定義とテーブル作成処理を分離
-・共有テキスト取り込みとブックテンプレート保存処理を MainActivity から分離
+・UI ファイルの import を使用箇所に合わせて整理
+・グラフ計算処理を HealthChartCalculations に分離
+・手入力保存処理を ManualRecordRepository に分離
+・読込処理を HealthRecordQueries に分離
+・WorkbookTemplateExporter を export パッケージへ移動
 ・デバッグビルド成功を確認
 ・デバッグアプリ更新成功を確認
