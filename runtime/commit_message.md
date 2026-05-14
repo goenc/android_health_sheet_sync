@@ -1,9 +1,8 @@
-責務分離と import 整理を継続
+CSVをAndroid共有で保存する機能を追加
 
-・UI ファイルの import を使用箇所に合わせて整理
-・グラフ計算処理を HealthChartCalculations に分離
-・手入力保存処理を ManualRecordRepository に分離
-・読込処理を HealthRecordQueries に分離
-・WorkbookTemplateExporter を export パッケージへ移動
+・HealthDebugUiState からCSVを生成するExporterを追加
+・FileProvider と共有用 file_paths を追加
+・設定画面にDrive保存ボタンと共有方式表示を追加
+・MainActivity にCSV共有シート起動処理を追加
 ・デバッグビルド成功を確認
 ・デバッグアプリ更新成功を確認

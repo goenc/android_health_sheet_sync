@@ -16,8 +16,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.export.HealthCsvShareExporter
 import com.goenc.healthsheetsync.export.WorkbookTemplateExporter
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
@@ -40,9 +42,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var localStore: LocalHealthDataStore
     private lateinit var sharedTextImporter: SharedTextImporter
     private lateinit var workbookTemplateExporter: WorkbookTemplateExporter
+    private lateinit var healthCsvShareExporter: HealthCsvShareExporter
     private val spreadsheetUploader = SpreadsheetUploader()
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var externalSaveStatus by mutableStateOf<String?>(null)
+    private var csvShareStatus by mutableStateOf<String?>(null)
     private var spreadsheetUploadStatus by mutableStateOf<String?>(null)
     private var isSpreadsheetUploading by mutableStateOf(false)
     private var sharedText by mutableStateOf<String?>(null)
@@ -90,6 +94,7 @@ class MainActivity : ComponentActivity() {
         localStore = LocalHealthDataStore(applicationContext)
         sharedTextImporter = SharedTextImporter(applicationContext, localStore)
         workbookTemplateExporter = WorkbookTemplateExporter(applicationContext)
+        healthCsvShareExporter = HealthCsvShareExporter(applicationContext)
         handleSharedText(intent)
         enableEdgeToEdge()
         setContent {
@@ -112,6 +117,8 @@ class MainActivity : ComponentActivity() {
                             createExternalWorkbook.launch(DEFAULT_WORKBOOK_NAME)
                         },
                         externalSaveStatus = externalSaveStatus,
+                        onShareCsvToDrive = { shareCsvToDrive() },
+                        csvShareStatus = csvShareStatus,
                         onUploadSpreadsheet = { uploadSpreadsheetData() },
                         spreadsheetUploadStatus = spreadsheetUploadStatus,
                         isSpreadsheetUploading = isSpreadsheetUploading,
@@ -192,6 +199,34 @@ class MainActivity : ComponentActivity() {
     private fun deleteStoredRecord(recordType: String, uniqueKey: String) {
         localStore.deleteStoredRecord(recordType, uniqueKey)
         refreshHealthData()
+    }
+
+    private fun shareCsvToDrive() {
+        csvShareStatus = null
+        val csvFile = runCatching {
+            healthCsvShareExporter.export(healthState)
+        }.getOrElse { error ->
+            csvShareStatus = "CSV作成に失敗しました: ${error.message ?: "原因不明"}"
+            return
+        }
+        val csvUri = runCatching {
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", csvFile)
+        }.getOrElse { error ->
+            csvShareStatus = "CSV作成に失敗しました: ${error.message ?: "原因不明"}"
+            return
+        }
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = HealthCsvShareExporter.MIME_TYPE
+            putExtra(Intent.EXTRA_STREAM, csvUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching {
+            startActivity(Intent.createChooser(shareIntent, "Drive保存"))
+        }.onSuccess {
+            csvShareStatus = "CSVを共有できます。保存先にGoogle Driveを選択してください"
+        }.onFailure { error ->
+            csvShareStatus = "共有先を開けませんでした: ${error.message ?: "原因不明"}"
+        }
     }
 
     private fun uploadSpreadsheetData() {

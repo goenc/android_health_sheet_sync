@@ -39,6 +39,8 @@ internal fun SettingsScreen(
     onRefresh: () -> Unit,
     onSaveExternalWorkbook: () -> Unit,
     externalSaveStatus: String?,
+    onShareCsvToDrive: () -> Unit,
+    csvShareStatus: String?,
     targetSpreadsheetUrl: String,
     onUploadSpreadsheet: () -> Unit,
     spreadsheetUploadStatus: String?,
@@ -65,6 +67,18 @@ internal fun SettingsScreen(
     DebugSection(title = "操作") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
+                onClick = onShareCsvToDrive,
+                enabled = !state.isLoading,
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppPrimary,
+                    contentColor = Color.White,
+                ),
+                modifier = Modifier.defaultMinSize(minWidth = 128.dp, minHeight = 52.dp),
+            ) {
+                Text("Drive保存")
+            }
+            Button(
                 onClick = onUploadSpreadsheet,
                 enabled = canUploadSpreadsheet,
                 shape = CircleShape,
@@ -76,6 +90,8 @@ internal fun SettingsScreen(
             ) {
                 Text(if (isSpreadsheetUploading) "送信中" else "アップロード")
             }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
                 onClick = onRefresh,
                 enabled = !state.isLoading,
@@ -84,6 +100,13 @@ internal fun SettingsScreen(
             ) {
                 Text(if (state.isLoading) "読み込み中" else "データ更新")
             }
+        }
+        csvShareStatus?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
@@ -153,6 +176,7 @@ internal fun SettingsScreen(
     }
     DebugSection(title = "アップロード先") {
         DebugLine("対象スプレッドシート", targetSpreadsheetUrl)
+        DebugLine("Drive保存方式", "Android共有でCSV保存")
         DebugLine("方式", "Googleログインで直接書き込み")
     }
     DebugSection(title = "ヘルスコネクト") {
