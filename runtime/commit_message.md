@@ -1,8 +1,5 @@
-CSVをAndroid共有で保存する機能を追加
+CSV出力に全健康データ種別を含める
 
-・HealthDebugUiState からCSVを生成するExporterを追加
-・FileProvider と共有用 file_paths を追加
-・設定画面にDrive保存ボタンと共有方式表示を追加
-・MainActivity にCSV共有シート起動処理を追加
-・デバッグビルド成功を確認
-・デバッグアプリ更新成功を確認
+・CSV出力処理を整理し既存の体重と歩数と血糖値とA1cに加えて血圧と腹囲の手入力データも出力対象に追加
+・無効化されていない手入力データだけをCSVへ含めるように調整
+・JAVA_HOME を設定して assembleDebug を実行しデバッグビルド成功を確認
