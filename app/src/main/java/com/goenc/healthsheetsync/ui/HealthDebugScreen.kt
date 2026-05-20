@@ -1,7 +1,6 @@
 package com.goenc.healthsheetsync.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,13 +24,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -40,9 +39,6 @@ import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 @Composable
 fun HealthDebugScreen(
@@ -156,7 +152,10 @@ fun HealthDebugScreen(
                     onClick = { showSettings = true },
                     modifier = Modifier.align(Alignment.TopEnd),
                 ) {
-                    SettingsGearIcon()
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_settings_24),
+                        contentDescription = "設定",
+                    )
                 }
                 Column(
                     modifier = Modifier
@@ -262,45 +261,6 @@ private fun SummaryValue(
         color = color,
         fontSize = 13.sp,
     )
-}
-
-@Composable
-private fun SettingsGearIcon(
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier = modifier.size(24.dp)) {
-        val strokeWidth = 3.dp.toPx()
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val ringRadius = size.minDimension * 0.26f
-        val toothStartRadius = size.minDimension * 0.36f
-        val toothEndRadius = size.minDimension * 0.44f
-
-        repeat(8) { index ->
-            val angle = (PI / 4.0 * index).toFloat()
-            val start = Offset(
-                x = center.x + cos(angle) * toothStartRadius,
-                y = center.y + sin(angle) * toothStartRadius,
-            )
-            val end = Offset(
-                x = center.x + cos(angle) * toothEndRadius,
-                y = center.y + sin(angle) * toothEndRadius,
-            )
-            drawLine(
-                color = AppText,
-                start = start,
-                end = end,
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        drawCircle(
-            color = AppText,
-            radius = ringRadius,
-            center = center,
-            style = Stroke(width = strokeWidth),
-        )
-    }
 }
 
 @Composable
