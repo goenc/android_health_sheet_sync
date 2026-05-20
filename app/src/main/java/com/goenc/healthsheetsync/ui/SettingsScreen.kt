@@ -37,15 +37,8 @@ internal fun SettingsScreen(
     state: HealthDebugUiState,
     onRequestPermissions: () -> Unit,
     onRefresh: () -> Unit,
-    onSaveExternalWorkbook: () -> Unit,
-    externalSaveStatus: String?,
     onShareCsvToDrive: () -> Unit,
     csvShareStatus: String?,
-    targetSpreadsheetUrl: String,
-    onUploadSpreadsheet: () -> Unit,
-    spreadsheetUploadStatus: String?,
-    canUploadSpreadsheet: Boolean,
-    isSpreadsheetUploading: Boolean,
     onBack: () -> Unit,
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
@@ -78,18 +71,6 @@ internal fun SettingsScreen(
             ) {
                 Text("Drive保存")
             }
-            Button(
-                onClick = onUploadSpreadsheet,
-                enabled = canUploadSpreadsheet,
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AppPrimary,
-                    contentColor = Color.White,
-                ),
-                modifier = Modifier.defaultMinSize(minWidth = 148.dp, minHeight = 52.dp),
-            ) {
-                Text(if (isSpreadsheetUploading) "送信中" else "アップロード")
-            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
@@ -119,26 +100,7 @@ internal fun SettingsScreen(
             ) {
                 Text("権限をリクエスト")
             }
-            OutlinedButton(
-                onClick = onSaveExternalWorkbook,
-                shape = CircleShape,
-            ) {
-                Text("外部保存")
-            }
         }
-        spreadsheetUploadStatus?.let { status ->
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
-    externalSaveStatus?.let { status ->
-        Text(
-            text = status,
-            style = MaterialTheme.typography.bodyMedium,
-        )
     }
     DebugSection(title = "記録一覧") {
         DebugLine("体重記録の件数", state.weightRecords.size.toString())
@@ -174,10 +136,8 @@ internal fun SettingsScreen(
             }
         }
     }
-    DebugSection(title = "アップロード先") {
-        DebugLine("対象スプレッドシート", targetSpreadsheetUrl)
+    DebugSection(title = "保存先") {
         DebugLine("Drive保存方式", "Android共有でCSV保存")
-        DebugLine("方式", "Googleログインで直接書き込み")
     }
     DebugSection(title = "ヘルスコネクト") {
         DebugLine("利用可否", state.availability.displayText())
