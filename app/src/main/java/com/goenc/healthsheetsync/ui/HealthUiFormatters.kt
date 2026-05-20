@@ -104,16 +104,21 @@ internal fun ManualRecordType.formatManualValue(primaryValue: String, secondaryV
 internal fun ManualRecordType.manualInputTimeBandOptions(): List<String> {
     return when (this) {
         ManualRecordType.Steps,
+        ManualRecordType.BloodGlucose,
         ManualRecordType.Waist,
         ManualRecordType.A1c -> emptyList()
+        ManualRecordType.Weight,
         ManualRecordType.BloodPressure -> listOf("朝", "夜")
-        else -> listOf("朝", "昼", "夜")
     }
 }
 
 internal fun ManualRecordType.defaultManualTimeBand(): String {
     return when (this) {
-        ManualRecordType.BloodPressure -> "朝"
+        ManualRecordType.Weight,
+        ManualRecordType.BloodPressure -> {
+            val hour = LocalTime.now().hour
+            if (hour in 2..16) "朝" else "夜"
+        }
         else -> "朝"
     }
 }
@@ -121,11 +126,11 @@ internal fun ManualRecordType.defaultManualTimeBand(): String {
 internal fun ManualRecordType.manualInputTime(timeBand: String): LocalTime {
     return when (this) {
         ManualRecordType.Steps,
+        ManualRecordType.BloodGlucose -> LocalTime.of(7, 0)
         ManualRecordType.Waist,
         ManualRecordType.A1c -> LocalTime.NOON
         else -> when (timeBand) {
             "朝" -> LocalTime.of(7, 0)
-            "昼" -> LocalTime.of(12, 0)
             else -> LocalTime.of(20, 0)
         }
     }
