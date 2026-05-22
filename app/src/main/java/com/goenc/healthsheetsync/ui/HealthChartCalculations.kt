@@ -21,16 +21,25 @@ internal enum class WeightChartRange(
     private val startAt: (LocalDateTime) -> LocalDateTime,
     private val endAt: (LocalDateTime) -> LocalDateTime,
 ) {
-    SixMonths("半年", { latestAt -> latestAt.minusMonths(6) }, { startAt -> startAt.plusMonths(6) }),
+    SixMonths("ALL", { latestAt -> latestAt.minusMonths(6) }, { startAt -> startAt.plusMonths(6) }),
     OneMonth("1か月", { latestAt -> latestAt.minusMonths(1) }, { startAt -> startAt.plusMonths(1) }),
     TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) }, { startAt -> startAt.plusWeeks(2) }),
     OneWeek("1週間", { latestAt -> latestAt.minusWeeks(1) }, { startAt -> startAt.plusWeeks(1) });
 
     fun window(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): ChartTimeWindow? {
+        if (this == SixMonths) {
+            val firstAt = records.firstOrNull()?.measuredAt ?: return null
+            val latestAt = records.lastOrNull()?.measuredAt ?: return null
+            return ChartTimeWindow(
+                startAt = firstAt.minusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
+                endAt = latestAt.plusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
+            )
+        }
         val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return null
         val rangeStartAt = startAt(rangeEndAt)
+        val leftPaddingDays = if (this == OneWeek || this == TwoWeeks) 0L else CHART_EMPTY_EDGE_PADDING_DAYS
         return ChartTimeWindow(
-            startAt = rangeStartAt.minusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
+            startAt = rangeStartAt.minusDays(leftPaddingDays),
             endAt = rangeEndAt.plusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
         )
     }
@@ -40,6 +49,9 @@ internal enum class WeightChartRange(
     }
 
     fun minimumEndAt(records: List<DebugWeightRecord>): LocalDateTime? {
+        if (this == SixMonths) {
+            return records.lastOrNull()?.measuredAt
+        }
         val firstAt = records.firstOrNull()?.measuredAt ?: return null
         val latestAt = records.lastOrNull()?.measuredAt ?: return null
         val endForFirstRecord = endAt(firstAt)

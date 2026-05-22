@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -27,10 +28,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthDebugUiState
+import com.goenc.healthsheetsync.health.ManualHealthRecord
+import com.goenc.healthsheetsync.health.ManualRecordType
 
 @Composable
 internal fun SettingsScreen(
@@ -57,7 +61,10 @@ internal fun SettingsScreen(
             Text("メインに戻る")
         }
     }
-    DebugSection(title = "操作") {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
                 onClick = onShareCsvToDrive,
@@ -71,8 +78,6 @@ internal fun SettingsScreen(
             ) {
                 Text("Drive保存")
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
                 onClick = onRefresh,
                 enabled = !state.isLoading,
@@ -89,44 +94,80 @@ internal fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
-                onClick = {
-                    Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
-                    onRequestPermissions()
-                },
-                enabled = state.canRequestPermissions && !state.isLoading,
-                shape = CircleShape,
-            ) {
-                Text("権限をリクエスト")
-            }
-        }
+        HorizontalDivider(color = DividerColor)
     }
     DebugSection(title = "記録一覧") {
-        DebugLine("体重記録の件数", state.weightRecords.size.toString())
-        DebugLine("血糖値記録の件数", state.glucoseRecords.size.toString())
-        DebugLine("歩数記録の日数", state.stepDailyRecords.size.toString())
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            DebugLineCell("体重記録の件数", state.weightRecords.size.toString())
+            DebugLineCell("血糖値記録の件数", state.glucoseRecords.size.toString())
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            DebugLineCell("歩数記録の日数", state.stepDailyRecords.size.toString())
+            DebugLineCell("血圧記録の件数", state.manualRecords.count { it.type == ManualRecordType.BloodPressure && it.invalidatedAt == null }.toString())
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            DebugLineCell("腹囲記録の件数", state.manualRecords.count { it.type == ManualRecordType.Waist && it.invalidatedAt == null }.toString())
+            DebugLineCell("A1c記録の件数", state.a1cDailyRecords.size.toString())
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             RecordListButton(
                 label = "体重",
                 selected = selectedRecordList == RecordListType.Weight,
-                onClick = { selectedRecordList = RecordListType.Weight },
+                onClick = {
+                    selectedRecordList =
+                        if (selectedRecordList == RecordListType.Weight) null else RecordListType.Weight
+                },
             )
             RecordListButton(
                 label = "血糖値",
                 selected = selectedRecordList == RecordListType.Glucose,
-                onClick = { selectedRecordList = RecordListType.Glucose },
+                onClick = {
+                    selectedRecordList =
+                        if (selectedRecordList == RecordListType.Glucose) null else RecordListType.Glucose
+                },
             )
             RecordListButton(
                 label = "歩数",
                 selected = selectedRecordList == RecordListType.Steps,
-                onClick = { selectedRecordList = RecordListType.Steps },
+                onClick = {
+                    selectedRecordList =
+                        if (selectedRecordList == RecordListType.Steps) null else RecordListType.Steps
+                },
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            RecordListButton(
+                label = "血圧",
+                selected = selectedRecordList == RecordListType.BloodPressure,
+                onClick = {
+                    selectedRecordList =
+                        if (selectedRecordList == RecordListType.BloodPressure) null else RecordListType.BloodPressure
+                },
+            )
+            RecordListButton(
+                label = "腹囲",
+                selected = selectedRecordList == RecordListType.Waist,
+                onClick = {
+                    selectedRecordList =
+                        if (selectedRecordList == RecordListType.Waist) null else RecordListType.Waist
+                },
+            )
+            RecordListButton(
+                label = "A1c",
+                selected = selectedRecordList == RecordListType.A1c,
+                onClick = {
+                    selectedRecordList =
+                        if (selectedRecordList == RecordListType.A1c) null else RecordListType.A1c
+                },
             )
         }
         when (selectedRecordList) {
             RecordListType.Weight -> WeightDailySummary(state.weightRecords)
             RecordListType.Glucose -> GlucoseRecordSummary(state.glucoseRecords)
             RecordListType.Steps -> StepDailySummary(state.stepDailyRecords)
+            RecordListType.BloodPressure -> BloodPressureRecordSummary(state.manualRecords)
+            RecordListType.Waist -> WaistRecordSummary(state.manualRecords)
+            RecordListType.A1c -> A1cRecordSummary(state.a1cDailyRecords)
             null -> {
                 Text(
                     text = "表示する記録を選択してください",
@@ -136,23 +177,18 @@ internal fun SettingsScreen(
             }
         }
     }
-    DebugSection(title = "保存先") {
-        DebugLine("Drive保存方式", "Android共有でCSV保存")
-    }
     DebugSection(title = "ヘルスコネクト") {
         DebugLine("利用可否", state.availability.displayText())
         DebugLine("権限", state.permissions.displayText())
-    }
-    DebugSection(title = "デバッグ") {
-        state.sourceSummaries.forEach { source ->
-            DebugLine("取得元", source)
-        }
-        state.debugMessages.forEach { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+        OutlinedButton(
+            onClick = {
+                Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
+                onRequestPermissions()
+            },
+            enabled = state.canRequestPermissions && !state.isLoading,
+            shape = CircleShape,
+        ) {
+            Text("権限をリクエスト")
         }
     }
 }
@@ -183,6 +219,9 @@ private enum class RecordListType {
     Weight,
     Glucose,
     Steps,
+    BloodPressure,
+    Waist,
+    A1c,
 }
 
 @Composable
@@ -231,6 +270,13 @@ private fun DebugLine(label: String, value: String) {
             style = MaterialTheme.typography.titleMedium,
             color = AppText,
         )
+    }
+}
+
+@Composable
+private fun RowScope.DebugLineCell(label: String, value: String) {
+    Column(modifier = Modifier.weight(1f)) {
+        DebugLine(label, value)
     }
 }
 
@@ -293,4 +339,54 @@ private fun GlucoseRecordRow(record: DebugGlucoseRecord) {
         Text("取得元 ${record.sourceAppName} / ${record.sourcePackageName}")
         Spacer(Modifier.height(4.dp))
     }
+}
+
+@Composable
+private fun BloodPressureRecordSummary(records: List<ManualHealthRecord>) {
+    val validRecords = records
+        .filter { it.type == ManualRecordType.BloodPressure && it.invalidatedAt == null }
+        .sortedByDescending { it.measuredAt }
+    if (validRecords.isEmpty()) {
+        Text("血圧記録はありません", style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+    validRecords.forEach { record ->
+        Text(
+            text = "${record.measuredAt.formatDateTime()}  ${record.valueText}",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun WaistRecordSummary(records: List<ManualHealthRecord>) {
+    val validRecords = records
+        .filter { it.type == ManualRecordType.Waist && it.invalidatedAt == null }
+        .sortedByDescending { it.measuredAt }
+    if (validRecords.isEmpty()) {
+        Text("腹囲記録はありません", style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+    validRecords.forEach { record ->
+        Text(
+            text = "${record.measuredAt.formatDateTime()}  ${record.valueText}",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun A1cRecordSummary(records: List<DebugA1cDaily>) {
+    if (records.isEmpty()) {
+        Text("A1c記録はありません", style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+    records
+        .sortedByDescending { it.measuredAt }
+        .forEach { record ->
+            Text(
+                text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.a1cPercent)}%",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
 }

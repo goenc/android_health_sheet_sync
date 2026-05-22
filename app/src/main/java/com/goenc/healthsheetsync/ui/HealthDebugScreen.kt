@@ -156,7 +156,7 @@ fun HealthDebugScreen(
                         glucoseRecords = state.glucoseRecords,
                         a1cDailyRecords = state.a1cDailyRecords,
                         manualRecords = state.manualRecords,
-                        modifier = Modifier.padding(end = 52.dp),
+                        modifier = Modifier.padding(start = 8.dp, top = 6.dp, end = 44.dp),
                     )
 
                     WeightTrendChart(

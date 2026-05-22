@@ -113,7 +113,15 @@ internal fun WeightTrendChart(
         }
     }
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
-    val trendDuration = (chartEndAt ?: latestEndAt)?.let { selectedRange.durationAt(it) }
+    val trendDuration = if (selectedRange == WeightChartRange.SixMonths) {
+        chartRecords.firstOrNull()?.measuredAt?.let { firstAt ->
+            chartRecords.lastOrNull()?.measuredAt?.let { lastAt ->
+                Duration.between(firstAt, lastAt)
+            }
+        }
+    } else {
+        (chartEndAt ?: latestEndAt)?.let { selectedRange.durationAt(it) }
+    }
     val earliestEndAt = remember(sortedRecords, selectedRange) {
         selectedRange.minimumEndAt(sortedRecords)
     }
@@ -352,6 +360,7 @@ internal fun WeightTrendChart(
                 monthLabelPaint.textAlign = Paint.Align.LEFT
                 val visibleStartDate = visibleWindow.startAt.toLocalDate()
                 val visibleStartMonthText = "${visibleStartDate.monthValue}月"
+                val isDotOnlyRange = selectedRange == WeightChartRange.SixMonths
                 drawText(
                     visibleStartMonthText,
                     chartLeft,
@@ -387,7 +396,7 @@ internal fun WeightTrendChart(
                                 monthLabelPaint,
                             )
                         }
-                        if (date.shouldShowChartDateNumber() && date !in hiddenDateLabels) {
+                        if (!isDotOnlyRange && date.shouldShowChartDateNumber() && date !in hiddenDateLabels) {
                             drawText(
                                 date.dayOfMonth.toString(),
                                 x,
@@ -398,7 +407,7 @@ internal fun WeightTrendChart(
                             drawCircle(
                                 x,
                                 chartBottom + 17.dp.toPx(),
-                                1.5.dp.toPx(),
+                                if (isDotOnlyRange) 0.8.dp.toPx() else 1.dp.toPx(),
                                 labelPaint,
                             )
                         }
