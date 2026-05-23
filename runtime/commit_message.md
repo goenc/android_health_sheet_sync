@@ -1,5 +1,5 @@
-メイン画面のオーバースクロール効果を無効化
+メイン画面の縦スクロールを無効化
 
-・HealthDebugScreenでLocalOverscrollFactoryをnull提供し縦スワイプ時の伸びる効果を無効化
-・スクロール可否や画面表示ロジックは変更せず見た目効果のみ調整
+・HealthDebugScreenのルートスクロール条件を見直しメイン表示時はスクロールしないよう固定
+・手入力画面と設定一覧表示時の必要なスクロール条件は維持
 ・gradlew.bat :app:assembleDebug でデバッグビルド成功を確認

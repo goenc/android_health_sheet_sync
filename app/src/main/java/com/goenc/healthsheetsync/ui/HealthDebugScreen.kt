@@ -68,7 +68,7 @@ fun HealthDebugScreen(
     var showManualInput by remember { mutableStateOf(false) }
     var shouldEnableSettingsScroll by remember { mutableStateOf(false) }
     var preparedManualRecords by remember { mutableStateOf<Map<ManualRecordType, List<GraphDataItem>>>(emptyMap()) }
-    val shouldScrollRoot = !showSettings || shouldEnableSettingsScroll
+    val shouldScrollRoot = showManualInput || (showSettings && shouldEnableSettingsScroll)
 
     LaunchedEffect(
         state.weightRecords,
