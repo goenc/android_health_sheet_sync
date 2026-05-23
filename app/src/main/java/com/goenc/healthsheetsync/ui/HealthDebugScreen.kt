@@ -60,6 +60,7 @@ fun HealthDebugScreen(
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
+    val shouldScrollRoot = !showSettings
 
     BackHandler(enabled = showSettings || showManualInput) {
         if (showManualInput) {
@@ -81,9 +82,13 @@ fun HealthDebugScreen(
             .background(AppBackground),
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxSize().let { rootModifier ->
+                if (shouldScrollRoot) {
+                    rootModifier.verticalScroll(rememberScrollState())
+                } else {
+                    rootModifier
+                }
+            },
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             if (showManualInput) {

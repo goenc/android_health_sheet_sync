@@ -168,16 +168,10 @@ internal fun SettingsScreen(
             RecordListType.BloodPressure -> BloodPressureRecordSummary(state.manualRecords)
             RecordListType.Waist -> WaistRecordSummary(state.manualRecords)
             RecordListType.A1c -> A1cRecordSummary(state.a1cDailyRecords)
-            null -> {
-                Text(
-                    text = "表示する記録を選択してください",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AppText,
-                )
-            }
+            null -> Unit
         }
     }
-    DebugSection(title = "ヘルスコネクト") {
+    DebugSection(title = "ヘルスコネクト", showDivider = false) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -206,6 +200,7 @@ internal fun SettingsScreen(
 @Composable
 internal fun DebugSection(
     title: String,
+    showDivider: Boolean = true,
     content: @Composable ColumnScopeMarker.() -> Unit,
 ) {
     Column(
@@ -219,7 +214,9 @@ internal fun DebugSection(
             color = AppText,
         )
         ColumnScopeMarker.content()
-        HorizontalDivider(color = DividerColor)
+        if (showDivider) {
+            HorizontalDivider(color = DividerColor)
+        }
     }
 }
 
