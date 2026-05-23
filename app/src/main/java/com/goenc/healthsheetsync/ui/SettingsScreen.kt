@@ -177,14 +177,15 @@ internal fun SettingsScreen(
         }
     }
     DebugSection(title = "ヘルスコネクト", showDivider = false) {
+        DebugLine("利用可否", state.availability.displayText())
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             DebugLine(
-                label = "利用可否",
-                value = state.availability.displayText(),
+                label = "権限",
+                value = state.permissions.displayText(),
                 modifier = Modifier.weight(1f),
             )
             OutlinedButton(
@@ -198,7 +199,6 @@ internal fun SettingsScreen(
                 Text("権限をリクエスト")
             }
         }
-        DebugLine("権限", state.permissions.displayText())
     }
 }
 
