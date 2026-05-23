@@ -178,18 +178,28 @@ internal fun SettingsScreen(
         }
     }
     DebugSection(title = "ヘルスコネクト") {
-        DebugLine("利用可否", state.availability.displayText())
-        DebugLine("権限", state.permissions.displayText())
-        OutlinedButton(
-            onClick = {
-                Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
-                onRequestPermissions()
-            },
-            enabled = state.canRequestPermissions && !state.isLoading,
-            shape = CircleShape,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("権限をリクエスト")
+            DebugLine(
+                label = "利用可否",
+                value = state.availability.displayText(),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(
+                onClick = {
+                    Log.d(TAG, "Permission request button clicked; invoking onRequestPermissions.")
+                    onRequestPermissions()
+                },
+                enabled = state.canRequestPermissions && !state.isLoading,
+                shape = CircleShape,
+            ) {
+                Text("権限をリクエスト")
+            }
         }
+        DebugLine("権限", state.permissions.displayText())
     }
 }
 
@@ -259,7 +269,16 @@ private fun RecordListButton(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DebugLine(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    DebugLine(label = label, value = value, modifier = Modifier)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DebugLine(label: String, value: String, modifier: Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
