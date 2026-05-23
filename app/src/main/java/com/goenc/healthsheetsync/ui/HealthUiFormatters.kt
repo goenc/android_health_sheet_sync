@@ -16,6 +16,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.PriorityQueue
 import kotlin.math.roundToInt
 
 internal fun HealthConnectAvailability.displayText(): String {
@@ -146,8 +147,7 @@ internal fun ManualRecordType.toGraphDataItems(
 ): List<GraphDataItem> {
     val activeItems = when (this) {
         ManualRecordType.Weight -> weightRecords
-            .sortedByDescending { it.measuredAt }
-            .limitedTo(limit)
+            .recentFirst(limit, compareByDescending<DebugWeightRecord> { it.measuredAt })
             .map { record ->
                 GraphDataItem(
                     recordType = "weight",
@@ -158,8 +158,7 @@ internal fun ManualRecordType.toGraphDataItems(
                 )
             }
         ManualRecordType.Steps -> dailySteps
-            .sortedByDescending { it.targetDate }
-            .limitedTo(limit)
+            .recentFirst(limit, compareByDescending<DebugStepDaily> { it.targetDate })
             .map { steps ->
                 GraphDataItem(
                     recordType = "steps",
@@ -170,8 +169,7 @@ internal fun ManualRecordType.toGraphDataItems(
                 )
             }
         ManualRecordType.BloodGlucose -> glucoseRecords
-            .sortedByDescending { it.measuredAt }
-            .limitedTo(limit)
+            .recentFirst(limit, compareByDescending<DebugGlucoseRecord> { it.measuredAt })
             .map { record ->
                 GraphDataItem(
                     recordType = "glucose",
@@ -185,8 +183,7 @@ internal fun ManualRecordType.toGraphDataItems(
         ManualRecordType.Waist,
         ManualRecordType.A1c -> manualRecords
             .filter { it.type == this }
-            .sortedByDescending { it.measuredAt }
-            .limitedTo(limit)
+            .recentFirst(limit, compareByDescending<ManualHealthRecord> { it.measuredAt })
             .map { record ->
                 GraphDataItem(
                     recordType = MANUAL_RECORD_TYPE,
@@ -199,8 +196,7 @@ internal fun ManualRecordType.toGraphDataItems(
     }
     val invalidatedItems = invalidatedRecords
         .filter { it.manualType == this }
-        .sortedByDescending { it.measuredAt }
-        .limitedTo(limit)
+        .recentFirst(limit, compareByDescending<InvalidatedGraphRecord> { it.measuredAt })
         .map { record ->
             GraphDataItem(
                 recordType = record.recordType,
@@ -211,12 +207,47 @@ internal fun ManualRecordType.toGraphDataItems(
             )
         }
     return (activeItems + invalidatedItems)
-        .sortedByDescending { it.measuredAt }
-        .limitedTo(limit)
+        .recentFirst(limit, compareByDescending<GraphDataItem> { it.measuredAt })
 }
 
-private fun <T> List<T>.limitedTo(limit: Int?): List<T> =
-    if (limit == null) this else take(limit)
+private fun <T> List<T>.recentFirst(limit: Int?, newestFirst: Comparator<T>): List<T> {
+    if (limit == null) return sortedWith(newestFirst)
+    if (limit <= 0) return emptyList()
+
+    val displayComparator = Comparator<IndexedValue<T>> { left, right ->
+        newestFirst.compare(left.value, right.value)
+            .takeIf { it != 0 }
+            ?: left.index.compareTo(right.index)
+    }
+    if (size <= limit) {
+        return mapIndexed { index, value -> IndexedValue(index, value) }
+            .sortedWith(displayComparator)
+            .map { it.value }
+    }
+
+    val worstFirst = Comparator<IndexedValue<T>> { left, right ->
+        -displayComparator.compare(left, right)
+    }
+    val recentItems = PriorityQueue(worstFirst)
+    forEachIndexed { index, value ->
+        val item = IndexedValue(index, value)
+        if (recentItems.size < limit) {
+            recentItems.add(item)
+        } else if (displayComparator.compare(item, recentItems.peek()) < 0) {
+            recentItems.poll()
+            recentItems.add(item)
+        }
+    }
+    return recentItems
+        .toList()
+        .sortedWith(displayComparator)
+        .map { it.value }
+}
+
+private data class IndexedValue<T>(
+    val index: Int,
+    val value: T,
+)
 
 internal data class GraphDataItem(
     val recordType: String,
