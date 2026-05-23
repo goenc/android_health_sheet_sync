@@ -75,6 +75,7 @@ internal fun ManualDataScreen(
     val labels = selectedType.inputLabels()
     val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords) {
         selectedType.toGraphDataItems(weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords)
+            .take(MANUAL_LIST_RECENT_LIMIT)
     }
 
     Row(
@@ -268,6 +269,8 @@ internal fun ManualDataScreen(
         }
     }
 }
+
+private const val MANUAL_LIST_RECENT_LIMIT = 30
 
 @Composable
 private fun ManualRecordRow(
