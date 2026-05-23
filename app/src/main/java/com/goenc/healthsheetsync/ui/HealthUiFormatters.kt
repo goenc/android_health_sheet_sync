@@ -210,6 +210,26 @@ internal fun ManualRecordType.toGraphDataItems(
         .recentFirst(limit, compareByDescending<GraphDataItem> { it.measuredAt })
 }
 
+internal fun buildManualDataItemsByType(
+    weightRecords: List<DebugWeightRecord>,
+    dailySteps: List<DebugStepDaily>,
+    glucoseRecords: List<DebugGlucoseRecord>,
+    manualRecords: List<ManualHealthRecord>,
+    invalidatedRecords: List<InvalidatedGraphRecord>,
+    limit: Int = MANUAL_LIST_RECENT_LIMIT,
+): Map<ManualRecordType, List<GraphDataItem>> {
+    return ManualRecordType.entries.associateWith { type ->
+        type.toGraphDataItems(
+            weightRecords = weightRecords,
+            dailySteps = dailySteps,
+            glucoseRecords = glucoseRecords,
+            manualRecords = manualRecords,
+            invalidatedRecords = invalidatedRecords,
+            limit = limit,
+        )
+    }
+}
+
 private fun <T> List<T>.recentFirst(limit: Int?, newestFirst: Comparator<T>): List<T> {
     if (limit == null) return sortedWith(newestFirst)
     if (limit <= 0) return emptyList()
@@ -360,6 +380,7 @@ internal const val GLUCOSE_WEIGHT_COUNT = 3
 internal const val ASSUMED_VALUE_SUFFIX = "（想定）"
 internal const val UNKNOWN_HEALTH_VALUE = "不明"
 internal const val MANUAL_RECORD_TYPE = "manual"
+internal const val MANUAL_LIST_RECENT_LIMIT = 10
 internal const val DELETE_PRESS_MILLIS = 5_000L
 internal const val A1C_CHART_MIN = 4.0
 internal const val A1C_CHART_MAX = 14.0

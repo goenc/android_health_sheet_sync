@@ -56,6 +56,7 @@ internal fun ManualDataScreen(
     glucoseRecords: List<DebugGlucoseRecord>,
     manualRecords: List<ManualHealthRecord>,
     invalidatedRecords: List<InvalidatedGraphRecord>,
+    preparedRecordsByType: Map<ManualRecordType, List<GraphDataItem>>,
     onSave: (ManualHealthRecordDraft) -> Unit,
     onInvalidateManual: (String) -> Unit,
     onRestoreManual: (String) -> Unit,
@@ -73,8 +74,8 @@ internal fun ManualDataScreen(
     var secondaryValue by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
     val labels = selectedType.inputLabels()
-    val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords) {
-        selectedType.toGraphDataItems(
+    val fallbackRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords) {
+        preparedRecordsByType[selectedType] ?: selectedType.toGraphDataItems(
             weightRecords = weightRecords,
             dailySteps = dailySteps,
             glucoseRecords = glucoseRecords,
@@ -83,6 +84,7 @@ internal fun ManualDataScreen(
             limit = MANUAL_LIST_RECENT_LIMIT,
         )
     }
+    val selectedRecords = preparedRecordsByType[selectedType] ?: fallbackRecords
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -275,8 +277,6 @@ internal fun ManualDataScreen(
         }
     }
 }
-
-private const val MANUAL_LIST_RECENT_LIMIT = 30
 
 @Composable
 private fun ManualRecordRow(
