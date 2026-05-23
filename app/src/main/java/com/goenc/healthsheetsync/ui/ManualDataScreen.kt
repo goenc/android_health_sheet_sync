@@ -74,8 +74,14 @@ internal fun ManualDataScreen(
     var inputError by remember { mutableStateOf<String?>(null) }
     val labels = selectedType.inputLabels()
     val selectedRecords = remember(selectedType, weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords) {
-        selectedType.toGraphDataItems(weightRecords, dailySteps, glucoseRecords, manualRecords, invalidatedRecords)
-            .take(MANUAL_LIST_RECENT_LIMIT)
+        selectedType.toGraphDataItems(
+            weightRecords = weightRecords,
+            dailySteps = dailySteps,
+            glucoseRecords = glucoseRecords,
+            manualRecords = manualRecords,
+            invalidatedRecords = invalidatedRecords,
+            limit = MANUAL_LIST_RECENT_LIMIT,
+        )
     }
 
     Row(

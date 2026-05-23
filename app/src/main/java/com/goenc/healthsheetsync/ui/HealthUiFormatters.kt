@@ -142,10 +142,12 @@ internal fun ManualRecordType.toGraphDataItems(
     glucoseRecords: List<DebugGlucoseRecord>,
     manualRecords: List<ManualHealthRecord>,
     invalidatedRecords: List<InvalidatedGraphRecord>,
+    limit: Int? = null,
 ): List<GraphDataItem> {
     val activeItems = when (this) {
         ManualRecordType.Weight -> weightRecords
             .sortedByDescending { it.measuredAt }
+            .limitedTo(limit)
             .map { record ->
                 GraphDataItem(
                     recordType = "weight",
@@ -157,6 +159,7 @@ internal fun ManualRecordType.toGraphDataItems(
             }
         ManualRecordType.Steps -> dailySteps
             .sortedByDescending { it.targetDate }
+            .limitedTo(limit)
             .map { steps ->
                 GraphDataItem(
                     recordType = "steps",
@@ -168,6 +171,7 @@ internal fun ManualRecordType.toGraphDataItems(
             }
         ManualRecordType.BloodGlucose -> glucoseRecords
             .sortedByDescending { it.measuredAt }
+            .limitedTo(limit)
             .map { record ->
                 GraphDataItem(
                     recordType = "glucose",
@@ -182,6 +186,7 @@ internal fun ManualRecordType.toGraphDataItems(
         ManualRecordType.A1c -> manualRecords
             .filter { it.type == this }
             .sortedByDescending { it.measuredAt }
+            .limitedTo(limit)
             .map { record ->
                 GraphDataItem(
                     recordType = MANUAL_RECORD_TYPE,
@@ -194,6 +199,8 @@ internal fun ManualRecordType.toGraphDataItems(
     }
     val invalidatedItems = invalidatedRecords
         .filter { it.manualType == this }
+        .sortedByDescending { it.measuredAt }
+        .limitedTo(limit)
         .map { record ->
             GraphDataItem(
                 recordType = record.recordType,
@@ -203,8 +210,13 @@ internal fun ManualRecordType.toGraphDataItems(
                 invalidatedAt = record.invalidatedAt,
             )
         }
-    return (activeItems + invalidatedItems).sortedByDescending { it.measuredAt }
+    return (activeItems + invalidatedItems)
+        .sortedByDescending { it.measuredAt }
+        .limitedTo(limit)
 }
+
+private fun <T> List<T>.limitedTo(limit: Int?): List<T> =
+    if (limit == null) this else take(limit)
 
 internal data class GraphDataItem(
     val recordType: String,
