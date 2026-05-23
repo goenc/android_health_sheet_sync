@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,9 +44,13 @@ internal fun SettingsScreen(
     onRefresh: () -> Unit,
     onShareCsvToDrive: () -> Unit,
     csvShareStatus: String?,
+    onRecordListVisibilityChanged: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
+    LaunchedEffect(selectedRecordList) {
+        onRecordListVisibilityChanged(selectedRecordList != null)
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),

@@ -60,7 +60,8 @@ fun HealthDebugScreen(
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
-    val shouldScrollRoot = !showSettings
+    var shouldEnableSettingsScroll by remember { mutableStateOf(false) }
+    val shouldScrollRoot = !showSettings || shouldEnableSettingsScroll
 
     BackHandler(enabled = showSettings || showManualInput) {
         if (showManualInput) {
@@ -129,6 +130,9 @@ fun HealthDebugScreen(
                         onRefresh = onRefresh,
                         onShareCsvToDrive = onShareCsvToDrive,
                         csvShareStatus = csvShareStatus,
+                        onRecordListVisibilityChanged = { isVisible ->
+                            shouldEnableSettingsScroll = isVisible
+                        },
                         onBack = { showSettings = false },
                     )
                 }
