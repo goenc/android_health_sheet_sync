@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -120,116 +122,118 @@ fun HealthDebugScreen(
             .fillMaxSize()
             .background(AppBackground),
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().let { rootModifier ->
-                if (shouldScrollRoot) {
-                    rootModifier.verticalScroll(rememberScrollState())
-                } else {
-                    rootModifier
-                }
-            },
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            if (showManualInput) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    ManualDataScreen(
-                        weightRecords = state.weightRecords,
-                        dailySteps = state.stepDailyRecords,
-                        glucoseRecords = state.glucoseRecords,
-                        manualRecords = state.manualRecords,
-                        invalidatedRecords = state.invalidatedGraphRecords,
-                        preparedRecordsByType = preparedManualRecords,
-                        onSave = onSaveManualRecord,
-                        onInvalidateManual = onInvalidateManualRecord,
-                        onRestoreManual = onRestoreManualRecord,
-                        onDeleteManual = onDeleteManualRecord,
-                        onInvalidate = onInvalidateStoredRecord,
-                        onRestore = onRestoreStoredRecord,
-                        onDelete = onDeleteStoredRecord,
-                        onBack = {
-                            showManualInput = false
-                            onRefresh()
-                        },
-                    )
-                }
-                return@Column
-            }
-
-            if (showSettings) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    SettingsScreen(
-                        state = state,
-                        onRequestPermissions = onRequestPermissions,
-                        onRefresh = onRefresh,
-                        onShareCsvToDrive = onShareCsvToDrive,
-                        csvShareStatus = csvShareStatus,
-                        onRecordListVisibilityChanged = { isVisible ->
-                            shouldEnableSettingsScroll = isVisible
-                        },
-                        onBack = { showSettings = false },
-                    )
-                }
-                return@Column
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 22.dp, top = 4.dp, end = 22.dp, bottom = 8.dp),
+        CompositionLocalProvider(LocalOverscrollFactory provides null) {
+            Column(
+                modifier = Modifier.fillMaxSize().let { rootModifier ->
+                    if (shouldScrollRoot) {
+                        rootModifier.verticalScroll(rememberScrollState())
+                    } else {
+                        rootModifier
+                    }
+                },
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                IconButton(
-                    onClick = { showSettings = true },
-                    modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_settings_24),
-                        contentDescription = "設定",
-                    )
+                if (showManualInput) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        ManualDataScreen(
+                            weightRecords = state.weightRecords,
+                            dailySteps = state.stepDailyRecords,
+                            glucoseRecords = state.glucoseRecords,
+                            manualRecords = state.manualRecords,
+                            invalidatedRecords = state.invalidatedGraphRecords,
+                            preparedRecordsByType = preparedManualRecords,
+                            onSave = onSaveManualRecord,
+                            onInvalidateManual = onInvalidateManualRecord,
+                            onRestoreManual = onRestoreManualRecord,
+                            onDeleteManual = onDeleteManualRecord,
+                            onInvalidate = onInvalidateStoredRecord,
+                            onRestore = onRestoreStoredRecord,
+                            onDelete = onDeleteStoredRecord,
+                            onBack = {
+                                showManualInput = false
+                                onRefresh()
+                            },
+                        )
+                    }
+                    return@Column
                 }
-                Column(
+
+                if (showSettings) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        SettingsScreen(
+                            state = state,
+                            onRequestPermissions = onRequestPermissions,
+                            onRefresh = onRefresh,
+                            onShareCsvToDrive = onShareCsvToDrive,
+                            csvShareStatus = csvShareStatus,
+                            onRecordListVisibilityChanged = { isVisible ->
+                                shouldEnableSettingsScroll = isVisible
+                            },
+                            onBack = { showSettings = false },
+                        )
+                    }
+                    return@Column
+                }
+
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 2.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .padding(start = 22.dp, top = 4.dp, end = 22.dp, bottom = 8.dp),
                 ) {
-                    MainSummaryValues(
-                        records = state.weightRecords,
-                        dailySteps = state.stepDailyRecords,
-                        glucoseRecords = state.glucoseRecords,
-                        a1cDailyRecords = state.a1cDailyRecords,
-                        manualRecords = state.manualRecords,
-                        modifier = Modifier.padding(start = 8.dp, top = 6.dp, end = 44.dp),
-                    )
+                    IconButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_settings_24),
+                            contentDescription = "設定",
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        MainSummaryValues(
+                            records = state.weightRecords,
+                            dailySteps = state.stepDailyRecords,
+                            glucoseRecords = state.glucoseRecords,
+                            a1cDailyRecords = state.a1cDailyRecords,
+                            manualRecords = state.manualRecords,
+                            modifier = Modifier.padding(start = 8.dp, top = 6.dp, end = 44.dp),
+                        )
 
-                    WeightTrendChart(
-                        state.weightRecords,
-                        state.stepDailyRecords,
-                        state.glucoseRecords,
-                        state.a1cDailyRecords,
-                        state.manualRecords,
-                        onAddManualRecord = { showManualInput = true },
-                    )
+                        WeightTrendChart(
+                            state.weightRecords,
+                            state.stepDailyRecords,
+                            state.glucoseRecords,
+                            state.a1cDailyRecords,
+                            state.manualRecords,
+                            onAddManualRecord = { showManualInput = true },
+                        )
 
-                    sharedText?.takeIf { it.isNotBlank() }?.let { text ->
-                        DebugSection(title = "共有テキスト") {
-                            sharedTextImportStatus?.let { status ->
+                        sharedText?.takeIf { it.isNotBlank() }?.let { text ->
+                            DebugSection(title = "共有テキスト") {
+                                sharedTextImportStatus?.let { status ->
+                                    Text(
+                                        text = status,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = AppMutedBlue,
+                                    )
+                                }
                                 Text(
-                                    text = status,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = AppMutedBlue,
+                                    text = text,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppText,
                                 )
                             }
-                            Text(
-                                text = text,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = AppText,
-                            )
                         }
                     }
                 }
