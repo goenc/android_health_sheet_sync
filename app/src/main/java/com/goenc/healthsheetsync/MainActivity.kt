@@ -15,13 +15,18 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.data.StoredHealthData
 import com.goenc.healthsheetsync.export.HealthCsvShareExporter
+import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectDebugReader
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.share.SharedTextImporter
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -102,7 +107,7 @@ class MainActivity : ComponentActivity() {
         val result = sharedTextImporter.importFrom(intent) ?: return
         sharedText = result.text
         sharedTextImportStatus = result.status
-        if (result.imported) refreshHealthData()
+        if (result.imported) refreshLocalHealthData()
     }
 
     private fun refreshHealthData() {
@@ -112,39 +117,43 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun refreshLocalHealthData() {
+        healthState = healthState.withStoredData(localStore.load())
+    }
+
     private fun saveManualRecord(draft: ManualHealthRecordDraft) {
         localStore.saveManualRecord(draft)
-        refreshHealthData()
+        refreshLocalHealthData()
     }
 
     private fun invalidateManualRecord(id: String) {
         localStore.invalidateManualRecord(id)
-        refreshHealthData()
+        refreshLocalHealthData()
     }
 
     private fun restoreManualRecord(id: String) {
         localStore.restoreManualRecord(id)
-        refreshHealthData()
+        refreshLocalHealthData()
     }
 
     private fun deleteManualRecord(id: String) {
         localStore.deleteManualRecord(id)
-        refreshHealthData()
+        refreshLocalHealthData()
     }
 
     private fun invalidateStoredRecord(recordType: String, uniqueKey: String) {
         localStore.invalidateStoredRecord(recordType, uniqueKey)
-        refreshHealthData()
+        refreshLocalHealthData()
     }
 
     private fun restoreStoredRecord(recordType: String, uniqueKey: String) {
         localStore.restoreStoredRecord(recordType, uniqueKey)
-        refreshHealthData()
+        refreshLocalHealthData()
     }
 
     private fun deleteStoredRecord(recordType: String, uniqueKey: String) {
         localStore.deleteStoredRecord(recordType, uniqueKey)
-        refreshHealthData()
+        refreshLocalHealthData()
     }
 
     private fun shareCsvToDrive() {
@@ -177,4 +186,33 @@ class MainActivity : ComponentActivity() {
 
 }
 
+private fun HealthDebugUiState.withStoredData(storedData: StoredHealthData): HealthDebugUiState {
+    val yesterday = LocalDate.now(ZoneId.systemDefault()).minusDays(1)
+    return copy(
+        isLoading = false,
+        weightRecords = storedData.weightRecords,
+        glucoseRecords = storedData.glucoseRecords,
+        stepDailyRecords = storedData.stepDailyRecords,
+        a1cDailyRecords = storedData.a1cDailyRecords,
+        manualRecords = storedData.manualRecords,
+        invalidatedGraphRecords = storedData.invalidatedGraphRecords,
+        yesterdaySteps = storedData.stepDailyRecords.firstOrNull { it.targetDate == yesterday },
+        sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
+    )
+}
+
+private fun buildSourceSummaries(
+    weightRecords: List<DebugWeightRecord>,
+    glucoseRecords: List<DebugGlucoseRecord>,
+): List<String> {
+    val sources = weightRecords.map { it.sourceAppName to it.sourcePackageName } +
+        glucoseRecords.map { it.sourceAppName to it.sourcePackageName }
+    return sources.distinct().map { (name, packageName) ->
+        "$name / $packageName"
+    }.ifEmpty {
+        listOf("$UNKNOWN / $UNKNOWN")
+    }
+}
+
 private const val TAG = "HealthSheetSync"
+private const val UNKNOWN = "不明"
