@@ -25,7 +25,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,8 +42,6 @@ import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun HealthDebugScreen(
@@ -67,41 +64,7 @@ fun HealthDebugScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
     var shouldEnableSettingsScroll by remember { mutableStateOf(false) }
-    var preparedManualRecords by remember { mutableStateOf<Map<ManualRecordType, List<GraphDataItem>>>(emptyMap()) }
     val shouldScrollRoot = showManualInput || (showSettings && shouldEnableSettingsScroll)
-
-    LaunchedEffect(
-        state.weightRecords,
-        state.stepDailyRecords,
-        state.glucoseRecords,
-        state.manualRecords,
-        state.invalidatedGraphRecords,
-    ) {
-        preparedManualRecords = emptyMap()
-    }
-
-    LaunchedEffect(
-        showManualInput,
-        showSettings,
-        state.weightRecords,
-        state.stepDailyRecords,
-        state.glucoseRecords,
-        state.manualRecords,
-        state.invalidatedGraphRecords,
-    ) {
-        if (!showManualInput && !showSettings) {
-            withFrameNanos { }
-            preparedManualRecords = withContext(Dispatchers.Default) {
-                buildManualDataItemsByType(
-                    weightRecords = state.weightRecords,
-                    dailySteps = state.stepDailyRecords,
-                    glucoseRecords = state.glucoseRecords,
-                    manualRecords = state.manualRecords,
-                    invalidatedRecords = state.invalidatedGraphRecords,
-                )
-            }
-        }
-    }
 
     BackHandler(enabled = showSettings || showManualInput) {
         if (showManualInput) {
@@ -144,7 +107,6 @@ fun HealthDebugScreen(
                             glucoseRecords = state.glucoseRecords,
                             manualRecords = state.manualRecords,
                             invalidatedRecords = state.invalidatedGraphRecords,
-                            preparedRecordsByType = preparedManualRecords,
                             onSave = onSaveManualRecord,
                             onInvalidateManual = onInvalidateManualRecord,
                             onRestoreManual = onRestoreManualRecord,
