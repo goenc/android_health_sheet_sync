@@ -84,7 +84,7 @@ internal fun ManualDataScreen(
             limit = MANUAL_LIST_RECENT_LIMIT,
         )
     }
-    val selectedRecords = preparedRecordsByType[selectedType] ?: fallbackRecords
+    val selectedRecords = fallbackRecords
 
     Row(
         modifier = Modifier.fillMaxWidth(),
