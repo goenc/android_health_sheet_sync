@@ -66,9 +66,11 @@ internal fun ManualDataScreen(
     onBack: () -> Unit,
 ) {
     var selectedType by remember { mutableStateOf(ManualRecordType.Weight) }
+    var lastSavedTypeLabel by remember { mutableStateOf(ManualRecordType.Weight.label) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedTimeBand by remember { mutableStateOf("朝") }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showSaveCompleteDialog by remember { mutableStateOf(false) }
     var primaryValue by remember { mutableStateOf("") }
     var secondaryValue by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
@@ -206,6 +208,7 @@ internal fun ManualDataScreen(
                 if (valueText == null) {
                     inputError = "値を確認してください"
                 } else {
+                    lastSavedTypeLabel = selectedType.label
                     onSave(
                         ManualHealthRecordDraft(
                             type = selectedType,
@@ -216,6 +219,7 @@ internal fun ManualDataScreen(
                     primaryValue = ""
                     secondaryValue = ""
                     inputError = null
+                    showSaveCompleteDialog = true
                 }
             },
             shape = CircleShape,
@@ -223,6 +227,34 @@ internal fun ManualDataScreen(
         ) {
             Text("保存")
         }
+    }
+
+    if (showSaveCompleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveCompleteDialog = false },
+            title = {
+                Text(
+                    text = "${lastSavedTypeLabel}の登録完了",
+                    color = AppPrimary,
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                Text(
+                    text = "${lastSavedTypeLabel}のデータを登録しました。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppText,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showSaveCompleteDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
+                ) {
+                    Text("OK")
+                }
+            },
+        )
     }
 
     if (showDatePicker) {
