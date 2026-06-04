@@ -31,6 +31,16 @@ class HealthGraphWidgetProvider : AppWidgetProvider() {
         super.onEnabled(context)
         HealthGraphWidgetUpdater.requestUpdate(context.applicationContext)
     }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        HealthGraphWidgetUpdater.requestUpdate(context.applicationContext)
+    }
 }
 
 internal object HealthGraphWidgetUpdater {
@@ -82,13 +92,17 @@ internal object HealthGraphWidgetUpdater {
     }
 
     private fun resolveWidgetWidthPx(context: Context, options: Bundle): Int {
-        val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, DEFAULT_WIDGET_WIDTH_DP)
-        return (minWidthDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+        val widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
+            .takeIf { it > 0 }
+            ?: options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, DEFAULT_WIDGET_WIDTH_DP)
+        return (widthDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
     }
 
     private fun resolveWidgetHeightPx(context: Context, options: Bundle): Int {
-        val minHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_WIDGET_HEIGHT_DP)
-        return (minHeightDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+        val heightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+            .takeIf { it > 0 }
+            ?: options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_WIDGET_HEIGHT_DP)
+        return (heightDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
     }
 
     private const val DEFAULT_WIDGET_WIDTH_DP = 320
