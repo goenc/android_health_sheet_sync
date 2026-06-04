@@ -25,6 +25,7 @@ import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.share.SharedTextImporter
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
+import com.goenc.healthsheetsync.widget.HealthGraphWidgetUpdater
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.launch
@@ -119,6 +120,7 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshLocalHealthData() {
         healthState = healthState.withStoredData(localStore.load())
+        HealthGraphWidgetUpdater.requestUpdate(applicationContext)
     }
 
     private fun saveManualRecord(draft: ManualHealthRecordDraft) {

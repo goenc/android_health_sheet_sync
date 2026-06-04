@@ -12,6 +12,7 @@ import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.widget.HealthGraphWidgetUpdater
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -91,6 +92,7 @@ class HealthConnectDebugReader(private val context: Context) {
         }
         if (weightRecords.isNotEmpty() || glucoseRecords.isNotEmpty() || stepDailyRecords.isNotEmpty()) {
             localStore.save(weightRecords, glucoseRecords, stepDailyRecords)
+            HealthGraphWidgetUpdater.requestUpdate(context.applicationContext)
         }
         val storedData = localStore.load()
         debugMessages += "保存済み件数: 体重${storedData.weightRecords.size}件、血糖${storedData.glucoseRecords.size}件、歩数${storedData.stepDailyRecords.size}日"

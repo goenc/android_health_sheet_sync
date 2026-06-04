@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">ヘルスシート同期</string>
     <string name="permissions_rationale_title">Health Connect 権限について</string>
+    <string name="widget_health_graph_title">体重グラフ</string>
+    <string name="widget_health_graph_description">最新の体重グラフを表示します</string>
+    <string name="widget_health_graph_empty">データがありません</string>
+    <string name="widget_health_graph_empty_subtitle">アプリで同期すると表示されます</string>
 </resources>
