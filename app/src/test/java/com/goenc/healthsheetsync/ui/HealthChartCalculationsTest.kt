@@ -61,21 +61,28 @@ class HealthChartCalculationsTest {
         )
 
         assertNotNull(chart)
-        assertEquals(listOf(90.0, 100.0, 110.0), chart!!.lineRecords.map { it.bloodGlucoseMgDl })
+        val lineRecords = chart!!.lineRecords
+        assertEquals(4, lineRecords.size)
+        assertEquals(window.startAt, lineRecords.first().measuredAt)
+        assertEquals(100.0, lineRecords[1].bloodGlucoseMgDl, 0.0)
+        assertEquals(110.0, lineRecords[2].bloodGlucoseMgDl, 0.0)
+        assertEquals(window.endAt, lineRecords.last().measuredAt)
         assertEquals(80.0, chart.minValueMgDl, 0.0)
         assertEquals(120.0, chart.maxValueMgDl, 0.0)
     }
 
     @Test
-    fun fastingGlucoseChart_does_not_prepend_extrapolated_leading_point() {
+    fun fastingGlucoseChart_adds_both_boundary_points_when_window_has_no_visible_records() {
         val window = ChartTimeWindow(
             startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
             endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
         )
         val chart = calculateFastingGlucoseChart(
             glucoseRecords = listOf(
-                glucoseRecord(2026, 1, 2, 100.0),
-                glucoseRecord(2026, 1, 4, 110.0),
+                glucoseRecord(2025, 12, 30, 90.0),
+                glucoseRecord(2025, 12, 31, 100.0),
+                glucoseRecord(2026, 1, 6, 110.0),
+                glucoseRecord(2026, 1, 7, 120.0),
             ),
             window = window,
         )
@@ -83,7 +90,8 @@ class HealthChartCalculationsTest {
         assertNotNull(chart)
         val lineRecords = chart!!.lineRecords
         assertEquals(2, lineRecords.size)
-        assertEquals(false, lineRecords.first().measuredAt.isBefore(window.startAt))
+        assertEquals(window.startAt, lineRecords.first().measuredAt)
+        assertEquals(window.endAt, lineRecords.last().measuredAt)
     }
 
     private fun glucoseRecord(

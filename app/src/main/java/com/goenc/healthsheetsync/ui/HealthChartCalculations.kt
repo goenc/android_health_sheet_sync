@@ -320,9 +320,23 @@ internal fun calculateFastingGlucoseChart(
             !pointAt.isBefore(window.startAt) && !pointAt.isAfter(window.endAt)
         }
         .sortedBy { it.measuredAt }
-    val previousRecord = fastingRecords.lastOrNull { it.measuredAt.isBefore(window.startAt) }
-    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
-        .distinctBy { it.measuredAt to it.bloodGlucoseMgDl }
+    val startBoundaryRecord = estimateGlucoseRecordAt(fastingRecords, window.startAt)
+    val endBoundaryRecord = estimateGlucoseRecordAt(fastingRecords, window.endAt)
+    val lineRecords = buildList {
+        if (visibleRecords.isEmpty()) {
+            addAll(listOfNotNull(startBoundaryRecord, endBoundaryRecord))
+        } else {
+            val firstVisible = visibleRecords.first()
+            if (firstVisible.measuredAt.isAfter(window.startAt)) {
+                startBoundaryRecord?.let(::add)
+            }
+            addAll(visibleRecords)
+            val lastVisible = visibleRecords.last()
+            if (lastVisible.measuredAt.isBefore(window.endAt)) {
+                endBoundaryRecord?.let(::add)
+            }
+        }
+    }.distinctBy { it.measuredAt to it.bloodGlucoseMgDl }
     val minValueMgDl = kotlin.math.floor(fastingRecords.minOf { it.bloodGlucoseMgDl } - GLUCOSE_CHART_VALUE_PADDING_MG_DL)
     val maxValueMgDl = kotlin.math.ceil(fastingRecords.maxOf { it.bloodGlucoseMgDl } + GLUCOSE_CHART_VALUE_PADDING_MG_DL)
 
@@ -338,6 +352,48 @@ internal fun calculateFastingGlucoseChart(
 
 internal fun FastingGlucoseChart.displayRecord(): DebugGlucoseRecord? {
     return visibleRecords.lastOrNull() ?: latestRecord
+}
+
+private fun estimateGlucoseRecordAt(
+    sortedRecords: List<DebugGlucoseRecord>,
+    targetAt: LocalDateTime,
+): DebugGlucoseRecord? {
+    if (sortedRecords.isEmpty()) return null
+    val previous = sortedRecords.lastOrNull { !it.measuredAt.isAfter(targetAt) }
+    val next = sortedRecords.firstOrNull { !it.measuredAt.isBefore(targetAt) }
+
+    val estimatedValue = when {
+        previous != null && next != null && previous.measuredAt != next.measuredAt ->
+            interpolateGlucoseValue(previous, next, targetAt)
+        previous != null && next == null && sortedRecords.size >= 2 ->
+            interpolateGlucoseValue(sortedRecords[sortedRecords.lastIndex - 1], sortedRecords.last(), targetAt)
+        previous == null && next != null && sortedRecords.size >= 2 ->
+            interpolateGlucoseValue(sortedRecords[0], sortedRecords[1], targetAt)
+        else -> previous?.bloodGlucoseMgDl ?: next?.bloodGlucoseMgDl
+    } ?: return null
+
+    return DebugGlucoseRecord(
+        measuredAt = targetAt,
+        targetDate = targetAt.toLocalDate(),
+        timeBand = "朝",
+        bloodGlucoseMgDl = estimatedValue,
+        mealRelation = "空腹時",
+        healthConnectId = "",
+        sourceAppName = "",
+        sourcePackageName = "",
+    )
+}
+
+private fun interpolateGlucoseValue(
+    start: DebugGlucoseRecord,
+    end: DebugGlucoseRecord,
+    targetAt: LocalDateTime,
+): Double? {
+    val totalMillis = Duration.between(start.measuredAt, end.measuredAt).toMillis()
+    if (totalMillis == 0L) return start.bloodGlucoseMgDl
+    val elapsedMillis = Duration.between(start.measuredAt, targetAt).toMillis()
+    val ratio = elapsedMillis.toDouble() / totalMillis.toDouble()
+    return start.bloodGlucoseMgDl + (end.bloodGlucoseMgDl - start.bloodGlucoseMgDl) * ratio
 }
 
 internal fun calculateWeightedAverageFastingGlucose(
