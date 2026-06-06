@@ -321,20 +321,15 @@ internal fun calculateFastingGlucoseChart(
         }
         .sortedBy { it.measuredAt }
     val startBoundaryRecord = estimateGlucoseRecordAt(fastingRecords, window.startAt)
-    val endBoundaryRecord = estimateGlucoseRecordAt(fastingRecords, window.endAt)
     val lineRecords = buildList {
         if (visibleRecords.isEmpty()) {
-            addAll(listOfNotNull(startBoundaryRecord, endBoundaryRecord))
+            startBoundaryRecord?.let(::add)
         } else {
             val firstVisible = visibleRecords.first()
             if (firstVisible.measuredAt.isAfter(window.startAt)) {
                 startBoundaryRecord?.let(::add)
             }
             addAll(visibleRecords)
-            val lastVisible = visibleRecords.last()
-            if (lastVisible.measuredAt.isBefore(window.endAt)) {
-                endBoundaryRecord?.let(::add)
-            }
         }
     }.distinctBy { it.measuredAt to it.bloodGlucoseMgDl }
     val minValueMgDl = kotlin.math.floor(fastingRecords.minOf { it.bloodGlucoseMgDl } - GLUCOSE_CHART_VALUE_PADDING_MG_DL)

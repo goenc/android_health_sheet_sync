@@ -62,17 +62,16 @@ class HealthChartCalculationsTest {
 
         assertNotNull(chart)
         val lineRecords = chart!!.lineRecords
-        assertEquals(4, lineRecords.size)
+        assertEquals(3, lineRecords.size)
         assertEquals(window.startAt, lineRecords.first().measuredAt)
         assertEquals(100.0, lineRecords[1].bloodGlucoseMgDl, 0.0)
         assertEquals(110.0, lineRecords[2].bloodGlucoseMgDl, 0.0)
-        assertEquals(window.endAt, lineRecords.last().measuredAt)
         assertEquals(80.0, chart.minValueMgDl, 0.0)
         assertEquals(120.0, chart.maxValueMgDl, 0.0)
     }
 
     @Test
-    fun fastingGlucoseChart_adds_both_boundary_points_when_window_has_no_visible_records() {
+    fun fastingGlucoseChart_adds_only_left_boundary_point_when_window_has_no_visible_records() {
         val window = ChartTimeWindow(
             startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
             endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
@@ -89,9 +88,8 @@ class HealthChartCalculationsTest {
 
         assertNotNull(chart)
         val lineRecords = chart!!.lineRecords
-        assertEquals(2, lineRecords.size)
+        assertEquals(1, lineRecords.size)
         assertEquals(window.startAt, lineRecords.first().measuredAt)
-        assertEquals(window.endAt, lineRecords.last().measuredAt)
     }
 
     private fun glucoseRecord(
