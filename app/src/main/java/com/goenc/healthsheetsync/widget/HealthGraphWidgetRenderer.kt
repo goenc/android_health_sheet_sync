@@ -398,16 +398,6 @@ internal object HealthGraphWidgetRenderer {
                     glucoseLinePaint,
                 )
             }
-            if (chart.visibleRecords.isEmpty()) {
-                chart.lineRecords.firstOrNull()?.let { record ->
-                    canvas.drawCircle(
-                        xAtTime(record.measuredAt),
-                        glucoseYAt(record.bloodGlucoseMgDl),
-                        4f * density,
-                        glucoseLinePaint,
-                    )
-                }
-            }
             chart.displayRecord()?.let { latest ->
                 val latestY = glucoseYAt(latest.bloodGlucoseMgDl)
                 canvas.drawLine(xAtTime(latest.measuredAt), latestY, chartRight, latestY, glucoseLinePaint)
