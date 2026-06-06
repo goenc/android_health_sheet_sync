@@ -101,6 +101,7 @@ internal data class FastingGlucoseChart(
     val visibleRecords: List<DebugGlucoseRecord>,
     val lineRecords: List<DebugGlucoseRecord>,
     val latestRecord: DebugGlucoseRecord?,
+    val nearestRightRecord: DebugGlucoseRecord?,
     val minValueMgDl: Double,
     val maxValueMgDl: Double,
 )
@@ -321,9 +322,11 @@ internal fun calculateFastingGlucoseChart(
         }
         .sortedBy { it.measuredAt }
     val startBoundaryRecord = estimateGlucoseRecordAt(fastingRecords, window.startAt)
+    val nearestRightRecord = fastingRecords.firstOrNull { it.measuredAt.isAfter(window.endAt) }
     val lineRecords = buildList {
         if (visibleRecords.isEmpty()) {
             startBoundaryRecord?.let(::add)
+            nearestRightRecord?.let(::add)
         } else {
             val firstVisible = visibleRecords.first()
             if (firstVisible.measuredAt.isAfter(window.startAt)) {
@@ -340,13 +343,14 @@ internal fun calculateFastingGlucoseChart(
         visibleRecords = visibleRecords,
         lineRecords = lineRecords,
         latestRecord = fastingRecords.lastOrNull(),
+        nearestRightRecord = nearestRightRecord,
         minValueMgDl = minValueMgDl,
         maxValueMgDl = maxValueMgDl,
     )
 }
 
 internal fun FastingGlucoseChart.displayRecord(): DebugGlucoseRecord? {
-    return visibleRecords.lastOrNull() ?: latestRecord
+    return visibleRecords.lastOrNull() ?: nearestRightRecord ?: latestRecord
 }
 
 private fun estimateGlucoseRecordAt(

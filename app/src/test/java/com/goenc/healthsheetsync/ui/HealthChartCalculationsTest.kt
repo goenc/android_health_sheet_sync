@@ -71,7 +71,7 @@ class HealthChartCalculationsTest {
     }
 
     @Test
-    fun fastingGlucoseChart_adds_only_left_boundary_point_when_window_has_no_visible_records() {
+    fun fastingGlucoseChart_adds_left_boundary_point_and_nearest_right_record_when_window_has_no_visible_records() {
         val window = ChartTimeWindow(
             startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
             endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
@@ -88,8 +88,10 @@ class HealthChartCalculationsTest {
 
         assertNotNull(chart)
         val lineRecords = chart!!.lineRecords
-        assertEquals(1, lineRecords.size)
+        assertEquals(2, lineRecords.size)
         assertEquals(window.startAt, lineRecords.first().measuredAt)
+        assertEquals(LocalDateTime.of(2026, 1, 6, 7, 0), lineRecords.last().measuredAt)
+        assertEquals(110.0, chart.displayRecord()!!.bloodGlucoseMgDl, 0.0)
     }
 
     private fun glucoseRecord(
