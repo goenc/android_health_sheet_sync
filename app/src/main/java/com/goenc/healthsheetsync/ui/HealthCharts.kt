@@ -506,6 +506,15 @@ internal fun WeightTrendChart(
                         center = Offset(xAtTime(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl)),
                     )
                 }
+                if (chart.visibleRecords.isEmpty()) {
+                    chart.lineRecords.firstOrNull()?.let { record ->
+                        drawCircle(
+                            color = ChartGlucose,
+                            radius = 4.dp.toPx(),
+                            center = Offset(xAtTime(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl)),
+                        )
+                    }
+                }
                 chart.displayRecord()?.let { latest ->
                     val latestY = glucoseYAt(latest.bloodGlucoseMgDl)
                     drawLine(
