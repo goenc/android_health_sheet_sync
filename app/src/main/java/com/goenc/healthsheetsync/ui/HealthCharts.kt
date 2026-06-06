@@ -488,18 +488,6 @@ internal fun WeightTrendChart(
                         center = Offset(xAtTime(record.targetDate.atStartOfDay().plusHours(12)), glucoseY),
                     )
                 }
-                val glucoseLabelPaint = Paint(glucosePaint).apply {
-                    textAlign = Paint.Align.CENTER
-                }
-                chart.visibleRecords.forEach { record ->
-                    val x = xAtTime(record.targetDate.atStartOfDay().plusHours(12))
-                    drawContext.canvas.nativeCanvas.drawText(
-                        formatDecimal(record.bloodGlucoseMgDl),
-                        x,
-                        glucoseY - 8.dp.toPx(),
-                        glucoseLabelPaint,
-                    )
-                }
                 chart.displayRecord()?.let { latest ->
                     drawContext.canvas.nativeCanvas.apply {
                         glucosePaint.textAlign = Paint.Align.RIGHT
