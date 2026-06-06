@@ -228,6 +228,9 @@ internal object HealthGraphWidgetRenderer {
             style = Paint.Style.STROKE
             strokeWidth = 1.5f * density
         }
+        val glucoseLabelPaint = textPaint(scaledDensity, ChartGlucose.toArgb(), 11f).apply {
+            textAlign = Paint.Align.CENTER
+        }
         val a1cLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = ChartA1c.toArgb()
             style = Paint.Style.STROKE
@@ -386,6 +389,14 @@ internal object HealthGraphWidgetRenderer {
                     glucoseY,
                     4f * density,
                     glucoseLinePaint,
+                )
+            }
+            chart.visibleRecords.forEach { record ->
+                canvas.drawText(
+                    formatDecimal(record.bloodGlucoseMgDl),
+                    xAtTime(record.targetDate.atStartOfDay().plusHours(12)),
+                    glucoseY - (8f * density),
+                    glucoseLabelPaint,
                 )
             }
             chart.displayRecord()?.let { latest ->
