@@ -45,7 +45,7 @@ class HealthChartCalculationsTest {
         )
 
         assertNotNull(chart)
-        assertEquals(120.0, chart!!.displayRecord()!!.bloodGlucoseMgDl, 0.0)
+        assertEquals(window.endAt, chart!!.displayRecord()!!.measuredAt)
     }
 
     @Test
@@ -93,8 +93,92 @@ class HealthChartCalculationsTest {
         val lineRecords = chart!!.lineRecords
         assertEquals(2, lineRecords.size)
         assertEquals(window.startAt, lineRecords.first().measuredAt)
-        assertEquals(LocalDateTime.of(2026, 1, 6, 7, 0), lineRecords.last().measuredAt)
-        assertEquals(110.0, chart.displayRecord()!!.bloodGlucoseMgDl, 0.0)
+        assertEquals(window.endAt, lineRecords.last().measuredAt)
+        assertEquals(window.endAt, chart.displayRecord()!!.measuredAt)
+    }
+
+    @Test
+    fun fastingGlucoseChart_adds_both_boundaries_when_single_visible_record_has_data_on_both_sides() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateFastingGlucoseChart(
+            glucoseRecords = listOf(
+                glucoseRecord(2025, 12, 31, 100.0),
+                glucoseRecord(2026, 1, 3, 110.0),
+                glucoseRecord(2026, 1, 7, 120.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(3, lineRecords.size)
+        assertEquals(window.startAt, lineRecords[0].measuredAt)
+        assertEquals(LocalDateTime.of(2026, 1, 3, 7, 0), lineRecords[1].measuredAt)
+        assertEquals(window.endAt, lineRecords[2].measuredAt)
+    }
+
+    @Test
+    fun fastingGlucoseChart_adds_right_boundary_when_single_visible_record_has_only_right_side_data() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateFastingGlucoseChart(
+            glucoseRecords = listOf(
+                glucoseRecord(2026, 1, 3, 110.0),
+                glucoseRecord(2026, 1, 7, 120.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(2, lineRecords.size)
+        assertEquals(LocalDateTime.of(2026, 1, 3, 7, 0), lineRecords[0].measuredAt)
+        assertEquals(window.endAt, lineRecords[1].measuredAt)
+    }
+
+    @Test
+    fun fastingGlucoseChart_adds_left_boundary_when_single_visible_record_has_only_left_side_data() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateFastingGlucoseChart(
+            glucoseRecords = listOf(
+                glucoseRecord(2025, 12, 31, 100.0),
+                glucoseRecord(2026, 1, 3, 110.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(2, lineRecords.size)
+        assertEquals(window.startAt, lineRecords[0].measuredAt)
+        assertEquals(LocalDateTime.of(2026, 1, 3, 7, 0), lineRecords[1].measuredAt)
+    }
+
+    @Test
+    fun fastingGlucoseChart_does_not_draw_slanted_line_when_only_right_side_data_exists() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateFastingGlucoseChart(
+            glucoseRecords = listOf(
+                glucoseRecord(2026, 1, 6, 110.0),
+                glucoseRecord(2026, 1, 7, 120.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        assertEquals(0, chart!!.lineRecords.size)
+        assertEquals(window.endAt, chart.displayRecord()!!.measuredAt)
     }
 
     @Test
@@ -117,8 +201,31 @@ class HealthChartCalculationsTest {
         val lineRecords = chart!!.lineRecords
         assertEquals(2, lineRecords.size)
         assertEquals(window.startAt, lineRecords.first().measuredAt)
-        assertEquals(LocalDateTime.of(2026, 1, 6, 7, 0), lineRecords.last().measuredAt)
-        assertEquals(6.2, chart.displayRecord()!!.value, 0.0)
+        assertEquals(window.endAt, lineRecords.last().measuredAt)
+        assertEquals(window.endAt, chart.displayRecord()!!.measuredAt)
+    }
+
+    @Test
+    fun a1cChart_adds_both_boundaries_when_single_visible_record_has_data_on_both_sides() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateA1cChart(
+            a1cDailyRecords = listOf(
+                a1cRecord(2025, 12, 31, 6.0),
+                a1cRecord(2026, 1, 3, 6.2),
+                a1cRecord(2026, 1, 7, 6.4),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(3, lineRecords.size)
+        assertEquals(window.startAt, lineRecords[0].measuredAt)
+        assertEquals(LocalDateTime.of(2026, 1, 3, 7, 0), lineRecords[1].measuredAt)
+        assertEquals(window.endAt, lineRecords[2].measuredAt)
     }
 
     @Test
@@ -141,8 +248,31 @@ class HealthChartCalculationsTest {
         val lineRecords = chart!!.lineRecords
         assertEquals(2, lineRecords.size)
         assertEquals(window.startAt, lineRecords.first().measuredAt)
-        assertEquals(LocalDateTime.of(2026, 1, 6, 7, 0), lineRecords.last().measuredAt)
-        assertEquals(83.0, chart.displayRecord()!!.value, 0.0)
+        assertEquals(window.endAt, lineRecords.last().measuredAt)
+        assertEquals(window.endAt, chart.displayRecord()!!.measuredAt)
+    }
+
+    @Test
+    fun waistChart_adds_both_boundaries_when_single_visible_record_has_data_on_both_sides() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateWaistChart(
+            manualRecords = listOf(
+                waistRecord(2025, 12, 31, 83.5),
+                waistRecord(2026, 1, 3, 83.0),
+                waistRecord(2026, 1, 7, 82.5),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(3, lineRecords.size)
+        assertEquals(window.startAt, lineRecords[0].measuredAt)
+        assertEquals(LocalDateTime.of(2026, 1, 3, 7, 0), lineRecords[1].measuredAt)
+        assertEquals(window.endAt, lineRecords[2].measuredAt)
     }
 
     private fun glucoseRecord(

@@ -100,7 +100,10 @@ internal data class FastingGlucoseChart(
     val weightedAverageMgDl: Double,
     val visibleRecords: List<DebugGlucoseRecord>,
     val lineRecords: List<DebugGlucoseRecord>,
+    val leftBoundaryRecord: DebugGlucoseRecord?,
+    val rightBoundaryRecord: DebugGlucoseRecord?,
     val latestRecord: DebugGlucoseRecord?,
+    val nearestLeftRecord: DebugGlucoseRecord?,
     val nearestRightRecord: DebugGlucoseRecord?,
     val minValueMgDl: Double,
     val maxValueMgDl: Double,
@@ -109,7 +112,10 @@ internal data class FastingGlucoseChart(
 internal data class A1cChart(
     val visibleRecords: List<A1cChartRecord>,
     val lineRecords: List<A1cChartRecord>,
+    val leftBoundaryRecord: A1cChartRecord?,
+    val rightBoundaryRecord: A1cChartRecord?,
     val latestRecord: A1cChartRecord?,
+    val nearestLeftRecord: A1cChartRecord?,
     val nearestRightRecord: A1cChartRecord?,
 )
 
@@ -121,7 +127,10 @@ internal data class A1cChartRecord(
 internal data class WaistChart(
     val visibleRecords: List<WaistChartRecord>,
     val lineRecords: List<WaistChartRecord>,
+    val leftBoundaryRecord: WaistChartRecord?,
+    val rightBoundaryRecord: WaistChartRecord?,
     val latestRecord: WaistChartRecord?,
+    val nearestLeftRecord: WaistChartRecord?,
     val nearestRightRecord: WaistChartRecord?,
 )
 
@@ -323,20 +332,19 @@ internal fun calculateFastingGlucoseChart(
             !pointAt.isBefore(window.startAt) && !pointAt.isAfter(window.endAt)
         }
         .sortedBy { it.measuredAt }
-    val startBoundaryRecord = estimateGlucoseRecordAt(fastingRecords, window.startAt)
+    val nearestLeftRecord = fastingRecords.lastOrNull { it.measuredAt.isBefore(window.startAt) }
     val nearestRightRecord = fastingRecords.firstOrNull { it.measuredAt.isAfter(window.endAt) }
-    val lineRecords = buildList {
-        if (visibleRecords.isEmpty()) {
-            startBoundaryRecord?.let(::add)
-            nearestRightRecord?.let(::add)
-        } else {
-            val firstVisible = visibleRecords.first()
-            if (firstVisible.measuredAt.isAfter(window.startAt)) {
-                startBoundaryRecord?.let(::add)
-            }
-            addAll(visibleRecords)
-        }
-    }.distinctBy { it.measuredAt to it.bloodGlucoseMgDl }
+    val leftBoundaryRecord = nearestLeftRecord?.let { estimateGlucoseRecordAt(fastingRecords, window.startAt) }
+    val rightBoundaryRecord = nearestRightRecord?.let { estimateGlucoseRecordAt(fastingRecords, window.endAt) }
+    val lineRecords = buildGraphLineRecords(
+        visibleRecords = visibleRecords,
+        leftBoundaryRecord = leftBoundaryRecord,
+        rightBoundaryRecord = rightBoundaryRecord,
+        nearestLeftRecord = nearestLeftRecord,
+        nearestRightRecord = nearestRightRecord,
+        measuredAt = { it.measuredAt },
+        valueKey = { it.bloodGlucoseMgDl },
+    )
     val minValueMgDl = kotlin.math.floor(fastingRecords.minOf { it.bloodGlucoseMgDl } - GLUCOSE_CHART_VALUE_PADDING_MG_DL)
     val maxValueMgDl = kotlin.math.ceil(fastingRecords.maxOf { it.bloodGlucoseMgDl } + GLUCOSE_CHART_VALUE_PADDING_MG_DL)
 
@@ -344,7 +352,10 @@ internal fun calculateFastingGlucoseChart(
         weightedAverageMgDl = weightedAverage,
         visibleRecords = visibleRecords,
         lineRecords = lineRecords,
+        leftBoundaryRecord = leftBoundaryRecord,
+        rightBoundaryRecord = rightBoundaryRecord,
         latestRecord = fastingRecords.lastOrNull(),
+        nearestLeftRecord = nearestLeftRecord,
         nearestRightRecord = nearestRightRecord,
         minValueMgDl = minValueMgDl,
         maxValueMgDl = maxValueMgDl,
@@ -352,15 +363,51 @@ internal fun calculateFastingGlucoseChart(
 }
 
 internal fun FastingGlucoseChart.displayRecord(): DebugGlucoseRecord? {
-    return visibleRecords.lastOrNull() ?: nearestRightRecord ?: latestRecord
+    return visibleRecords.lastOrNull() ?: rightBoundaryRecord ?: nearestRightRecord ?: latestRecord
 }
 
 internal fun A1cChart.displayRecord(): A1cChartRecord? {
-    return visibleRecords.lastOrNull() ?: nearestRightRecord ?: latestRecord
+    return visibleRecords.lastOrNull() ?: rightBoundaryRecord ?: nearestRightRecord ?: latestRecord
 }
 
 internal fun WaistChart.displayRecord(): WaistChartRecord? {
-    return visibleRecords.lastOrNull() ?: nearestRightRecord ?: latestRecord
+    return visibleRecords.lastOrNull() ?: rightBoundaryRecord ?: nearestRightRecord ?: latestRecord
+}
+
+private fun <T, V> buildGraphLineRecords(
+    visibleRecords: List<T>,
+    leftBoundaryRecord: T?,
+    rightBoundaryRecord: T?,
+    nearestLeftRecord: T?,
+    nearestRightRecord: T?,
+    measuredAt: (T) -> LocalDateTime,
+    valueKey: (T) -> V,
+): List<T> {
+    val hasLeftSide = nearestLeftRecord != null
+    val hasRightSide = nearestRightRecord != null
+    val records = when (visibleRecords.size) {
+        0 -> when {
+            hasLeftSide && hasRightSide -> listOfNotNull(leftBoundaryRecord, rightBoundaryRecord)
+            else -> emptyList()
+        }
+        1 -> {
+            val visibleRecord = visibleRecords.first()
+            when {
+                hasLeftSide && hasRightSide -> listOfNotNull(leftBoundaryRecord, visibleRecord, rightBoundaryRecord)
+                hasLeftSide -> listOfNotNull(leftBoundaryRecord, visibleRecord)
+                hasRightSide -> listOfNotNull(visibleRecord, rightBoundaryRecord)
+                else -> listOf(visibleRecord)
+            }
+        }
+        else -> buildList {
+            val firstVisible = visibleRecords.first()
+            if (hasLeftSide && measuredAt(firstVisible).isAfter(measuredAt(leftBoundaryRecord!!))) {
+                add(leftBoundaryRecord)
+            }
+            addAll(visibleRecords)
+        }
+    }
+    return records.distinctBy { measuredAt(it) to valueKey(it) }
 }
 
 private fun estimateGlucoseRecordAt(
@@ -586,26 +633,27 @@ internal fun calculateA1cChart(
     val visibleRecords = records.filter { record ->
         !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
     }
-    val startBoundaryRecord = estimateA1cBoundaryRecordAt(records, window.startAt)
+    val nearestLeftRecord = records.lastOrNull { it.measuredAt.isBefore(window.startAt) }
     val nearestRightRecord = records.firstOrNull { it.measuredAt.isAfter(window.endAt) }
-    val lineRecords = buildList {
-        if (visibleRecords.isEmpty()) {
-            startBoundaryRecord?.let(::add)
-            nearestRightRecord?.let(::add)
-        } else {
-            val firstVisible = visibleRecords.first()
-            if (firstVisible.measuredAt.isAfter(window.startAt)) {
-                startBoundaryRecord?.let(::add)
-            }
-            addAll(visibleRecords)
-        }
-    }
-        .distinctBy { it.measuredAt to it.value }
+    val leftBoundaryRecord = nearestLeftRecord?.let { estimateA1cBoundaryRecordAt(records, window.startAt) }
+    val rightBoundaryRecord = nearestRightRecord?.let { estimateA1cBoundaryRecordAt(records, window.endAt) }
+    val lineRecords = buildGraphLineRecords(
+        visibleRecords = visibleRecords,
+        leftBoundaryRecord = leftBoundaryRecord,
+        rightBoundaryRecord = rightBoundaryRecord,
+        nearestLeftRecord = nearestLeftRecord,
+        nearestRightRecord = nearestRightRecord,
+        measuredAt = { it.measuredAt },
+        valueKey = { it.value },
+    )
     val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
     return A1cChart(
         visibleRecords = visibleRecords,
         lineRecords = lineRecords,
+        leftBoundaryRecord = leftBoundaryRecord,
+        rightBoundaryRecord = rightBoundaryRecord,
         latestRecord = latestRecord,
+        nearestLeftRecord = nearestLeftRecord,
         nearestRightRecord = nearestRightRecord,
     )
 }
@@ -626,26 +674,27 @@ internal fun calculateWaistChart(
     val visibleRecords = records.filter { record ->
         !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
     }
-    val startBoundaryRecord = estimateWaistBoundaryRecordAt(records, window.startAt)
+    val nearestLeftRecord = records.lastOrNull { it.measuredAt.isBefore(window.startAt) }
     val nearestRightRecord = records.firstOrNull { it.measuredAt.isAfter(window.endAt) }
-    val lineRecords = buildList {
-        if (visibleRecords.isEmpty()) {
-            startBoundaryRecord?.let(::add)
-            nearestRightRecord?.let(::add)
-        } else {
-            val firstVisible = visibleRecords.first()
-            if (firstVisible.measuredAt.isAfter(window.startAt)) {
-                startBoundaryRecord?.let(::add)
-            }
-            addAll(visibleRecords)
-        }
-    }
-        .distinctBy { it.measuredAt to it.value }
+    val leftBoundaryRecord = nearestLeftRecord?.let { estimateWaistBoundaryRecordAt(records, window.startAt) }
+    val rightBoundaryRecord = nearestRightRecord?.let { estimateWaistBoundaryRecordAt(records, window.endAt) }
+    val lineRecords = buildGraphLineRecords(
+        visibleRecords = visibleRecords,
+        leftBoundaryRecord = leftBoundaryRecord,
+        rightBoundaryRecord = rightBoundaryRecord,
+        nearestLeftRecord = nearestLeftRecord,
+        nearestRightRecord = nearestRightRecord,
+        measuredAt = { it.measuredAt },
+        valueKey = { it.value },
+    )
     val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
     return WaistChart(
         visibleRecords = visibleRecords,
         lineRecords = lineRecords,
+        leftBoundaryRecord = leftBoundaryRecord,
+        rightBoundaryRecord = rightBoundaryRecord,
         latestRecord = latestRecord,
+        nearestLeftRecord = nearestLeftRecord,
         nearestRightRecord = nearestRightRecord,
     )
 }
