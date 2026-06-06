@@ -553,7 +553,7 @@ internal fun WeightTrendChart(
                         )
                     }
                 }
-                chart.latestRecord?.let { latest ->
+                chart.displayRecord()?.let { latest ->
                     val latestX = xAtTime(latest.measuredAt)
                     val latestY = a1cYAt(latest.value)
                     drawLine(
@@ -599,7 +599,7 @@ internal fun WeightTrendChart(
                         center = Offset(xAtTime(record.measuredAt), waistYAt(record.value)),
                     )
                 }
-                chart.latestRecord?.let { latest ->
+                chart.displayRecord()?.let { latest ->
                     val latestX = xAtTime(latest.measuredAt)
                     val latestY = waistYAt(latest.value)
                     drawLine(

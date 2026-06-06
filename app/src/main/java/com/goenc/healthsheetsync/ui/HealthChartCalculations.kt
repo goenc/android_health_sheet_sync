@@ -110,6 +110,7 @@ internal data class A1cChart(
     val visibleRecords: List<A1cChartRecord>,
     val lineRecords: List<A1cChartRecord>,
     val latestRecord: A1cChartRecord?,
+    val nearestRightRecord: A1cChartRecord?,
 )
 
 internal data class A1cChartRecord(
@@ -121,6 +122,7 @@ internal data class WaistChart(
     val visibleRecords: List<WaistChartRecord>,
     val lineRecords: List<WaistChartRecord>,
     val latestRecord: WaistChartRecord?,
+    val nearestRightRecord: WaistChartRecord?,
 )
 
 internal data class WaistChartRecord(
@@ -353,6 +355,14 @@ internal fun FastingGlucoseChart.displayRecord(): DebugGlucoseRecord? {
     return visibleRecords.lastOrNull() ?: nearestRightRecord ?: latestRecord
 }
 
+internal fun A1cChart.displayRecord(): A1cChartRecord? {
+    return visibleRecords.lastOrNull() ?: nearestRightRecord ?: latestRecord
+}
+
+internal fun WaistChart.displayRecord(): WaistChartRecord? {
+    return visibleRecords.lastOrNull() ?: nearestRightRecord ?: latestRecord
+}
+
 private fun estimateGlucoseRecordAt(
     sortedRecords: List<DebugGlucoseRecord>,
     targetAt: LocalDateTime,
@@ -393,6 +403,79 @@ private fun interpolateGlucoseValue(
     val elapsedMillis = Duration.between(start.measuredAt, targetAt).toMillis()
     val ratio = elapsedMillis.toDouble() / totalMillis.toDouble()
     return start.bloodGlucoseMgDl + (end.bloodGlucoseMgDl - start.bloodGlucoseMgDl) * ratio
+}
+
+private fun estimateA1cBoundaryRecordAt(
+    sortedRecords: List<A1cChartRecord>,
+    targetAt: LocalDateTime,
+): A1cChartRecord? {
+    val estimatedValue = estimateBoundaryValueAt(
+        sortedRecords = sortedRecords,
+        targetAt = targetAt,
+        measuredAt = { it.measuredAt },
+        value = { it.value },
+    ) ?: return null
+    return A1cChartRecord(
+        measuredAt = targetAt,
+        value = estimatedValue,
+    )
+}
+
+private fun estimateWaistBoundaryRecordAt(
+    sortedRecords: List<WaistChartRecord>,
+    targetAt: LocalDateTime,
+): WaistChartRecord? {
+    val estimatedValue = estimateBoundaryValueAt(
+        sortedRecords = sortedRecords,
+        targetAt = targetAt,
+        measuredAt = { it.measuredAt },
+        value = { it.value },
+    ) ?: return null
+    return WaistChartRecord(
+        measuredAt = targetAt,
+        value = estimatedValue,
+    )
+}
+
+private fun <T> estimateBoundaryValueAt(
+    sortedRecords: List<T>,
+    targetAt: LocalDateTime,
+    measuredAt: (T) -> LocalDateTime,
+    value: (T) -> Double,
+): Double? {
+    if (sortedRecords.isEmpty()) return null
+    val previous = sortedRecords.lastOrNull { !measuredAt(it).isAfter(targetAt) }
+    val next = sortedRecords.firstOrNull { !measuredAt(it).isBefore(targetAt) }
+
+    return when {
+        previous != null && next != null && measuredAt(previous) != measuredAt(next) ->
+            interpolateValue(measuredAt(previous), value(previous), measuredAt(next), value(next), targetAt)
+        previous != null && next == null && sortedRecords.size >= 2 -> {
+            val start = sortedRecords[sortedRecords.lastIndex - 1]
+            val end = sortedRecords.last()
+            interpolateValue(measuredAt(start), value(start), measuredAt(end), value(end), targetAt)
+        }
+        previous == null && next != null && sortedRecords.size >= 2 -> {
+            val start = sortedRecords[0]
+            val end = sortedRecords[1]
+            interpolateValue(measuredAt(start), value(start), measuredAt(end), value(end), targetAt)
+        }
+        else -> previous?.let(value) ?: next?.let(value)
+    }
+}
+
+private fun interpolateValue(
+    startAt: LocalDateTime,
+    startValue: Double,
+    endAt: LocalDateTime,
+    endValue: Double,
+    targetAt: LocalDateTime,
+): Double {
+    val totalMillis = Duration.between(startAt, endAt).toMillis()
+    if (totalMillis == 0L) return startValue
+    val elapsedMillis = Duration.between(startAt, targetAt).toMillis()
+    val ratio = elapsedMillis.toDouble() / totalMillis.toDouble()
+    return startValue + (endValue - startValue) * ratio
 }
 
 internal fun calculateWeightedAverageFastingGlucose(
@@ -503,14 +586,27 @@ internal fun calculateA1cChart(
     val visibleRecords = records.filter { record ->
         !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
     }
-    val previousRecord = records.lastOrNull { it.measuredAt.isBefore(window.startAt) }
-    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
+    val startBoundaryRecord = estimateA1cBoundaryRecordAt(records, window.startAt)
+    val nearestRightRecord = records.firstOrNull { it.measuredAt.isAfter(window.endAt) }
+    val lineRecords = buildList {
+        if (visibleRecords.isEmpty()) {
+            startBoundaryRecord?.let(::add)
+            nearestRightRecord?.let(::add)
+        } else {
+            val firstVisible = visibleRecords.first()
+            if (firstVisible.measuredAt.isAfter(window.startAt)) {
+                startBoundaryRecord?.let(::add)
+            }
+            addAll(visibleRecords)
+        }
+    }
         .distinctBy { it.measuredAt to it.value }
     val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
     return A1cChart(
         visibleRecords = visibleRecords,
         lineRecords = lineRecords,
         latestRecord = latestRecord,
+        nearestRightRecord = nearestRightRecord,
     )
 }
 
@@ -530,14 +626,27 @@ internal fun calculateWaistChart(
     val visibleRecords = records.filter { record ->
         !record.measuredAt.isBefore(window.startAt) && !record.measuredAt.isAfter(window.endAt)
     }
-    val previousRecord = records.lastOrNull { it.measuredAt.isBefore(window.startAt) }
-    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
+    val startBoundaryRecord = estimateWaistBoundaryRecordAt(records, window.startAt)
+    val nearestRightRecord = records.firstOrNull { it.measuredAt.isAfter(window.endAt) }
+    val lineRecords = buildList {
+        if (visibleRecords.isEmpty()) {
+            startBoundaryRecord?.let(::add)
+            nearestRightRecord?.let(::add)
+        } else {
+            val firstVisible = visibleRecords.first()
+            if (firstVisible.measuredAt.isAfter(window.startAt)) {
+                startBoundaryRecord?.let(::add)
+            }
+            addAll(visibleRecords)
+        }
+    }
         .distinctBy { it.measuredAt to it.value }
     val latestRecord = records.lastOrNull { !it.measuredAt.isAfter(window.endAt) }
     return WaistChart(
         visibleRecords = visibleRecords,
         lineRecords = lineRecords,
         latestRecord = latestRecord,
+        nearestRightRecord = nearestRightRecord,
     )
 }
 

@@ -415,7 +415,7 @@ internal object HealthGraphWidgetRenderer {
             chart.visibleRecords.forEach { record ->
                 canvas.drawCircle(xAtTime(record.measuredAt), a1cYAt(record.value), 4f * density, a1cLinePaint)
             }
-            chart.latestRecord?.let { latest ->
+            chart.displayRecord()?.let { latest ->
                 val latestY = a1cYAt(latest.value)
                 canvas.drawLine(xAtTime(latest.measuredAt), latestY, chartRight, latestY, a1cLinePaint)
                 canvas.drawText(
@@ -432,7 +432,7 @@ internal object HealthGraphWidgetRenderer {
             chart.visibleRecords.forEach { record ->
                 canvas.drawCircle(xAtTime(record.measuredAt), waistYAt(record.value), 4f * density, waistLinePaint)
             }
-            chart.latestRecord?.let { latest ->
+            chart.displayRecord()?.let { latest ->
                 val latestY = waistYAt(latest.value)
                 canvas.drawLine(xAtTime(latest.measuredAt), latestY, chartRight, latestY, waistLinePaint)
                 canvas.drawText(
