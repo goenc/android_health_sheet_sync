@@ -330,14 +330,6 @@ internal fun WeightTrendChart(
                     pathEffect = dashedGrid,
                 )
             }
-            val stepReferenceY = stepYAt(STEP_REFERENCE_STEPS)
-            drawLine(
-                color = ChartStepText.copy(alpha = 0.28f),
-                start = Offset(chartLeft, stepReferenceY),
-                end = Offset(chartRight, stepReferenceY),
-                strokeWidth = 1.dp.toPx(),
-                pathEffect = dashedGrid,
-            )
             chartPoints.zipWithNext().forEachIndexed { index, pair ->
                 val (previous, current) = pair
                 if (previous.targetDate.dayOfWeek == DayOfWeek.SUNDAY &&
@@ -463,6 +455,14 @@ internal fun WeightTrendChart(
                     size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
                 )
             }
+            val stepReferenceY = stepYAt(STEP_REFERENCE_STEPS)
+            drawLine(
+                color = ChartStepText.copy(alpha = 0.6f),
+                start = Offset(chartLeft, stepReferenceY),
+                end = Offset(chartRight, stepReferenceY),
+                strokeWidth = 1.5.dp.toPx(),
+                pathEffect = dashedGrid,
+            )
 
             glucoseChart?.let { chart ->
                 val glucoseY = chartBottom - 54.dp.toPx()
