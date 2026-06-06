@@ -378,6 +378,7 @@ internal const val CHART_WEIGHT_UPPER_PADDING_KG = 1.5
 internal const val CHART_EMPTY_EDGE_PADDING_DAYS = 2L
 internal const val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L
 internal const val GLUCOSE_WEIGHT_COUNT = 3
+internal const val GLUCOSE_CHART_VALUE_PADDING_MG_DL = 10.0
 internal const val ASSUMED_VALUE_SUFFIX = "（想定）"
 internal const val UNKNOWN_HEALTH_VALUE = "不明"
 internal const val MANUAL_RECORD_TYPE = "manual"

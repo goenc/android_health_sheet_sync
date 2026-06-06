@@ -99,7 +99,10 @@ internal data class StepBar(
 internal data class FastingGlucoseChart(
     val weightedAverageMgDl: Double,
     val visibleRecords: List<DebugGlucoseRecord>,
+    val lineRecords: List<DebugGlucoseRecord>,
     val latestRecord: DebugGlucoseRecord?,
+    val minValueMgDl: Double,
+    val maxValueMgDl: Double,
 )
 
 internal data class A1cChart(
@@ -317,11 +320,19 @@ internal fun calculateFastingGlucoseChart(
             !pointAt.isBefore(window.startAt) && !pointAt.isAfter(window.endAt)
         }
         .sortedBy { it.measuredAt }
+    val previousRecord = fastingRecords.lastOrNull { it.measuredAt.isBefore(window.startAt) }
+    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
+        .distinctBy { it.measuredAt to it.bloodGlucoseMgDl }
+    val minValueMgDl = kotlin.math.floor(fastingRecords.minOf { it.bloodGlucoseMgDl } - GLUCOSE_CHART_VALUE_PADDING_MG_DL)
+    val maxValueMgDl = kotlin.math.ceil(fastingRecords.maxOf { it.bloodGlucoseMgDl } + GLUCOSE_CHART_VALUE_PADDING_MG_DL)
 
     return FastingGlucoseChart(
         weightedAverageMgDl = weightedAverage,
         visibleRecords = visibleRecords,
+        lineRecords = lineRecords,
         latestRecord = fastingRecords.firstOrNull(),
+        minValueMgDl = minValueMgDl,
+        maxValueMgDl = maxValueMgDl,
     )
 }
 

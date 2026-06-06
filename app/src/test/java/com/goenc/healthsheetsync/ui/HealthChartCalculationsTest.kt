@@ -45,6 +45,27 @@ class HealthChartCalculationsTest {
         assertEquals(120.0, chart!!.displayRecord()!!.bloodGlucoseMgDl, 0.0)
     }
 
+    @Test
+    fun fastingGlucoseChart_uses_real_measurements_for_line_and_range() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateFastingGlucoseChart(
+            glucoseRecords = listOf(
+                glucoseRecord(2025, 12, 31, 90.0),
+                glucoseRecord(2026, 1, 2, 100.0),
+                glucoseRecord(2026, 1, 4, 110.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        assertEquals(listOf(90.0, 100.0, 110.0), chart!!.lineRecords.map { it.bloodGlucoseMgDl })
+        assertEquals(80.0, chart.minValueMgDl, 0.0)
+        assertEquals(120.0, chart.maxValueMgDl, 0.0)
+    }
+
     private fun glucoseRecord(
         year: Int,
         month: Int,

@@ -474,27 +474,52 @@ internal fun WeightTrendChart(
             )
 
             glucoseChart?.let { chart ->
-                val glucoseY = chartBottom - 54.dp.toPx()
-                drawLine(
-                    color = ChartGlucose,
-                    start = Offset(chartLeft, glucoseY),
-                    end = Offset(chartRight, glucoseY),
-                    strokeWidth = 1.5.dp.toPx(),
-                )
+                fun glucoseYAt(value: Double): Float {
+                    val ratio = ((value - chart.minValueMgDl) / (chart.maxValueMgDl - chart.minValueMgDl))
+                        .toFloat()
+                        .coerceIn(0f, 1f)
+                    return chartBottom - chartHeight * ratio
+                }
+
+                val linePoints = chart.lineRecords.map { record ->
+                    Offset(xAtTime(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl))
+                }
+                if (linePoints.size > 1) {
+                    val glucosePath = Path()
+                    linePoints.forEachIndexed { index, point ->
+                        if (index == 0) {
+                            glucosePath.moveTo(point.x, point.y)
+                        } else {
+                            glucosePath.lineTo(point.x, point.y)
+                        }
+                    }
+                    drawPath(
+                        path = glucosePath,
+                        color = ChartGlucose,
+                        style = Stroke(width = 1.5.dp.toPx()),
+                    )
+                }
                 chart.visibleRecords.forEach { record ->
                     drawCircle(
                         color = ChartGlucose,
                         radius = 4.dp.toPx(),
-                        center = Offset(xAtTime(record.targetDate.atStartOfDay().plusHours(12)), glucoseY),
+                        center = Offset(xAtTime(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl)),
                     )
                 }
                 chart.displayRecord()?.let { latest ->
+                    val latestY = glucoseYAt(latest.bloodGlucoseMgDl)
+                    drawLine(
+                        color = ChartGlucose,
+                        start = Offset(xAtTime(latest.measuredAt), latestY),
+                        end = Offset(chartRight, latestY),
+                        strokeWidth = 1.5.dp.toPx(),
+                    )
                     drawContext.canvas.nativeCanvas.apply {
                         glucosePaint.textAlign = Paint.Align.RIGHT
                         drawText(
                             formatDecimal(latest.bloodGlucoseMgDl),
                             chartRight - 4.dp.toPx(),
-                            glucoseY - 4.dp.toPx(),
+                            latestY - 4.dp.toPx(),
                             glucosePaint,
                         )
                     }

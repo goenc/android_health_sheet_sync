@@ -157,6 +157,14 @@ internal object HealthGraphWidgetRenderer {
             return chartBottom - chartHeight * ratio
         }
 
+        fun glucoseYAt(value: Double): Float {
+            val chart = glucoseChart ?: return chartBottom - (54f * density)
+            val ratio = ((value - chart.minValueMgDl) /
+                (chart.maxValueMgDl - chart.minValueMgDl)).toFloat()
+                .coerceIn(0f, 1f)
+            return chartBottom - chartHeight * ratio
+        }
+
         fun waistYAt(value: Double): Float {
             val ratio = ((value - WAIST_CHART_MIN_CM) / (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
                 .coerceIn(0f, 1f)
@@ -378,21 +386,25 @@ internal object HealthGraphWidgetRenderer {
         }
 
         glucoseChart?.let { chart ->
-            val glucoseY = chartBottom - (54f * density)
-            canvas.drawLine(chartLeft, glucoseY, chartRight, glucoseY, glucoseLinePaint)
+            val linePoints = chart.lineRecords.map { record ->
+                xAtTime(record.measuredAt) to glucoseYAt(record.bloodGlucoseMgDl)
+            }
+            drawPolyline(canvas, linePoints, glucoseLinePaint)
             chart.visibleRecords.forEach { record ->
                 canvas.drawCircle(
-                    xAtTime(record.targetDate.atStartOfDay().plusHours(12)),
-                    glucoseY,
+                    xAtTime(record.measuredAt),
+                    glucoseYAt(record.bloodGlucoseMgDl),
                     4f * density,
                     glucoseLinePaint,
                 )
             }
             chart.displayRecord()?.let { latest ->
+                val latestY = glucoseYAt(latest.bloodGlucoseMgDl)
+                canvas.drawLine(xAtTime(latest.measuredAt), latestY, chartRight, latestY, glucoseLinePaint)
                 canvas.drawText(
                     formatDecimal(latest.bloodGlucoseMgDl),
                     chartRight - (4f * density),
-                    glucoseY - (4f * density),
+                    latestY - (4f * density),
                     glucosePaint(scaledDensity),
                 )
             }
