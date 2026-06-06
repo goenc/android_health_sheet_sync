@@ -1,6 +1,9 @@
 package com.goenc.healthsheetsync.ui
 
+import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.ManualHealthRecord
+import com.goenc.healthsheetsync.health.ManualRecordType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
@@ -92,6 +95,50 @@ class HealthChartCalculationsTest {
         assertEquals(window.startAt, lineRecords.first().measuredAt)
     }
 
+    @Test
+    fun a1cChart_adds_left_boundary_point_when_first_visible_record_starts_after_window_start() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateA1cChart(
+            a1cDailyRecords = listOf(
+                a1cRecord(2025, 12, 31, 6.0),
+                a1cRecord(2026, 1, 2, 6.5),
+                a1cRecord(2026, 1, 4, 7.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(3, lineRecords.size)
+        assertEquals(window.startAt, lineRecords.first().measuredAt)
+        assertEquals(6.5, lineRecords[1].value, 0.0)
+        assertEquals(7.0, lineRecords[2].value, 0.0)
+    }
+
+    @Test
+    fun waistChart_adds_left_boundary_point_when_no_visible_record_exists() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateWaistChart(
+            manualRecords = listOf(
+                waistRecord(2025, 12, 30, 85.0),
+                waistRecord(2025, 12, 31, 86.0),
+                waistRecord(2026, 1, 7, 88.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(1, lineRecords.size)
+        assertEquals(window.startAt, lineRecords.first().measuredAt)
+    }
+
     private fun glucoseRecord(
         year: Int,
         month: Int,
@@ -108,6 +155,37 @@ class HealthChartCalculationsTest {
             healthConnectId = "$year-$month-$day",
             sourceAppName = "test",
             sourcePackageName = "test.package",
+        )
+    }
+
+    private fun a1cRecord(
+        year: Int,
+        month: Int,
+        day: Int,
+        value: Double,
+    ): DebugA1cDaily {
+        val measuredAt = LocalDateTime.of(year, month, day, 12, 0)
+        return DebugA1cDaily(
+            targetDate = measuredAt.toLocalDate(),
+            measuredAt = measuredAt,
+            a1cPercent = value,
+            manualId = "$year-$month-$day",
+        )
+    }
+
+    private fun waistRecord(
+        year: Int,
+        month: Int,
+        day: Int,
+        value: Double,
+    ): ManualHealthRecord {
+        val measuredAt = LocalDateTime.of(year, month, day, 12, 0)
+        return ManualHealthRecord(
+            id = "$year-$month-$day",
+            type = ManualRecordType.Waist,
+            measuredAt = measuredAt,
+            valueText = "${value} cm",
+            invalidatedAt = null,
         )
     }
 }
