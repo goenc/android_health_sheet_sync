@@ -330,6 +330,14 @@ internal fun WeightTrendChart(
                     pathEffect = dashedGrid,
                 )
             }
+            val stepReferenceY = stepYAt(STEP_REFERENCE_STEPS)
+            drawLine(
+                color = ChartStepText.copy(alpha = 0.28f),
+                start = Offset(chartLeft, stepReferenceY),
+                end = Offset(chartRight, stepReferenceY),
+                strokeWidth = 1.dp.toPx(),
+                pathEffect = dashedGrid,
+            )
             chartPoints.zipWithNext().forEachIndexed { index, pair ->
                 val (previous, current) = pair
                 if (previous.targetDate.dayOfWeek == DayOfWeek.SUNDAY &&
