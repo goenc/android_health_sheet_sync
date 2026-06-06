@@ -255,18 +255,6 @@ internal fun WeightTrendChart(
                 return chartBottom - chartHeight * ratio
             }
 
-            val stepChartMaxSteps = run {
-                val targetRatio = ((STEP_REFERENCE_TARGET_WEIGHT_KG - minWeight) / weightRange)
-                    .toFloat()
-                    .coerceIn(0.05f, 0.95f)
-                max(STEP_REFERENCE_STEPS, STEP_REFERENCE_STEPS / targetRatio)
-            }
-
-            fun stepYAt(steps: Float): Float {
-                val ratio = (steps / stepChartMaxSteps).coerceIn(0f, 1f)
-                return chartBottom - chartHeight * ratio
-            }
-
             fun a1cYAt(value: Double): Float {
                 val ratio = ((value - A1C_CHART_MIN) / (A1C_CHART_MAX - A1C_CHART_MIN)).toFloat()
                     .coerceIn(0f, 1f)
@@ -287,6 +275,18 @@ internal fun WeightTrendChart(
                     (WAIST_CHART_DISPLAY_MAX_CM - WAIST_CHART_DISPLAY_MIN_CM)).toFloat()
                     .coerceIn(0f, 1f)
                 return bandBottom - bandHeight * ratio
+            }
+
+            val desiredStepReferenceY = (
+                waistYAt(WAIST_CHART_DISPLAY_MAX_CM) + STEP_REFERENCE_CLEARANCE_DP.dp.toPx()
+            ).coerceAtMost(chartBottom - 20.dp.toPx())
+            val stepReferenceRatio = ((chartBottom - desiredStepReferenceY) / chartHeight)
+                .coerceIn(0.05f, 0.95f)
+            val stepChartMaxSteps = max(STEP_REFERENCE_STEPS, STEP_REFERENCE_STEPS / stepReferenceRatio)
+
+            fun stepYAt(steps: Float): Float {
+                val ratio = (steps / stepChartMaxSteps).coerceIn(0f, 1f)
+                return chartBottom - chartHeight * ratio
             }
 
             fun bloodPressureYAt(value: Double): Float {
@@ -359,7 +359,9 @@ internal fun WeightTrendChart(
                     drawText("${formatDecimal(weightKg)}kg", chartLeft - 8.dp.toPx(), y + 4.dp.toPx(), weightLabelPaint)
                 }
                 stepLabelPaint.textAlign = Paint.Align.LEFT
-                drawText("1万", chartRight + 8.dp.toPx(), stepYAt(STEP_REFERENCE_STEPS) - 8.dp.toPx(), stepLabelPaint)
+                val stepLabelBaseline =
+                    stepYAt(STEP_REFERENCE_STEPS) - (stepLabelPaint.fontMetrics.ascent + stepLabelPaint.fontMetrics.descent) / 2f
+                drawText("1万", chartRight + 8.dp.toPx(), stepLabelBaseline, stepLabelPaint)
                 waistPaint.textAlign = Paint.Align.LEFT
                 WAIST_CHART_LINES_CM.forEach { waistCm ->
                     drawText("${waistCm.toInt()}", chartRight + 8.dp.toPx(), waistYAt(waistCm) + 4.dp.toPx(), waistPaint)
