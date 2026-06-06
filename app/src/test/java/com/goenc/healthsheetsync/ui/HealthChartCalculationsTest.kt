@@ -66,6 +66,26 @@ class HealthChartCalculationsTest {
         assertEquals(120.0, chart.maxValueMgDl, 0.0)
     }
 
+    @Test
+    fun fastingGlucoseChart_prepends_extrapolated_leading_point_when_no_previous_record_exists() {
+        val window = ChartTimeWindow(
+            startAt = LocalDateTime.of(2026, 1, 1, 0, 0),
+            endAt = LocalDateTime.of(2026, 1, 5, 23, 59),
+        )
+        val chart = calculateFastingGlucoseChart(
+            glucoseRecords = listOf(
+                glucoseRecord(2026, 1, 2, 100.0),
+                glucoseRecord(2026, 1, 4, 110.0),
+            ),
+            window = window,
+        )
+
+        assertNotNull(chart)
+        val lineRecords = chart!!.lineRecords
+        assertEquals(3, lineRecords.size)
+        assertEquals(true, lineRecords.first().measuredAt.isBefore(window.startAt))
+    }
+
     private fun glucoseRecord(
         year: Int,
         month: Int,

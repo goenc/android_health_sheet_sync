@@ -139,6 +139,12 @@ internal object HealthGraphWidgetRenderer {
             return chartLeft + chartWidth * elapsedMillis.toFloat() / totalMillis
         }
 
+        fun xAtTimeRaw(measuredAt: LocalDateTime): Float {
+            val totalMillis = max(1L, Duration.between(window.startAt, window.endAt).toMillis())
+            val elapsedMillis = Duration.between(window.startAt, measuredAt).toMillis()
+            return chartLeft + chartWidth * elapsedMillis.toFloat() / totalMillis
+        }
+
         fun xAt(index: Int): Float = xAtTime(chartPoints[index].measuredAt)
 
         fun yAt(weightKg: Double): Float {
@@ -387,7 +393,7 @@ internal object HealthGraphWidgetRenderer {
 
         glucoseChart?.let { chart ->
             val linePoints = chart.lineRecords.map { record ->
-                xAtTime(record.measuredAt) to glucoseYAt(record.bloodGlucoseMgDl)
+                xAtTimeRaw(record.measuredAt) to glucoseYAt(record.bloodGlucoseMgDl)
             }
             drawPolyline(canvas, linePoints, glucoseLinePaint)
             chart.visibleRecords.forEach { record ->
