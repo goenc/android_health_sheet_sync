@@ -321,12 +321,7 @@ internal fun calculateFastingGlucoseChart(
         }
         .sortedBy { it.measuredAt }
     val previousRecord = fastingRecords.lastOrNull { it.measuredAt.isBefore(window.startAt) }
-    val leadingRecord = if (previousRecord == null) {
-        extrapolatedGlucoseRecord(fastingRecords, window.startAt.minusMinutes(1))
-    } else {
-        null
-    }
-    val lineRecords = (listOfNotNull(leadingRecord, previousRecord) + visibleRecords)
+    val lineRecords = (listOfNotNull(previousRecord) + visibleRecords)
         .distinctBy { it.measuredAt to it.bloodGlucoseMgDl }
     val minValueMgDl = kotlin.math.floor(fastingRecords.minOf { it.bloodGlucoseMgDl } - GLUCOSE_CHART_VALUE_PADDING_MG_DL)
     val maxValueMgDl = kotlin.math.ceil(fastingRecords.maxOf { it.bloodGlucoseMgDl } + GLUCOSE_CHART_VALUE_PADDING_MG_DL)
@@ -343,25 +338,6 @@ internal fun calculateFastingGlucoseChart(
 
 internal fun FastingGlucoseChart.displayRecord(): DebugGlucoseRecord? {
     return visibleRecords.lastOrNull() ?: latestRecord
-}
-
-private fun extrapolatedGlucoseRecord(
-    sortedRecords: List<DebugGlucoseRecord>,
-    targetAt: LocalDateTime,
-): DebugGlucoseRecord? {
-    if (sortedRecords.size < 2) return null
-    val first = sortedRecords[0]
-    val second = sortedRecords[1]
-    val totalMillis = Duration.between(first.measuredAt, second.measuredAt).toMillis()
-    if (totalMillis <= 0L) return null
-    val targetMillis = Duration.between(first.measuredAt, targetAt).toMillis()
-    val ratio = targetMillis.toDouble() / totalMillis.toDouble()
-    val estimatedValue = first.bloodGlucoseMgDl + (second.bloodGlucoseMgDl - first.bloodGlucoseMgDl) * ratio
-    return first.copy(
-        measuredAt = targetAt,
-        targetDate = targetAt.toLocalDate(),
-        bloodGlucoseMgDl = estimatedValue,
-    )
 }
 
 internal fun calculateWeightedAverageFastingGlucose(

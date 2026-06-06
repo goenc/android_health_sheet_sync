@@ -246,12 +246,6 @@ internal fun WeightTrendChart(
                 return chartLeft + chartWidth * elapsedMillis.toFloat() / totalMillis
             }
 
-            fun xAtTimeRaw(measuredAt: LocalDateTime): Float {
-                val totalMillis = max(1L, Duration.between(visibleWindow.startAt, visibleWindow.endAt).toMillis())
-                val elapsedMillis = Duration.between(visibleWindow.startAt, measuredAt).toMillis()
-                return chartLeft + chartWidth * elapsedMillis.toFloat() / totalMillis
-            }
-
             fun xAt(index: Int): Float {
                 return xAtTime(chartPoints[index].measuredAt)
             }
@@ -488,7 +482,7 @@ internal fun WeightTrendChart(
                 }
 
                 val linePoints = chart.lineRecords.map { record ->
-                    Offset(xAtTimeRaw(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl))
+                    Offset(xAtTime(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl))
                 }
                 if (linePoints.size > 1) {
                     val glucosePath = Path()
