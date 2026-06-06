@@ -51,6 +51,7 @@ import com.goenc.healthsheetsync.ui.calculateMissingWeightPoints
 import com.goenc.healthsheetsync.ui.calculateStepBars
 import com.goenc.healthsheetsync.ui.calculateTrendLine
 import com.goenc.healthsheetsync.ui.calculateWaistChart
+import com.goenc.healthsheetsync.ui.displayRecord
 import com.goenc.healthsheetsync.ui.formatDecimal
 import com.goenc.healthsheetsync.ui.formatTrendChange
 import com.goenc.healthsheetsync.ui.isMorning
@@ -387,12 +388,14 @@ internal object HealthGraphWidgetRenderer {
                     glucoseLinePaint,
                 )
             }
-            canvas.drawText(
-                "${formatDecimal(chart.weightedAverageMgDl)}",
-                chartRight - (4f * density),
-                glucoseY - (4f * density),
-                glucosePaint(scaledDensity),
-            )
+            chart.displayRecord()?.let { latest ->
+                canvas.drawText(
+                    formatDecimal(latest.bloodGlucoseMgDl),
+                    chartRight - (4f * density),
+                    glucoseY - (4f * density),
+                    glucosePaint(scaledDensity),
+                )
+            }
         }
 
         a1cChart?.let { chart ->

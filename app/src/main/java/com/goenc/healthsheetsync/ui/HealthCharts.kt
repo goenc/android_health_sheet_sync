@@ -488,14 +488,16 @@ internal fun WeightTrendChart(
                         center = Offset(xAtTime(record.targetDate.atStartOfDay().plusHours(12)), glucoseY),
                     )
                 }
-                drawContext.canvas.nativeCanvas.apply {
-                    glucosePaint.textAlign = Paint.Align.RIGHT
-                    drawText(
-                        "${formatDecimal(chart.weightedAverageMgDl)}",
-                        chartRight - 4.dp.toPx(),
-                        glucoseY - 4.dp.toPx(),
-                        glucosePaint,
-                    )
+                chart.displayRecord()?.let { latest ->
+                    drawContext.canvas.nativeCanvas.apply {
+                        glucosePaint.textAlign = Paint.Align.RIGHT
+                        drawText(
+                            formatDecimal(latest.bloodGlucoseMgDl),
+                            chartRight - 4.dp.toPx(),
+                            glucoseY - 4.dp.toPx(),
+                            glucosePaint,
+                        )
+                    }
                 }
             }
 

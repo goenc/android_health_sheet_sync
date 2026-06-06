@@ -99,6 +99,7 @@ internal data class StepBar(
 internal data class FastingGlucoseChart(
     val weightedAverageMgDl: Double,
     val visibleRecords: List<DebugGlucoseRecord>,
+    val latestRecord: DebugGlucoseRecord?,
 )
 
 internal data class A1cChart(
@@ -320,7 +321,12 @@ internal fun calculateFastingGlucoseChart(
     return FastingGlucoseChart(
         weightedAverageMgDl = weightedAverage,
         visibleRecords = visibleRecords,
+        latestRecord = fastingRecords.firstOrNull(),
     )
+}
+
+internal fun FastingGlucoseChart.displayRecord(): DebugGlucoseRecord? {
+    return visibleRecords.lastOrNull() ?: latestRecord
 }
 
 internal fun calculateWeightedAverageFastingGlucose(
