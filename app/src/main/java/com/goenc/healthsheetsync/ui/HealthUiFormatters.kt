@@ -367,6 +367,7 @@ internal data class BloodPressureAverage(
 internal const val TAG = "HealthSheetSync"
 internal const val STEP_CHART_MAX_STEPS = 30_000f
 internal const val STEP_REFERENCE_STEPS = 10_000f
+internal const val STEP_REFERENCE_TARGET_WEIGHT_KG = 64.2
 internal const val CHART_LEFT_PADDING_DP = 44
 internal const val CHART_RIGHT_PADDING_DP = 36
 internal const val CHART_TIME_BAND_MORNING = 0

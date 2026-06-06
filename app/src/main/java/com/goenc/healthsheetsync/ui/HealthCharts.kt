@@ -255,8 +255,15 @@ internal fun WeightTrendChart(
                 return chartBottom - chartHeight * ratio
             }
 
+            val stepChartMaxSteps = run {
+                val targetRatio = ((STEP_REFERENCE_TARGET_WEIGHT_KG - minWeight) / weightRange)
+                    .toFloat()
+                    .coerceIn(0.05f, 0.95f)
+                max(STEP_REFERENCE_STEPS, STEP_REFERENCE_STEPS / targetRatio)
+            }
+
             fun stepYAt(steps: Float): Float {
-                val ratio = (steps / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)
+                val ratio = (steps / stepChartMaxSteps).coerceIn(0f, 1f)
                 return chartBottom - chartHeight * ratio
             }
 
@@ -446,7 +453,7 @@ internal fun WeightTrendChart(
             }
 
             calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
-                val stepRatio = (stepBar.steps.toFloat() / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)
+                val stepRatio = (stepBar.steps.toFloat() / stepChartMaxSteps).coerceIn(0f, 1f)
                 val barHeight = chartHeight * stepRatio
                 val barWidth = 12.dp.toPx()
                 drawRect(
