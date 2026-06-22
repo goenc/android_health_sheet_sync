@@ -3,10 +3,11 @@ package com.goenc.healthsheetsync.data
 import android.database.sqlite.SQLiteDatabase
 
 internal const val DATABASE_NAME = "health_sheet_sync.db"
-internal const val DATABASE_VERSION = 4
+internal const val DATABASE_VERSION = 5
 internal const val TABLE_WEIGHT = "weight_records"
 internal const val TABLE_GLUCOSE = "glucose_records"
 internal const val TABLE_STEPS = "step_daily_records"
+internal const val TABLE_STEP_RECORDS = "health_connect_step_records"
 internal const val TABLE_A1C_DAILY = "a1c_daily_records"
 internal const val TABLE_MANUAL = "manual_records"
 internal const val TABLE_INVALIDATED = "invalidated_record_keys"
@@ -57,7 +58,29 @@ internal fun SQLiteDatabase.createHealthConnectTables() {
         )
         """.trimIndent(),
     )
+    createHealthConnectStepRecordsTable()
     createInvalidatedRecordsTable()
+}
+
+internal fun SQLiteDatabase.createHealthConnectStepRecordsTable() {
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS health_connect_step_records (
+            health_connect_id TEXT PRIMARY KEY,
+            target_date TEXT NOT NULL,
+            start_at TEXT NOT NULL,
+            end_at TEXT NOT NULL,
+            steps INTEGER NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """.trimIndent(),
+    )
+    execSQL(
+        """
+        CREATE INDEX IF NOT EXISTS index_health_connect_step_records_target_date
+        ON health_connect_step_records(target_date)
+        """.trimIndent(),
+    )
 }
 
 internal fun SQLiteDatabase.createManualRecordsTable() {

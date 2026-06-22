@@ -4,11 +4,14 @@ import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.changes.DeletionChange
+import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
@@ -22,6 +25,8 @@ import kotlin.reflect.KClass
 class HealthConnectDebugReader(private val context: Context) {
     private val zoneId: ZoneId = ZoneId.systemDefault()
     private val localStore = LocalHealthDataStore(context)
+    private val syncPreferences = context.getSharedPreferences(SYNC_PREFERENCES, Context.MODE_PRIVATE)
+    private val appLabelCache = mutableMapOf<String, String>()
 
     suspend fun load(): HealthDebugUiState {
         val debugMessages = mutableListOf<String>()
@@ -68,30 +73,15 @@ class HealthConnectDebugReader(private val context: Context) {
             )
         }
 
-        val now = Instant.now()
-        val readStart = Instant.EPOCH
-        debugMessages += "読み取り範囲: 取得可能な最古 - ${now.toLocalDateTime()}"
-
-        val weightRecords = runCatching {
-            readWeightRecords(client, readStart, now)
+        val syncResult = runCatching {
+            synchronize(client)
         }.getOrElse { error ->
-            debugMessages += error.debugSummary("体重記録の読み取りに失敗しました")
-            emptyList()
+            debugMessages += error.debugSummary("Health Connect同期に失敗しました")
+            SyncResult(changed = false, message = "保存済みデータを表示しています")
         }
-        val glucoseRecords = runCatching {
-            readGlucoseRecords(client, readStart, now)
-        }.getOrElse { error ->
-            debugMessages += error.debugSummary("血糖値記録の読み取りに失敗しました")
-            emptyList()
-        }
-        val stepDailyRecords = runCatching {
-            readDailySteps(client, readStart, now)
-        }.getOrElse { error ->
-            debugMessages += error.debugSummary("歩数集計に失敗しました")
-            emptyList()
-        }
-        if (weightRecords.isNotEmpty() || glucoseRecords.isNotEmpty() || stepDailyRecords.isNotEmpty()) {
-            localStore.save(weightRecords, glucoseRecords, stepDailyRecords)
+        Log.d(TAG, syncResult.message)
+        debugMessages += syncResult.message
+        if (syncResult.changed) {
             HealthGraphWidgetUpdater.requestUpdate(context.applicationContext)
         }
         val storedData = localStore.load()
@@ -139,19 +129,7 @@ class HealthConnectDebugReader(private val context: Context) {
     ): List<DebugWeightRecord> {
         return client.readAllRecords(WeightRecord::class, start, end)
             .sortedByDescending { it.time }
-            .map { record ->
-                val measuredAt = record.time.toLocalDateTime()
-                val sourcePackage = record.metadata.dataOrigin.packageName.ifBlank { UNKNOWN }
-                DebugWeightRecord(
-                    measuredAt = measuredAt,
-                    targetDate = measuredAt.toLocalDate(),
-                    timeBand = measuredAt.toTimeBand(),
-                    weightKg = record.weight.inKilograms,
-                    healthConnectId = record.metadata.id.ifBlank { UNKNOWN },
-                    sourceAppName = sourcePackage.toAppLabel(),
-                    sourcePackageName = sourcePackage,
-                )
-            }
+            .map { record -> record.toDebugRecord() }
     }
 
     private suspend fun readGlucoseRecords(
@@ -161,39 +139,145 @@ class HealthConnectDebugReader(private val context: Context) {
     ): List<DebugGlucoseRecord> {
         return client.readAllRecords(BloodGlucoseRecord::class, start, end)
             .sortedByDescending { it.time }
-            .map { record ->
-                val measuredAt = record.time.toLocalDateTime()
-                val sourcePackage = record.metadata.dataOrigin.packageName.ifBlank { UNKNOWN }
-                DebugGlucoseRecord(
-                    measuredAt = measuredAt,
-                    targetDate = measuredAt.toLocalDate(),
-                    timeBand = measuredAt.toTimeBand(),
-                    bloodGlucoseMgDl = record.level.inMilligramsPerDeciliter,
-                    mealRelation = record.relationToMeal.toMealRelation(),
-                    healthConnectId = record.metadata.id.ifBlank { UNKNOWN },
-                    sourceAppName = sourcePackage.toAppLabel(),
-                    sourcePackageName = sourcePackage,
-                )
-            }
+            .map { record -> record.toDebugRecord() }
     }
 
-    private suspend fun readDailySteps(
+    private suspend fun readStepRecords(
         client: HealthConnectClient,
         start: Instant,
         end: Instant,
-    ): List<DebugStepDaily> {
-        val stepRecords = client.readAllRecords(StepsRecord::class, start, end)
-        return stepRecords
-            .groupBy { record -> record.startTime.toLocalDateTime().toLocalDate() }
-            .map { (targetDate, records) ->
-                DebugStepDaily(
-                    targetDate = targetDate,
-                    steps = records.sumOf { it.count },
-                    aggregationStartAt = targetDate.atStartOfDay(),
-                    aggregationEndAt = targetDate.plusDays(1).atStartOfDay(),
-                )
+    ): List<DebugStepRecord> {
+        return client.readAllRecords(StepsRecord::class, start, end)
+            .map { record -> record.toDebugRecord() }
+    }
+
+    private suspend fun synchronize(client: HealthConnectClient): SyncResult {
+        val changesToken = syncPreferences.getString(CHANGES_TOKEN_KEY, null)
+        return if (changesToken == null) {
+            replaceSnapshot(client, "初回完全同期")
+        } else {
+            applyChanges(client, changesToken)
+        }
+    }
+
+    private suspend fun replaceSnapshot(client: HealthConnectClient, reason: String): SyncResult {
+        val nextChangesToken = client.getChangesToken(
+            ChangesTokenRequest(recordTypes = SYNCED_RECORD_TYPES),
+        )
+        val now = Instant.now()
+        val weightRecords = readWeightRecords(client, Instant.EPOCH, now)
+        val glucoseRecords = readGlucoseRecords(client, Instant.EPOCH, now)
+        val stepRecords = readStepRecords(client, Instant.EPOCH, now)
+        localStore.replaceHealthConnectSnapshot(weightRecords, glucoseRecords, stepRecords)
+        saveChangesToken(nextChangesToken)
+        return SyncResult(
+            changed = true,
+            message = "$reason: 体重${weightRecords.size}件、血糖${glucoseRecords.size}件、歩数${stepRecords.size}件",
+        )
+    }
+
+    private suspend fun applyChanges(client: HealthConnectClient, initialToken: String): SyncResult {
+        var changesToken = initialToken
+        var changedCount = 0
+        do {
+            val response = client.getChanges(changesToken, PAGE_SIZE)
+            if (response.changesTokenExpired) {
+                return replaceSnapshot(client, "変更トークン失効による完全同期")
             }
-            .sortedByDescending { it.targetDate }
+            val page = response.changes.toChangePage()
+            localStore.applyHealthConnectChanges(
+                weightRecords = page.weightRecords,
+                glucoseRecords = page.glucoseRecords,
+                stepRecords = page.stepRecords,
+                deletedRecordIds = page.deletedRecordIds,
+            )
+            changedCount += page.changeCount
+            changesToken = response.nextChangesToken
+            saveChangesToken(changesToken)
+        } while (response.hasMore)
+        return SyncResult(
+            changed = changedCount > 0,
+            message = "差分同期: ${changedCount}件の変更を反映",
+        )
+    }
+
+    private fun List<androidx.health.connect.client.changes.Change>.toChangePage(): ChangePage {
+        val weightRecords = linkedMapOf<String, DebugWeightRecord>()
+        val glucoseRecords = linkedMapOf<String, DebugGlucoseRecord>()
+        val stepRecords = linkedMapOf<String, DebugStepRecord>()
+        val deletedRecordIds = linkedSetOf<String>()
+        forEach { change ->
+            when (change) {
+                is DeletionChange -> {
+                    deletedRecordIds += change.recordId
+                    weightRecords.remove(change.recordId)
+                    glucoseRecords.remove(change.recordId)
+                    stepRecords.remove(change.recordId)
+                }
+                is UpsertionChange -> {
+                    val recordId = change.record.metadata.id
+                    deletedRecordIds -= recordId
+                    when (val record = change.record) {
+                        is WeightRecord -> weightRecords[recordId] = record.toDebugRecord()
+                        is BloodGlucoseRecord -> glucoseRecords[recordId] = record.toDebugRecord()
+                        is StepsRecord -> stepRecords[recordId] = record.toDebugRecord()
+                    }
+                }
+            }
+        }
+        return ChangePage(
+            weightRecords = weightRecords.values.toList(),
+            glucoseRecords = glucoseRecords.values.toList(),
+            stepRecords = stepRecords.values.toList(),
+            deletedRecordIds = deletedRecordIds,
+            changeCount = size,
+        )
+    }
+
+    private fun saveChangesToken(changesToken: String) {
+        check(syncPreferences.edit().putString(CHANGES_TOKEN_KEY, changesToken).commit()) {
+            "変更トークンを保存できませんでした"
+        }
+    }
+
+    private fun WeightRecord.toDebugRecord(): DebugWeightRecord {
+        val measuredAt = time.toLocalDateTime()
+        val sourcePackage = metadata.dataOrigin.packageName.ifBlank { UNKNOWN }
+        return DebugWeightRecord(
+            measuredAt = measuredAt,
+            targetDate = measuredAt.toLocalDate(),
+            timeBand = measuredAt.toTimeBand(),
+            weightKg = weight.inKilograms,
+            healthConnectId = metadata.id.ifBlank { UNKNOWN },
+            sourceAppName = sourcePackage.toAppLabel(),
+            sourcePackageName = sourcePackage,
+        )
+    }
+
+    private fun BloodGlucoseRecord.toDebugRecord(): DebugGlucoseRecord {
+        val measuredAt = time.toLocalDateTime()
+        val sourcePackage = metadata.dataOrigin.packageName.ifBlank { UNKNOWN }
+        return DebugGlucoseRecord(
+            measuredAt = measuredAt,
+            targetDate = measuredAt.toLocalDate(),
+            timeBand = measuredAt.toTimeBand(),
+            bloodGlucoseMgDl = level.inMilligramsPerDeciliter,
+            mealRelation = relationToMeal.toMealRelation(),
+            healthConnectId = metadata.id.ifBlank { UNKNOWN },
+            sourceAppName = sourcePackage.toAppLabel(),
+            sourcePackageName = sourcePackage,
+        )
+    }
+
+    private fun StepsRecord.toDebugRecord(): DebugStepRecord {
+        val startAt = startTime.toLocalDateTime()
+        return DebugStepRecord(
+            healthConnectId = metadata.id.ifBlank { UNKNOWN },
+            targetDate = startAt.toLocalDate(),
+            startAt = startAt,
+            endAt = endTime.toLocalDateTime(),
+            steps = count,
+        )
     }
 
     private suspend fun <T : Record> HealthConnectClient.readAllRecords(
@@ -255,10 +339,12 @@ class HealthConnectDebugReader(private val context: Context) {
 
     private fun String.toAppLabel(): String {
         if (this == UNKNOWN) return UNKNOWN
-        return runCatching {
-            val appInfo = context.packageManager.getApplicationInfo(this, 0)
-            context.packageManager.getApplicationLabel(appInfo).toString()
-        }.getOrElse { UNKNOWN }
+        return appLabelCache.getOrPut(this) {
+            runCatching {
+                val appInfo = context.packageManager.getApplicationInfo(this, 0)
+                context.packageManager.getApplicationLabel(appInfo).toString()
+            }.getOrElse { UNKNOWN }
+        }
     }
 
     private fun Throwable.debugSummary(prefix: String): String {
@@ -280,11 +366,32 @@ class HealthConnectDebugReader(private val context: Context) {
         val availability: HealthConnectAvailability,
     )
 
+    private data class SyncResult(
+        val changed: Boolean,
+        val message: String,
+    )
+
+    private data class ChangePage(
+        val weightRecords: List<DebugWeightRecord>,
+        val glucoseRecords: List<DebugGlucoseRecord>,
+        val stepRecords: List<DebugStepRecord>,
+        val deletedRecordIds: Set<String>,
+        val changeCount: Int,
+    )
+
     companion object {
         const val UNKNOWN = "不明"
         private const val TAG = "HealthSheetSync"
         private const val HEALTH_CONNECT_PROVIDER_PACKAGE = "com.google.android.apps.healthdata"
         private const val PAGE_SIZE = 1_000
+        private const val SYNC_PREFERENCES = "health_connect_sync"
+        private const val CHANGES_TOKEN_KEY = "changes_token_v1"
+
+        private val SYNCED_RECORD_TYPES: Set<KClass<out Record>> = setOf(
+            WeightRecord::class,
+            BloodGlucoseRecord::class,
+            StepsRecord::class,
+        )
 
         val REQUIRED_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getReadPermission(WeightRecord::class),

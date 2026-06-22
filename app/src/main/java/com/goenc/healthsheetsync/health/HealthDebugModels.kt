@@ -65,6 +65,14 @@ data class DebugStepDaily(
     val aggregationEndAt: LocalDateTime,
 )
 
+data class DebugStepRecord(
+    val healthConnectId: String,
+    val targetDate: LocalDate,
+    val startAt: LocalDateTime,
+    val endAt: LocalDateTime,
+    val steps: Long,
+)
+
 data class DebugA1cDaily(
     val targetDate: LocalDate,
     val measuredAt: LocalDateTime,
