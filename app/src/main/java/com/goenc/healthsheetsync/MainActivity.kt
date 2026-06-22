@@ -28,7 +28,10 @@ import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
 import com.goenc.healthsheetsync.widget.HealthGraphWidgetUpdater
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
@@ -39,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private var csvShareStatus by mutableStateOf<String?>(null)
     private var sharedText by mutableStateOf<String?>(null)
     private var sharedTextImportStatus by mutableStateOf<String?>(null)
+    private var healthRefreshJob: Job? = null
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
     ) { grantedPermissions ->
@@ -112,9 +116,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshHealthData() {
-        lifecycleScope.launch {
+        if (healthRefreshJob?.isActive == true) return
+        healthRefreshJob = lifecycleScope.launch {
             healthState = healthState.copy(isLoading = true)
-            healthState = healthReader.load()
+            val storedData = withContext(Dispatchers.IO) {
+                localStore.load()
+            }
+            healthState = healthState.withStoredData(storedData)
+            healthState = withContext(Dispatchers.IO) {
+                healthReader.load()
+            }
         }
     }
 
