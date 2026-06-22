@@ -49,6 +49,15 @@ import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
 import kotlinx.coroutines.withTimeoutOrNull
 
+private val manualRecordTypeDisplayOrder = listOf(
+    ManualRecordType.BloodPressure,
+    ManualRecordType.Waist,
+    ManualRecordType.BloodGlucose,
+    ManualRecordType.Weight,
+    ManualRecordType.A1c,
+    ManualRecordType.Steps,
+)
+
 @Composable
 internal fun ManualDataScreen(
     weightRecords: List<DebugWeightRecord>,
@@ -65,8 +74,8 @@ internal fun ManualDataScreen(
     onDelete: (String, String) -> Unit,
     onBack: () -> Unit,
 ) {
-    var selectedType by remember { mutableStateOf(ManualRecordType.Weight) }
-    var lastSavedTypeLabel by remember { mutableStateOf(ManualRecordType.Weight.label) }
+    var selectedType by remember { mutableStateOf(ManualRecordType.BloodPressure) }
+    var lastSavedTypeLabel by remember { mutableStateOf(ManualRecordType.BloodPressure.label) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var selectedTimeBand by remember { mutableStateOf("朝") }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -102,7 +111,7 @@ internal fun ManualDataScreen(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ManualRecordType.entries.chunked(3).forEach { rowTypes ->
+        manualRecordTypeDisplayOrder.chunked(3).forEach { rowTypes ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowTypes.forEach { type ->
                     if (type == selectedType) {
