@@ -77,7 +77,7 @@ internal fun ManualDataScreen(
     var selectedType by remember { mutableStateOf(ManualRecordType.BloodPressure) }
     var lastSavedTypeLabel by remember { mutableStateOf(ManualRecordType.BloodPressure.label) }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var selectedTimeBand by remember { mutableStateOf("朝") }
+    var selectedTimeBand by remember { mutableStateOf(selectedType.defaultManualTimeBand()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showSaveCompleteDialog by remember { mutableStateOf(false) }
     var primaryValue by remember { mutableStateOf("") }

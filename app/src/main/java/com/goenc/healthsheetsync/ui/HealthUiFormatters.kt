@@ -113,11 +113,11 @@ internal fun ManualRecordType.manualInputTimeBandOptions(): List<String> {
     }
 }
 
-internal fun ManualRecordType.defaultManualTimeBand(): String {
+internal fun ManualRecordType.defaultManualTimeBand(currentTime: LocalTime = LocalTime.now()): String {
     return when (this) {
         ManualRecordType.Weight,
         ManualRecordType.BloodPressure -> {
-            val hour = LocalTime.now().hour
+            val hour = currentTime.hour
             if (hour in 2..16) "朝" else "夜"
         }
         else -> "朝"
