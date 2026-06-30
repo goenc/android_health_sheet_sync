@@ -273,8 +273,8 @@ internal fun WeightTrendChart(
                 val bandHeight = max(1f, bandBottom - bandTop)
                 val ratio = ((value - WAIST_CHART_DISPLAY_MIN_CM) /
                     (WAIST_CHART_DISPLAY_MAX_CM - WAIST_CHART_DISPLAY_MIN_CM)).toFloat()
-                    .coerceIn(0f, 1f)
-                return bandBottom - bandHeight * ratio
+                    .coerceAtLeast(0f)
+                return (bandBottom - bandHeight * ratio).coerceIn(chartTop, chartBottom)
             }
 
             val desiredStepReferenceY = (
