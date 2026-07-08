@@ -113,7 +113,13 @@ internal fun ManualRecordType.manualInputTimeBandOptions(): List<String> {
     }
 }
 
-internal fun ManualRecordType.defaultManualTimeBand(currentTime: LocalTime = LocalTime.now()): String {
+internal fun ManualRecordType.defaultManualTimeBand(
+    currentInstant: Instant = Instant.now(),
+    zoneId: ZoneId = MANUAL_INPUT_ZONE,
+): String =
+    defaultManualTimeBand(LocalDateTime.ofInstant(currentInstant, zoneId).toLocalTime())
+
+internal fun ManualRecordType.defaultManualTimeBand(currentTime: LocalTime): String {
     return when (this) {
         ManualRecordType.Weight,
         ManualRecordType.BloodPressure -> {
@@ -396,6 +402,7 @@ internal const val BLOOD_PRESSURE_CHART_MIN = 70.0
 internal const val BLOOD_PRESSURE_CHART_MAX = 140.0
 internal const val BLOOD_PRESSURE_CHART_HEIGHT_RATIO = 0.42f
 internal val DATE_PICKER_ZONE: ZoneId = ZoneId.of("UTC")
+private val MANUAL_INPUT_ZONE: ZoneId = ZoneId.of("Asia/Tokyo")
 internal val GLUCOSE_RECENT_WEIGHTS = listOf(0.5, 0.3, 0.2)
 internal val WAIST_CHART_LINES_CM = listOf(WAIST_CHART_DISPLAY_MIN_CM, WAIST_CHART_DISPLAY_MAX_CM)
 internal val BLOOD_PRESSURE_CHART_LINES = listOf(70.0, 90.0, 110.0, 140.0)
