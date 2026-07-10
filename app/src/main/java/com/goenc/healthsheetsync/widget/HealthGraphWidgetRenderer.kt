@@ -40,6 +40,7 @@ import com.goenc.healthsheetsync.ui.PopupBackground
 import com.goenc.healthsheetsync.ui.STEP_CHART_MAX_STEPS
 import com.goenc.healthsheetsync.ui.STEP_REFERENCE_STEPS
 import com.goenc.healthsheetsync.ui.WAIST_CHART_LINES_CM
+import com.goenc.healthsheetsync.ui.WAIST_CHART_GUIDE_MAX_CM
 import com.goenc.healthsheetsync.ui.WAIST_CHART_MAX_CM
 import com.goenc.healthsheetsync.ui.WAIST_CHART_MIN_CM
 import com.goenc.healthsheetsync.ui.WAIST_CHART_TOP_RATIO
@@ -169,8 +170,13 @@ internal object HealthGraphWidgetRenderer {
         fun waistYAt(value: Double): Float {
             val waistTop = chartTop + chartHeight * WAIST_CHART_TOP_RATIO
             val waistHeight = max(1f, chartBottom - waistTop)
-            val ratio = ((value - WAIST_CHART_MIN_CM) / (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
-                .coerceIn(0f, 1f)
+            val ratio = ((value - WAIST_CHART_MIN_CM) /
+                (WAIST_CHART_GUIDE_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
+                .coerceIn(
+                    0f,
+                    ((WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM) /
+                        (WAIST_CHART_GUIDE_MAX_CM - WAIST_CHART_MIN_CM)).toFloat(),
+                )
             return chartBottom - waistHeight * ratio
         }
 

@@ -265,8 +265,12 @@ internal fun WeightTrendChart(
                 val waistTop = chartTop + chartHeight * WAIST_CHART_TOP_RATIO
                 val waistHeight = max(1f, chartBottom - waistTop)
                 val ratio = ((value - WAIST_CHART_MIN_CM) /
-                    (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
-                    .coerceIn(0f, 1f)
+                    (WAIST_CHART_GUIDE_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
+                    .coerceIn(
+                        0f,
+                        ((WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM) /
+                            (WAIST_CHART_GUIDE_MAX_CM - WAIST_CHART_MIN_CM)).toFloat(),
+                    )
                 return chartBottom - waistHeight * ratio
             }
 
