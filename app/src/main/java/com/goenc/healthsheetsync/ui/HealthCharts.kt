@@ -262,23 +262,16 @@ internal fun WeightTrendChart(
             }
 
             fun waistYAt(value: Double): Float {
-                val bandBottomRatio =
-                    ((WAIST_CHART_DISPLAY_BAND_MIN_CM - WAIST_CHART_MIN_CM) /
-                        (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat().coerceIn(0f, 1f)
-                val bandTopRatio =
-                    ((WAIST_CHART_DISPLAY_BAND_MAX_CM - WAIST_CHART_MIN_CM) /
-                        (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat().coerceIn(0f, 1f)
-                val bandBottom = chartBottom - chartHeight * bandBottomRatio
-                val bandTop = chartBottom - chartHeight * bandTopRatio
-                val bandHeight = max(1f, bandBottom - bandTop)
-                val ratio = ((value - WAIST_CHART_DISPLAY_MIN_CM) /
-                    (WAIST_CHART_DISPLAY_MAX_CM - WAIST_CHART_DISPLAY_MIN_CM)).toFloat()
-                    .coerceAtLeast(0f)
-                return (bandBottom - bandHeight * ratio).coerceIn(chartTop, chartBottom)
+                val waistTop = chartTop + chartHeight * WAIST_CHART_TOP_RATIO
+                val waistHeight = max(1f, chartBottom - waistTop)
+                val ratio = ((value - WAIST_CHART_MIN_CM) /
+                    (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
+                    .coerceIn(0f, 1f)
+                return chartBottom - waistHeight * ratio
             }
 
             val desiredStepReferenceY = (
-                waistYAt(WAIST_CHART_DISPLAY_MAX_CM) - STEP_REFERENCE_CLEARANCE_DP.dp.toPx()
+                waistYAt(WAIST_CHART_MAX_CM) - STEP_REFERENCE_CLEARANCE_DP.dp.toPx()
             ).coerceAtLeast(chartTop + 20.dp.toPx())
             val stepReferenceRatio = ((chartBottom - desiredStepReferenceY) / chartHeight)
                 .coerceIn(0.05f, 0.95f)

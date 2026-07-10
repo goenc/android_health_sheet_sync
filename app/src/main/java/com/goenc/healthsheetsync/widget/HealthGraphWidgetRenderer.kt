@@ -42,6 +42,7 @@ import com.goenc.healthsheetsync.ui.STEP_REFERENCE_STEPS
 import com.goenc.healthsheetsync.ui.WAIST_CHART_LINES_CM
 import com.goenc.healthsheetsync.ui.WAIST_CHART_MAX_CM
 import com.goenc.healthsheetsync.ui.WAIST_CHART_MIN_CM
+import com.goenc.healthsheetsync.ui.WAIST_CHART_TOP_RATIO
 import com.goenc.healthsheetsync.ui.WeightChartRange
 import com.goenc.healthsheetsync.ui.calculateA1cChart
 import com.goenc.healthsheetsync.ui.calculateAverageSteps
@@ -166,9 +167,11 @@ internal object HealthGraphWidgetRenderer {
         }
 
         fun waistYAt(value: Double): Float {
+            val waistTop = chartTop + chartHeight * WAIST_CHART_TOP_RATIO
+            val waistHeight = max(1f, chartBottom - waistTop)
             val ratio = ((value - WAIST_CHART_MIN_CM) / (WAIST_CHART_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
                 .coerceIn(0f, 1f)
-            return chartBottom - chartHeight * ratio
+            return chartBottom - waistHeight * ratio
         }
 
         fun bloodPressureYAt(value: Double): Float {
