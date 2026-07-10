@@ -395,6 +395,7 @@ internal const val A1C_CHART_MAX = 14.0
 internal const val WAIST_CHART_MIN_CM = 70.0
 internal const val WAIST_CHART_MAX_CM = 95.0
 internal const val WAIST_CHART_TOP_RATIO = 0.46f
+internal const val STEP_REFERENCE_TOP_RATIO = 2f / 3f
 internal const val BLOOD_PRESSURE_CHART_MIN = 70.0
 internal const val BLOOD_PRESSURE_CHART_MAX = 140.0
 internal const val BLOOD_PRESSURE_CHART_HEIGHT_RATIO = 0.42f

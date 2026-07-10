@@ -271,7 +271,8 @@ internal fun WeightTrendChart(
             }
 
             val desiredStepReferenceY = (
-                waistYAt(WAIST_CHART_MAX_CM) - STEP_REFERENCE_CLEARANCE_DP.dp.toPx()
+                chartTop + chartHeight * STEP_REFERENCE_TOP_RATIO -
+                    STEP_REFERENCE_CLEARANCE_DP.dp.toPx()
             ).coerceAtLeast(chartTop + 20.dp.toPx())
             val stepReferenceRatio = ((chartBottom - desiredStepReferenceY) / chartHeight)
                 .coerceIn(0.05f, 0.95f)
