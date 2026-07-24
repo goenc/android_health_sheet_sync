@@ -4,6 +4,7 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyEnergyDisplay
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.DayOfWeek
@@ -81,6 +82,7 @@ internal data class ChartDaySelection(
     val morning: ChartWeightPoint?,
     val night: ChartWeightPoint?,
     val steps: DebugStepDaily?,
+    val dailyEnergy: DailyEnergyDisplay?,
 ) {
     val points: List<ChartWeightPoint>
         get() = listOfNotNull(morning, night)

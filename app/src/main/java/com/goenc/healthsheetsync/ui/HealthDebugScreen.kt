@@ -60,7 +60,7 @@ fun HealthDebugScreen(
     onRestoreStoredRecord: (String, String) -> Unit,
     onDeleteStoredRecord: (String, String) -> Unit,
     basalMetabolicRate: Int,
-    onSaveBasalMetabolicRate: (Int) -> Unit,
+    onSaveBasalMetabolicRate: (Int, (Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -142,6 +142,7 @@ fun HealthDebugScreen(
                             basalMetabolicRate = basalMetabolicRate,
                             onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
                             onBack = { showSettings = false },
+                            dailyEnergySnapshots = state.dailyEnergySnapshots,
                         )
                     }
                     return@Column
@@ -179,6 +180,8 @@ fun HealthDebugScreen(
                         WeightTrendChart(
                             state.weightRecords,
                             state.stepDailyRecords,
+                            state.dailyEnergySnapshots,
+                            basalMetabolicRate,
                             state.glucoseRecords,
                             state.a1cDailyRecords,
                             state.manualRecords,

@@ -23,6 +23,7 @@ internal class HealthRecordQueries(
             manualRecords = loadManualRecords(),
             a1cDailyRecords = loadA1cDailyRecords(),
             invalidatedGraphRecords = loadInvalidatedGraphRecords(),
+            dailyEnergySnapshots = DailyEnergySnapshotStore(db).load(),
         )
     }
 

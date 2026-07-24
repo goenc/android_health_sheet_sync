@@ -16,6 +16,7 @@ data class HealthDebugUiState(
     val yesterdaySteps: DebugStepDaily? = null,
     val sourceSummaries: List<String> = emptyList(),
     val debugMessages: List<String> = emptyList(),
+    val dailyEnergySnapshots: List<DailyEnergySnapshot> = emptyList(),
 ) {
     val canRequestPermissions: Boolean
         get() = availability == HealthConnectAvailability.Available
@@ -71,6 +72,15 @@ data class DebugStepRecord(
     val startAt: LocalDateTime,
     val endAt: LocalDateTime,
     val steps: Long,
+)
+
+data class DailyEnergySnapshot(
+    val targetDate: LocalDate,
+    val steps: Long,
+    val basalMetabolicRate: Int,
+    val pal: Double,
+    val estimatedTotalKcal: Int,
+    val finalizedAt: LocalDateTime,
 )
 
 data class DebugA1cDaily(

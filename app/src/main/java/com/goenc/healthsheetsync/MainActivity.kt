@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private var sharedText by mutableStateOf<String?>(null)
     private var sharedTextImportStatus by mutableStateOf<String?>(null)
     private var healthRefreshJob: Job? = null
+    private var localRefreshJob: Job? = null
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
     ) { grantedPermissions ->
@@ -101,7 +102,9 @@ class MainActivity : ComponentActivity() {
                             deleteStoredRecord(recordType, uniqueKey)
                         },
                         basalMetabolicRate = basalMetabolicRate,
-                        onSaveBasalMetabolicRate = { value -> saveBasalMetabolicRate(value) },
+                        onSaveBasalMetabolicRate = { value, onResult ->
+                            saveBasalMetabolicRate(value, onResult)
+                        },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -128,18 +131,26 @@ class MainActivity : ComponentActivity() {
         healthRefreshJob = lifecycleScope.launch {
             healthState = healthState.copy(isLoading = true)
             val storedData = withContext(Dispatchers.IO) {
+                localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
                 localStore.load()
             }
             healthState = healthState.withStoredData(storedData)
             healthState = withContext(Dispatchers.IO) {
-                healthReader.load()
+                healthReader.load(basalMetabolicRate)
             }
         }
     }
 
     private fun refreshLocalHealthData() {
-        healthState = healthState.withStoredData(localStore.load())
-        HealthGraphWidgetUpdater.requestUpdate(applicationContext)
+        if (localRefreshJob?.isActive == true) return
+        localRefreshJob = lifecycleScope.launch {
+            val storedData = withContext(Dispatchers.IO) {
+                localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
+                localStore.load()
+            }
+            healthState = healthState.withStoredData(storedData)
+            HealthGraphWidgetUpdater.requestUpdate(applicationContext)
+        }
     }
 
     private fun saveManualRecord(draft: ManualHealthRecordDraft) {
@@ -177,9 +188,22 @@ class MainActivity : ComponentActivity() {
         refreshLocalHealthData()
     }
 
-    private fun saveBasalMetabolicRate(value: Int) {
-        if (basalMetabolicRateSettingsStore.save(value)) {
-            basalMetabolicRate = value
+    private fun saveBasalMetabolicRate(value: Int, onResult: (Boolean) -> Unit) {
+        val previousBasalMetabolicRate = basalMetabolicRate
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    localStore.finalizePastDailyEnergySnapshots(previousBasalMetabolicRate)
+                    check(basalMetabolicRateSettingsStore.save(value))
+                }.isSuccess
+            }
+            if (saved) {
+                basalMetabolicRate = value
+                onResult(true)
+                refreshLocalHealthData()
+            } else {
+                onResult(false)
+            }
         }
     }
 
@@ -223,6 +247,7 @@ private fun HealthDebugUiState.withStoredData(storedData: StoredHealthData): Hea
         a1cDailyRecords = storedData.a1cDailyRecords,
         manualRecords = storedData.manualRecords,
         invalidatedGraphRecords = storedData.invalidatedGraphRecords,
+        dailyEnergySnapshots = storedData.dailyEnergySnapshots,
         yesterdaySteps = storedData.stepDailyRecords.firstOrNull { it.targetDate == yesterday },
         sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
     )

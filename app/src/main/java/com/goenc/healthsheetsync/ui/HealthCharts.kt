@@ -50,11 +50,14 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
+import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -64,6 +67,8 @@ import kotlin.math.roundToInt
 internal fun WeightTrendChart(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
+    dailyEnergySnapshots: List<DailyEnergySnapshot>,
+    basalMetabolicRate: Int,
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
     manualRecords: List<ManualHealthRecord>,
@@ -84,7 +89,13 @@ internal fun WeightTrendChart(
     }
     val chartPoints = remember(chartRecords) { chartRecords.toChartWeightPoints() }
     var selectedDate by remember(chartPoints) { mutableStateOf<LocalDate?>(null) }
-    val selectedDay = remember(chartPoints, dailySteps, selectedDate) {
+    val selectedDay = remember(
+        chartPoints,
+        dailySteps,
+        dailyEnergySnapshots,
+        basalMetabolicRate,
+        selectedDate,
+    ) {
         selectedDate?.let { date ->
             val dayPoints = chartPoints.filter { it.targetDate == date }
             if (dayPoints.isEmpty()) {
@@ -95,6 +106,13 @@ internal fun WeightTrendChart(
                     morning = dayPoints.firstOrNull { it.timeBand == "朝" },
                     night = dayPoints.firstOrNull { it.timeBand == "夜" },
                     steps = dailySteps.firstOrNull { it.targetDate == date },
+                    dailyEnergy = DailyEnergyCalculator.resolveDisplay(
+                        targetDate = date,
+                        today = LocalDate.now(ZoneId.systemDefault()),
+                        currentSteps = dailySteps.firstOrNull { it.targetDate == date }?.steps,
+                        currentBasalMetabolicRate = basalMetabolicRate,
+                        snapshot = dailyEnergySnapshots.firstOrNull { it.targetDate == date },
+                    ),
                 )
             }
         }
@@ -805,7 +823,18 @@ private fun SelectedDaySummary(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            SummaryInfoLine(day?.let { it.date.formatMonthDayWithWeekday() } ?: "日付 -", ChartBlue, true)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryInfoLine(day?.let { it.date.formatMonthDayWithWeekday() } ?: "日付 -", ChartBlue, true)
+                SummaryInfoLine(
+                    text = "推定総消費 ${day?.dailyEnergy?.estimatedTotalKcal?.let(::formatIntegerWithGrouping) ?: "-"} kcal",
+                    color = ChartSummary,
+                    bold = true,
+                )
+            }
             SummaryInfoLine(
                 day?.let { "朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}  差 ${it.weightDifferenceText()}" }
                     ?: "朝 -  夜 -  差 -",

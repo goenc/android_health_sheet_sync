@@ -3,7 +3,7 @@ package com.goenc.healthsheetsync.data
 import android.database.sqlite.SQLiteDatabase
 
 internal const val DATABASE_NAME = "health_sheet_sync.db"
-internal const val DATABASE_VERSION = 5
+internal const val DATABASE_VERSION = 6
 internal const val TABLE_WEIGHT = "weight_records"
 internal const val TABLE_GLUCOSE = "glucose_records"
 internal const val TABLE_STEPS = "step_daily_records"
@@ -11,6 +11,7 @@ internal const val TABLE_STEP_RECORDS = "health_connect_step_records"
 internal const val TABLE_A1C_DAILY = "a1c_daily_records"
 internal const val TABLE_MANUAL = "manual_records"
 internal const val TABLE_INVALIDATED = "invalidated_record_keys"
+internal const val TABLE_DAILY_ENERGY_SNAPSHOTS = "daily_energy_snapshots"
 internal const val MANUAL_SOURCE = "手入力"
 internal const val MANUAL_PACKAGE = "manual"
 internal const val UNKNOWN = "不明"
@@ -60,6 +61,7 @@ internal fun SQLiteDatabase.createHealthConnectTables() {
     )
     createHealthConnectStepRecordsTable()
     createInvalidatedRecordsTable()
+    createDailyEnergySnapshotsTable()
 }
 
 internal fun SQLiteDatabase.createHealthConnectStepRecordsTable() {
@@ -121,6 +123,21 @@ internal fun SQLiteDatabase.createA1cDailyRecordsTable() {
             a1c_percent REAL NOT NULL,
             manual_id TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )
+        """.trimIndent(),
+    )
+}
+
+internal fun SQLiteDatabase.createDailyEnergySnapshotsTable() {
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS daily_energy_snapshots (
+            target_date TEXT PRIMARY KEY,
+            steps INTEGER NOT NULL,
+            basal_metabolic_rate INTEGER NOT NULL,
+            pal REAL NOT NULL,
+            estimated_total_kcal INTEGER NOT NULL,
+            finalized_at TEXT NOT NULL
         )
         """.trimIndent(),
     )

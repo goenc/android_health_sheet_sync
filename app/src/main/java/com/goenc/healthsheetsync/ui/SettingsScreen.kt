@@ -36,10 +36,13 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
+import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
-import com.goenc.healthsheetsync.health.DailyEnergyCalculator
+import java.time.LocalDate
+import java.time.ZoneId
 
 @Composable
 internal fun SettingsScreen(
@@ -50,7 +53,8 @@ internal fun SettingsScreen(
     csvShareStatus: String?,
     onRecordListVisibilityChanged: (Boolean) -> Unit,
     basalMetabolicRate: Int,
-    onSaveBasalMetabolicRate: (Int) -> Unit,
+    onSaveBasalMetabolicRate: (Int, (Boolean) -> Unit) -> Unit,
+    dailyEnergySnapshots: List<DailyEnergySnapshot>,
     onBack: () -> Unit,
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
@@ -179,6 +183,7 @@ internal fun SettingsScreen(
                 dailySteps = state.stepDailyRecords,
                 basalMetabolicRate = basalMetabolicRate,
                 onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
+                dailyEnergySnapshots = dailyEnergySnapshots,
             )
             RecordListType.BloodPressure -> BloodPressureRecordSummary(state.manualRecords)
             RecordListType.Waist -> WaistRecordSummary(state.manualRecords)
@@ -328,7 +333,8 @@ private fun WeightDailySummary(records: List<DebugWeightRecord>) {
 private fun StepDailySummary(
     dailySteps: List<DebugStepDaily>,
     basalMetabolicRate: Int,
-    onSaveBasalMetabolicRate: (Int) -> Unit,
+    onSaveBasalMetabolicRate: (Int, (Boolean) -> Unit) -> Unit,
+    dailyEnergySnapshots: List<DailyEnergySnapshot>,
 ) {
     var inputValue by remember(basalMetabolicRate) { mutableStateOf(basalMetabolicRate.toString()) }
     var inputError by remember { mutableStateOf<String?>(null) }
@@ -366,8 +372,13 @@ private fun StepDailySummary(
                 } else if (value <= 0) {
                     inputError = "基礎代謝量は0より大きい整数で入力してください"
                 } else {
-                    onSaveBasalMetabolicRate(value)
-                    inputError = null
+                    onSaveBasalMetabolicRate(value) { success ->
+                        inputError = if (success) {
+                            null
+                        } else {
+                            "基礎代謝量を保存できませんでした"
+                        }
+                    }
                 }
             },
             shape = CircleShape,
@@ -384,17 +395,23 @@ private fun StepDailySummary(
     dailySteps
         .sortedByDescending { it.targetDate }
         .forEach { steps ->
-            val calculation = DailyEnergyCalculator.calculate(steps.steps, basalMetabolicRate)
+            val energy = DailyEnergyCalculator.resolveDisplay(
+                targetDate = steps.targetDate,
+                today = LocalDate.now(ZoneId.systemDefault()),
+                currentSteps = steps.steps,
+                currentBasalMetabolicRate = basalMetabolicRate,
+                snapshot = dailyEnergySnapshots.firstOrNull { it.targetDate == steps.targetDate },
+            )
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = steps.targetDate.toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text("${formatIntegerWithGrouping(steps.steps)}歩")
-                Text("基礎代謝 ${formatIntegerWithGrouping(basalMetabolicRate)} kcal/日")
-                Text("PAL ${formatPal(calculation.pal)}")
-                Text("推定総消費 ${formatIntegerWithGrouping(calculation.estimatedTotalKcal)} kcal/日")
+                Text("${formatIntegerWithGrouping(energy?.steps ?: steps.steps)}歩")
+                Text("基礎代謝 ${energy?.basalMetabolicRate?.let(::formatIntegerWithGrouping) ?: "-"} kcal/日")
+                Text("PAL ${energy?.pal?.let(::formatPal) ?: "-"}")
+                Text("推定総消費 ${energy?.estimatedTotalKcal?.let(::formatIntegerWithGrouping) ?: "-"} kcal/日")
             }
         }
 }

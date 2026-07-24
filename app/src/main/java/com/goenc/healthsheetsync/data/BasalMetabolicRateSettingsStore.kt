@@ -12,8 +12,7 @@ class BasalMetabolicRateSettingsStore(context: Context) {
 
     fun save(value: Int): Boolean {
         if (value <= 0) return false
-        preferences.edit().putInt(KEY_BASAL_METABOLIC_RATE, value).apply()
-        return true
+        return preferences.edit().putInt(KEY_BASAL_METABOLIC_RATE, value).commit()
     }
 
     private companion object {

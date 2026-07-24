@@ -9,6 +9,7 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugStepRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
@@ -40,6 +41,9 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         }
         if (oldVersion < 5) {
             db.createHealthConnectStepRecordsTable()
+        }
+        if (oldVersion < 6) {
+            db.createDailyEnergySnapshotsTable()
         }
     }
 
@@ -96,6 +100,10 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     }
 
     fun load(): StoredHealthData = HealthRecordQueries(readableDatabase).load()
+
+    fun finalizePastDailyEnergySnapshots(basalMetabolicRate: Int) {
+        DailyEnergySnapshotStore(writableDatabase).finalizePastDays(basalMetabolicRate)
+    }
 
     fun saveManualRecord(draft: ManualHealthRecordDraft) {
         ManualRecordRepository(writableDatabase).save(draft)
@@ -205,4 +213,5 @@ data class StoredHealthData(
     val a1cDailyRecords: List<DebugA1cDaily>,
     val manualRecords: List<ManualHealthRecord>,
     val invalidatedGraphRecords: List<InvalidatedGraphRecord>,
+    val dailyEnergySnapshots: List<DailyEnergySnapshot>,
 )
