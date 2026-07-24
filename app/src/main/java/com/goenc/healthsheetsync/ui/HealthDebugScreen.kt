@@ -59,6 +59,8 @@ fun HealthDebugScreen(
     onInvalidateStoredRecord: (String, String) -> Unit,
     onRestoreStoredRecord: (String, String) -> Unit,
     onDeleteStoredRecord: (String, String) -> Unit,
+    basalMetabolicRate: Int,
+    onSaveBasalMetabolicRate: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -137,6 +139,8 @@ fun HealthDebugScreen(
                             onRecordListVisibilityChanged = { isVisible ->
                                 shouldEnableSettingsScroll = isVisible
                             },
+                            basalMetabolicRate = basalMetabolicRate,
+                            onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
                             onBack = { showSettings = false },
                         )
                     }

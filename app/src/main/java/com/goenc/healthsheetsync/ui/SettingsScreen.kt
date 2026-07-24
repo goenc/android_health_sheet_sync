@@ -17,6 +17,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -36,6 +39,7 @@ import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 
 @Composable
 internal fun SettingsScreen(
@@ -45,6 +49,8 @@ internal fun SettingsScreen(
     onShareCsvToDrive: () -> Unit,
     csvShareStatus: String?,
     onRecordListVisibilityChanged: (Boolean) -> Unit,
+    basalMetabolicRate: Int,
+    onSaveBasalMetabolicRate: (Int) -> Unit,
     onBack: () -> Unit,
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
@@ -169,7 +175,11 @@ internal fun SettingsScreen(
         when (selectedRecordList) {
             RecordListType.Weight -> WeightDailySummary(state.weightRecords)
             RecordListType.Glucose -> GlucoseRecordSummary(state.glucoseRecords)
-            RecordListType.Steps -> StepDailySummary(state.stepDailyRecords)
+            RecordListType.Steps -> StepDailySummary(
+                dailySteps = state.stepDailyRecords,
+                basalMetabolicRate = basalMetabolicRate,
+                onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
+            )
             RecordListType.BloodPressure -> BloodPressureRecordSummary(state.manualRecords)
             RecordListType.Waist -> WaistRecordSummary(state.manualRecords)
             RecordListType.A1c -> A1cRecordSummary(state.a1cDailyRecords)
@@ -315,14 +325,77 @@ private fun WeightDailySummary(records: List<DebugWeightRecord>) {
 }
 
 @Composable
-private fun StepDailySummary(dailySteps: List<DebugStepDaily>) {
+private fun StepDailySummary(
+    dailySteps: List<DebugStepDaily>,
+    basalMetabolicRate: Int,
+    onSaveBasalMetabolicRate: (Int) -> Unit,
+) {
+    var inputValue by remember(basalMetabolicRate) { mutableStateOf(basalMetabolicRate.toString()) }
+    var inputError by remember { mutableStateOf<String?>(null) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "現在の基礎代謝：${formatIntegerWithGrouping(basalMetabolicRate)} kcal/日",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        OutlinedTextField(
+            value = inputValue,
+            onValueChange = {
+                inputValue = it
+                inputError = null
+            },
+            label = { Text("基礎代謝量（kcal/日）") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            isError = inputError != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        inputError?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Button(
+            onClick = {
+                val value = inputValue.trim().toIntOrNull()
+                if (value == null) {
+                    inputError = "基礎代謝量は整数で入力してください"
+                } else if (value <= 0) {
+                    inputError = "基礎代謝量は0より大きい整数で入力してください"
+                } else {
+                    onSaveBasalMetabolicRate(value)
+                    inputError = null
+                }
+            },
+            shape = CircleShape,
+        ) {
+            Text("保存")
+        }
+    }
+
+    if (dailySteps.isEmpty()) {
+        Text("歩数記録はありません", style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+
     dailySteps
         .sortedByDescending { it.targetDate }
         .forEach { steps ->
-            Text(
-                text = "${steps.targetDate}  ${steps.steps}歩",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            val calculation = DailyEnergyCalculator.calculate(steps.steps, basalMetabolicRate)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = steps.targetDate.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text("${formatIntegerWithGrouping(steps.steps)}歩")
+                Text("基礎代謝 ${formatIntegerWithGrouping(basalMetabolicRate)} kcal/日")
+                Text("PAL ${formatPal(calculation.pal)}")
+                Text("推定総消費 ${formatIntegerWithGrouping(calculation.estimatedTotalKcal)} kcal/日")
+            }
         }
 }
 

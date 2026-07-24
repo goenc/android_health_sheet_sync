@@ -17,6 +17,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.PriorityQueue
+import java.util.Locale
 import kotlin.math.roundToInt
 
 internal fun HealthConnectAvailability.displayText(): String {
@@ -47,6 +48,15 @@ internal fun String.toPermissionLabel(): String {
 
 internal fun LocalDateTime.formatDateTime(): String =
     format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+
+internal fun formatIntegerWithGrouping(value: Long): String =
+    String.format(Locale.US, "%,d", value)
+
+internal fun formatIntegerWithGrouping(value: Int): String =
+    String.format(Locale.US, "%,d", value)
+
+internal fun formatPal(value: Double): String =
+    String.format(Locale.US, "%.3f", value)
 
 internal fun LocalDate.formatMonthDayWithWeekday(): String =
     "${monthValue}月${dayOfMonth}日(${dayOfWeek.japaneseShortName()})"

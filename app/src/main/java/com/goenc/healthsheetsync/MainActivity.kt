@@ -15,11 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.data.BasalMetabolicRateSettingsStore
 import com.goenc.healthsheetsync.data.StoredHealthData
 import com.goenc.healthsheetsync.export.HealthCsvShareExporter
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.HealthConnectDebugReader
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.share.SharedTextImporter
@@ -36,9 +38,11 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
     private lateinit var localStore: LocalHealthDataStore
+    private lateinit var basalMetabolicRateSettingsStore: BasalMetabolicRateSettingsStore
     private lateinit var sharedTextImporter: SharedTextImporter
     private lateinit var healthCsvShareExporter: HealthCsvShareExporter
     private var healthState by mutableStateOf(HealthDebugUiState())
+    private var basalMetabolicRate by mutableStateOf(DailyEnergyCalculator.DEFAULT_BASAL_METABOLIC_RATE)
     private var csvShareStatus by mutableStateOf<String?>(null)
     private var sharedText by mutableStateOf<String?>(null)
     private var sharedTextImportStatus by mutableStateOf<String?>(null)
@@ -58,6 +62,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         healthReader = HealthConnectDebugReader(applicationContext)
         localStore = LocalHealthDataStore(applicationContext)
+        basalMetabolicRateSettingsStore = BasalMetabolicRateSettingsStore(applicationContext)
+        basalMetabolicRate = basalMetabolicRateSettingsStore.load()
         sharedTextImporter = SharedTextImporter(applicationContext, localStore)
         healthCsvShareExporter = HealthCsvShareExporter(applicationContext)
         handleSharedText(intent)
@@ -94,6 +100,8 @@ class MainActivity : ComponentActivity() {
                         onDeleteStoredRecord = { recordType, uniqueKey ->
                             deleteStoredRecord(recordType, uniqueKey)
                         },
+                        basalMetabolicRate = basalMetabolicRate,
+                        onSaveBasalMetabolicRate = { value -> saveBasalMetabolicRate(value) },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -167,6 +175,12 @@ class MainActivity : ComponentActivity() {
     private fun deleteStoredRecord(recordType: String, uniqueKey: String) {
         localStore.deleteStoredRecord(recordType, uniqueKey)
         refreshLocalHealthData()
+    }
+
+    private fun saveBasalMetabolicRate(value: Int) {
+        if (basalMetabolicRateSettingsStore.save(value)) {
+            basalMetabolicRate = value
+        }
     }
 
     private fun shareCsvToDrive() {

@@ -8,6 +8,18 @@ import java.time.LocalTime
 
 class HealthUiFormattersTest {
     @Test
+    fun formatsEnergyValuesWithFixedLocaleAndGrouping() {
+        assertEquals("8,000", formatIntegerWithGrouping(8_000L))
+        assertEquals("1,371", formatIntegerWithGrouping(1_371))
+        assertEquals("1,922", formatIntegerWithGrouping(1_922))
+    }
+
+    @Test
+    fun formatsPalToThreeDecimalPlaces() {
+        assertEquals("1.300", formatPal(1.29959))
+    }
+
+    @Test
     fun bloodPressureDefaultsToMorningBeforeFivePm() {
         assertEquals("朝", ManualRecordType.BloodPressure.defaultManualTimeBand(LocalTime.of(16, 59)))
     }
