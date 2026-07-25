@@ -2,15 +2,153 @@ package com.goenc.healthsheetsync.ui
 
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.DebugStepDaily
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
+import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
 
 class HealthChartCalculationsTest {
+    @Test
+    fun averageEstimatedTotalKcal_uses_saved_values_for_past_days() {
+        val today = LocalDate.of(2026, 1, 10)
+        val result = calculateAverageEstimatedTotalKcal(
+            dailySteps = listOf(
+                stepDaily(2026, 1, 8, 10_000),
+                stepDaily(2026, 1, 9, 10_000),
+            ),
+            dailyEnergySnapshots = listOf(
+                energySnapshot(2026, 1, 8, 2_000),
+                energySnapshot(2026, 1, 9, 2_200),
+            ),
+            basalMetabolicRate = 5_000,
+            window = chartWindow(2026, 1, 8, 2026, 1, 9),
+            today = today,
+        )
+
+        assertEquals(2_100, result)
+    }
+
+    @Test
+    fun averageEstimatedTotalKcal_uses_dynamic_value_for_today_even_with_snapshot() {
+        val today = LocalDate.of(2026, 1, 10)
+        val dynamicToday = DailyEnergyCalculator.calculate(1_000, 2_000).estimatedTotalKcal
+        val result = calculateAverageEstimatedTotalKcal(
+            dailySteps = listOf(stepDaily(2026, 1, 10, 1_000)),
+            dailyEnergySnapshots = listOf(energySnapshot(2026, 1, 10, 999)),
+            basalMetabolicRate = 2_000,
+            window = chartWindow(2026, 1, 10, 2026, 1, 10, endHour = 23),
+            today = today,
+        )
+
+        assertEquals(dynamicToday, result)
+    }
+
+    @Test
+    fun averageEstimatedTotalKcal_excludes_unfinalized_past_days() {
+        val result = calculateAverageEstimatedTotalKcal(
+            dailySteps = listOf(
+                stepDaily(2026, 1, 8, 10_000),
+                stepDaily(2026, 1, 9, 10_000),
+            ),
+            dailyEnergySnapshots = listOf(energySnapshot(2026, 1, 9, 2_200)),
+            basalMetabolicRate = 1_371,
+            window = chartWindow(2026, 1, 8, 2026, 1, 9),
+            today = LocalDate.of(2026, 1, 10),
+        )
+
+        assertEquals(2_200, result)
+    }
+
+    @Test
+    fun averageEstimatedTotalKcal_includes_snapshot_without_weight_or_steps() {
+        val result = calculateAverageEstimatedTotalKcal(
+            dailySteps = emptyList(),
+            dailyEnergySnapshots = listOf(energySnapshot(2026, 1, 8, 2_000)),
+            basalMetabolicRate = 1_371,
+            window = chartWindow(2026, 1, 8, 2026, 1, 8),
+            today = LocalDate.of(2026, 1, 10),
+        )
+
+        assertEquals(2_000, result)
+    }
+
+    @Test
+    fun averageEstimatedTotalKcal_deduplicates_dates_from_steps_and_snapshots() {
+        val result = calculateAverageEstimatedTotalKcal(
+            dailySteps = listOf(stepDaily(2026, 1, 8, 10_000)),
+            dailyEnergySnapshots = listOf(energySnapshot(2026, 1, 8, 2_000)),
+            basalMetabolicRate = 1_371,
+            window = chartWindow(2026, 1, 8, 2026, 1, 8),
+            today = LocalDate.of(2026, 1, 10),
+        )
+
+        assertEquals(2_000, result)
+    }
+
+    @Test
+    fun averageEstimatedTotalKcal_excludes_dates_outside_window_and_future() {
+        val result = calculateAverageEstimatedTotalKcal(
+            dailySteps = listOf(
+                stepDaily(2026, 1, 7, 10_000),
+                stepDaily(2026, 1, 8, 10_000),
+                stepDaily(2026, 1, 9, 10_000),
+                stepDaily(2026, 1, 11, 10_000),
+            ),
+            dailyEnergySnapshots = listOf(
+                energySnapshot(2026, 1, 7, 1_000),
+                energySnapshot(2026, 1, 8, 2_000),
+                energySnapshot(2026, 1, 9, 2_200),
+            ),
+            basalMetabolicRate = 1_371,
+            window = chartWindow(2026, 1, 8, 2026, 1, 9),
+            today = LocalDate.of(2026, 1, 10),
+        )
+
+        assertEquals(2_100, result)
+    }
+
+    @Test
+    fun averageEstimatedTotalKcal_returns_null_without_valid_values() {
+        val result = calculateAverageEstimatedTotalKcal(
+            dailySteps = listOf(stepDaily(2026, 1, 8, 10_000)),
+            dailyEnergySnapshots = emptyList(),
+            basalMetabolicRate = 1_371,
+            window = chartWindow(2026, 1, 8, 2026, 1, 8),
+            today = LocalDate.of(2026, 1, 10),
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun averageEstimatedTotalKcal_changes_with_chart_window() {
+        val steps = listOf(
+            stepDaily(2026, 1, 8, 10_000),
+            stepDaily(2026, 1, 9, 10_000),
+        )
+        val snapshots = listOf(
+            energySnapshot(2026, 1, 8, 2_000),
+            energySnapshot(2026, 1, 9, 2_200),
+        )
+        val today = LocalDate.of(2026, 1, 10)
+
+        assertEquals(
+            2_000,
+            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 8, 2026, 1, 8), today),
+        )
+        assertEquals(
+            2_100,
+            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 8, 2026, 1, 9), today),
+        )
+    }
+
     @Test
     fun displayRecord_prefers_latest_record_inside_window() {
         val window = ChartTimeWindow(
@@ -322,6 +460,41 @@ class HealthChartCalculationsTest {
             measuredAt = measuredAt,
             valueText = "$value cm",
             invalidatedAt = null,
+        )
+    }
+
+    private fun chartWindow(
+        startYear: Int,
+        startMonth: Int,
+        startDay: Int,
+        endYear: Int,
+        endMonth: Int,
+        endDay: Int,
+        endHour: Int = 23,
+    ): ChartTimeWindow = ChartTimeWindow(
+        startAt = LocalDateTime.of(startYear, startMonth, startDay, 0, 0),
+        endAt = LocalDateTime.of(endYear, endMonth, endDay, endHour, 59),
+    )
+
+    private fun stepDaily(year: Int, month: Int, day: Int, steps: Long): DebugStepDaily {
+        val date = LocalDate.of(year, month, day)
+        return DebugStepDaily(
+            targetDate = date,
+            steps = steps,
+            aggregationStartAt = date.atStartOfDay(),
+            aggregationEndAt = date.plusDays(1).atStartOfDay(),
+        )
+    }
+
+    private fun energySnapshot(year: Int, month: Int, day: Int, estimatedTotalKcal: Int): DailyEnergySnapshot {
+        val date = LocalDate.of(year, month, day)
+        return DailyEnergySnapshot(
+            targetDate = date,
+            steps = 10_000,
+            basalMetabolicRate = 1_371,
+            pal = 1.4,
+            estimatedTotalKcal = estimatedTotalKcal,
+            finalizedAt = date.atTime(23, 59),
         )
     }
 }

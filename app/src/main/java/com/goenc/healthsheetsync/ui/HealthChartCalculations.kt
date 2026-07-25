@@ -5,6 +5,8 @@ import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyEnergyDisplay
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
+import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.DayOfWeek
@@ -311,13 +313,38 @@ internal fun calculateAverageSteps(
     window: ChartTimeWindow,
 ): Long? {
     val stepsInWindow = dailySteps
-        .filter { dailyStep ->
-            val targetAt = dailyStep.targetDate.atStartOfDay()
-            !targetAt.isBefore(window.startAt) && !targetAt.isAfter(window.endAt)
-        }
+        .filter { it.targetDate.isInChartWindow(window) }
         .map { it.steps }
     if (stepsInWindow.isEmpty()) return null
     return stepsInWindow.average().roundToLong()
+}
+
+internal fun calculateAverageEstimatedTotalKcal(
+    dailySteps: List<DebugStepDaily>,
+    dailyEnergySnapshots: List<DailyEnergySnapshot>,
+    basalMetabolicRate: Int,
+    window: ChartTimeWindow,
+    today: LocalDate,
+): Int? {
+    val candidateDates = (dailySteps.map { it.targetDate } + dailyEnergySnapshots.map { it.targetDate })
+        .distinct()
+        .filter { it.isInChartWindow(window) }
+    val estimatedTotals = candidateDates.mapNotNull { targetDate ->
+        DailyEnergyCalculator.resolveDisplay(
+            targetDate = targetDate,
+            today = today,
+            currentSteps = dailySteps.firstOrNull { it.targetDate == targetDate }?.steps,
+            currentBasalMetabolicRate = basalMetabolicRate,
+            snapshot = dailyEnergySnapshots.firstOrNull { it.targetDate == targetDate },
+        )?.estimatedTotalKcal
+    }
+    if (estimatedTotals.isEmpty()) return null
+    return estimatedTotals.average().roundToInt()
+}
+
+private fun LocalDate.isInChartWindow(window: ChartTimeWindow): Boolean {
+    val targetAt = atStartOfDay()
+    return !targetAt.isBefore(window.startAt) && !targetAt.isAfter(window.endAt)
 }
 
 internal fun calculateFastingGlucoseChart(

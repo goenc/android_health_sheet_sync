@@ -207,6 +207,13 @@ internal fun WeightTrendChart(
                 val weightRange = max(1.0, maxWeight - minWeight)
                 val trendLine = calculateTrendLine(chartPoints)
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
+                val averageEstimatedTotalKcal = calculateAverageEstimatedTotalKcal(
+                    dailySteps = dailySteps,
+                    dailyEnergySnapshots = dailyEnergySnapshots,
+                    basalMetabolicRate = basalMetabolicRate,
+                    window = visibleWindow,
+                    today = LocalDate.now(ZoneId.systemDefault()),
+                )
                 val glucoseChart = calculateFastingGlucoseChart(glucoseRecords, visibleWindow)
                 val a1cChart = calculateA1cChart(a1cDailyRecords, visibleWindow)
                 val waistChart = calculateWaistChart(manualRecords, visibleWindow)
@@ -447,24 +454,50 @@ internal fun WeightTrendChart(
                             )
                         }
                 }
-                trendLine?.let {
+                val trendText = trendLine?.let { formatTrendChange(it, selectedRange, trendDuration) }
+                val averageStepsText = "平均歩数 ${averageSteps?.let { "%,d歩".format(it) } ?: "-"}"
+                val averageGlucoseText =
+                    "平均血糖 ${glucoseChart?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL" } ?: "-"}"
+                val averageEstimatedTotalText =
+                    "平均 ${averageEstimatedTotalKcal?.let(::formatIntegerWithGrouping) ?: "-"} kcal/日"
+                val summaryLeftX = chartLeft + 8.dp.toPx()
+                val summaryRightX = chartRight - 8.dp.toPx()
+                val summaryGap = 8.dp.toPx()
+                val averageEstimatedTotalLeftX =
+                    summaryRightX - trendSummaryPaint.measureText(averageEstimatedTotalText)
+                val summaryBaseline = when {
+                    trendText == null || averageEstimatedTotalLeftX >=
+                        summaryLeftX + trendSummaryPaint.measureText(trendText) + summaryGap -> chartTop + 16.dp.toPx()
+                    averageEstimatedTotalLeftX >=
+                        summaryLeftX + trendSummaryPaint.measureText(averageStepsText) + summaryGap -> chartTop + 34.dp.toPx()
+                    else -> chartTop + 70.dp.toPx()
+                }
+                trendText?.let {
                     trendSummaryPaint.textAlign = Paint.Align.LEFT
                     drawText(
-                        formatTrendChange(it, selectedRange, trendDuration),
-                        chartLeft + 8.dp.toPx(),
+                        it,
+                        summaryLeftX,
                         chartTop + 16.dp.toPx(),
                         trendSummaryPaint,
                     )
                 }
+                trendSummaryPaint.textAlign = Paint.Align.RIGHT
                 drawText(
-                    "平均歩数 ${averageSteps?.let { "%,d歩".format(it) } ?: "-"}",
-                    chartLeft + 8.dp.toPx(),
+                    averageEstimatedTotalText,
+                    summaryRightX,
+                    summaryBaseline,
+                    trendSummaryPaint,
+                )
+                trendSummaryPaint.textAlign = Paint.Align.LEFT
+                drawText(
+                    averageStepsText,
+                    summaryLeftX,
                     chartTop + 34.dp.toPx(),
                     trendSummaryPaint,
                 )
                 drawText(
-                    "平均血糖 ${glucoseChart?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL" } ?: "-"}",
-                    chartLeft + 8.dp.toPx(),
+                    averageGlucoseText,
+                    summaryLeftX,
                     chartTop + 52.dp.toPx(),
                     trendSummaryPaint,
                 )
