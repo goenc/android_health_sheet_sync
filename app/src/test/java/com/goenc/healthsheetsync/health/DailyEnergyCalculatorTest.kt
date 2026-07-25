@@ -78,6 +78,46 @@ class DailyEnergyCalculatorTest {
     }
 
     @Test
+    fun switchesBetweenDatesWithoutReusingThePreviousSnapshot() {
+        val firstSnapshot = DailyEnergySnapshot(
+            targetDate = LocalDate.of(2026, 7, 23),
+            steps = 20_021,
+            basalMetabolicRate = 1_371,
+            pal = 1.64903113,
+            estimatedTotalKcal = 2_261,
+            finalizedAt = LocalDateTime.of(2026, 7, 24, 11, 9),
+        )
+        val secondSnapshot = DailyEnergySnapshot(
+            targetDate = LocalDate.of(2026, 7, 24),
+            steps = 18_049,
+            basalMetabolicRate = 1_371,
+            pal = 1.60854597,
+            estimatedTotalKcal = 2_205,
+            finalizedAt = LocalDateTime.of(2026, 7, 25, 5, 37),
+        )
+
+        val first = DailyEnergyCalculator.resolveDisplay(
+            targetDate = firstSnapshot.targetDate,
+            today = LocalDate.of(2026, 7, 25),
+            currentSteps = null,
+            currentBasalMetabolicRate = 1_500,
+            snapshot = firstSnapshot,
+        )
+        val second = DailyEnergyCalculator.resolveDisplay(
+            targetDate = secondSnapshot.targetDate,
+            today = LocalDate.of(2026, 7, 25),
+            currentSteps = null,
+            currentBasalMetabolicRate = 1_500,
+            snapshot = secondSnapshot,
+        )
+
+        assertEquals(20_021L, first?.steps)
+        assertEquals(2_261, first?.estimatedTotalKcal)
+        assertEquals(18_049L, second?.steps)
+        assertEquals(2_205, second?.estimatedTotalKcal)
+    }
+
+    @Test
     fun resolvesCurrentDayDynamically() {
         val result = DailyEnergyCalculator.resolveDisplay(
             targetDate = LocalDate.of(2026, 7, 24),

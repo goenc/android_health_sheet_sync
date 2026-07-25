@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
+import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -34,6 +35,43 @@ internal class DailyEnergySnapshotStore(
                 )
             }
         }
+    }
+
+    fun repairLegacySyncSnapshots(
+        today: LocalDate = LocalDate.now(ZoneId.systemDefault()),
+    ): Int {
+        var repairedCount = 0
+        db.runInTransaction {
+            if (isRepairCompleted(LEGACY_SYNC_REPAIR_KEY)) return@runInTransaction
+
+            loadLegacyStaleSyncSnapshots(today).forEach { staleSnapshot ->
+                val calculation = DailyEnergyCalculator.calculate(
+                    staleSnapshot.steps,
+                    staleSnapshot.basalMetabolicRate,
+                )
+                update(
+                    TABLE_DAILY_ENERGY_SNAPSHOTS,
+                    ContentValues().apply {
+                        put("steps", staleSnapshot.steps)
+                        put("pal", calculation.pal)
+                        put("estimated_total_kcal", calculation.estimatedTotalKcal)
+                        put("finalized_at", LocalDateTime.now().toString())
+                    },
+                    "target_date = ?",
+                    arrayOf(staleSnapshot.targetDate.toString()),
+                )
+                repairedCount++
+            }
+            insertOrThrow(
+                TABLE_DAILY_ENERGY_REPAIRS,
+                null,
+                ContentValues().apply {
+                    put("repair_key", LEGACY_SYNC_REPAIR_KEY)
+                    put("completed_at", LocalDateTime.now().toString())
+                },
+            )
+        }
+        return repairedCount
     }
 
     fun load(): List<DailyEnergySnapshot> {
@@ -93,8 +131,80 @@ internal class DailyEnergySnapshotStore(
         }
     }
 
+    private fun SQLiteDatabase.loadLegacyStaleSyncSnapshots(today: LocalDate): List<StaleSyncSnapshot> {
+        return rawQuery(
+            """
+            SELECT daily_energy_snapshots.target_date,
+                   daily_energy_snapshots.basal_metabolic_rate,
+                   step_daily_records.steps
+            FROM $TABLE_DAILY_ENERGY_SNAPSHOTS AS daily_energy_snapshots
+            INNER JOIN $TABLE_STEPS AS step_daily_records
+                ON step_daily_records.target_date = daily_energy_snapshots.target_date
+            INNER JOIN $TABLE_STEP_RECORDS AS health_connect_step_records
+                ON health_connect_step_records.target_date = step_daily_records.target_date
+            WHERE daily_energy_snapshots.target_date < ?
+                AND daily_energy_snapshots.steps != step_daily_records.steps
+                AND step_daily_records.updated_at > daily_energy_snapshots.finalized_at
+                AND (julianday(step_daily_records.updated_at) - julianday(daily_energy_snapshots.finalized_at)) <= ${MAX_REPAIR_DELAY_MINUTES / MINUTES_PER_DAY}
+                AND NOT EXISTS (
+                    SELECT 1 FROM $TABLE_INVALIDATED AS invalidated_record_keys
+                    WHERE invalidated_record_keys.record_type = 'steps'
+                        AND invalidated_record_keys.unique_key = step_daily_records.target_date
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM $TABLE_MANUAL AS manual_records
+                    WHERE manual_records.type = ?
+                        AND manual_records.invalidated_at IS NULL
+                        AND substr(manual_records.measured_at, 1, 10) = step_daily_records.target_date
+                )
+            GROUP BY daily_energy_snapshots.target_date,
+                     daily_energy_snapshots.basal_metabolic_rate,
+                     step_daily_records.steps,
+                     step_daily_records.updated_at,
+                     daily_energy_snapshots.finalized_at
+            HAVING SUM(health_connect_step_records.steps) = step_daily_records.steps
+                AND MAX(health_connect_step_records.updated_at) = step_daily_records.updated_at
+            """.trimIndent(),
+            arrayOf(
+                today.toString(),
+                ManualRecordType.Steps.name,
+            ),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        StaleSyncSnapshot(
+                            targetDate = LocalDate.parse(cursor.getString(0)),
+                            basalMetabolicRate = cursor.getInt(1),
+                            steps = cursor.getLong(2),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun SQLiteDatabase.isRepairCompleted(repairKey: String): Boolean {
+        return rawQuery(
+            "SELECT 1 FROM $TABLE_DAILY_ENERGY_REPAIRS WHERE repair_key = ? LIMIT 1",
+            arrayOf(repairKey),
+        ).use { cursor -> cursor.moveToFirst() }
+    }
+
     private data class PendingDailyEnergyDay(
         val targetDate: LocalDate,
         val steps: Long,
     )
+
+    private data class StaleSyncSnapshot(
+        val targetDate: LocalDate,
+        val basalMetabolicRate: Int,
+        val steps: Long,
+    )
+
+    private companion object {
+        const val LEGACY_SYNC_REPAIR_KEY = "hss03_sync_before_finalize_v1"
+        const val MAX_REPAIR_DELAY_MINUTES = 10.0
+        const val MINUTES_PER_DAY = 24.0 * 60.0
+    }
 }

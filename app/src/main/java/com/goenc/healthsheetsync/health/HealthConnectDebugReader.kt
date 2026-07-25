@@ -25,7 +25,7 @@ class HealthConnectDebugReader(private val context: Context) {
         val availability = sdkStatusCheck.availability
         debugMessages += "HealthConnect SDK status: ${sdkStatusCheck.status.toSdkStatusLabel()} (${sdkStatusCheck.status})"
         if (availability !is HealthConnectAvailability.Available) {
-            val storedData = loadLocalData(basalMetabolicRate)
+            val storedData = loadLocalData(basalMetabolicRate, finalizePastDays = true)
             return HealthDebugUiState(
                 availability = availability,
                 permissions = PermissionState.Unknown,
@@ -56,7 +56,7 @@ class HealthConnectDebugReader(private val context: Context) {
         }
 
         if (missingPermissions.isNotEmpty()) {
-            val storedData = loadLocalData(basalMetabolicRate)
+            val storedData = loadLocalData(basalMetabolicRate, finalizePastDays = false)
             return HealthDebugUiState(
                 availability = availability,
                 permissions = permissionState,
@@ -68,9 +68,10 @@ class HealthConnectDebugReader(private val context: Context) {
             )
         }
 
-        val syncResult = runCatching {
+        val syncAttempt = runCatching {
             synchronizer.synchronize(client)
-        }.getOrElse { error ->
+        }
+        val syncResult = syncAttempt.getOrElse { error ->
             debugMessages += error.debugSummary("Health Connect同期に失敗しました")
             HealthConnectSyncResult(changed = false, message = "保存済みデータを表示しています")
         }
@@ -79,7 +80,14 @@ class HealthConnectDebugReader(private val context: Context) {
         if (syncResult.changed) {
             HealthGraphWidgetUpdater.requestUpdate(context.applicationContext)
         }
-        val storedData = loadLocalData(basalMetabolicRate)
+        if (syncAttempt.isSuccess) {
+            val repairedCount = localStore.repairLegacySyncDailyEnergySnapshots()
+            if (repairedCount > 0) {
+                debugMessages += "同期前確定の推定総消費を${repairedCount}日修復"
+            }
+            localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
+        }
+        val storedData = localStore.load()
         debugMessages += "保存済み件数: 体重${storedData.weightRecords.size}件、血糖${storedData.glucoseRecords.size}件、歩数${storedData.stepDailyRecords.size}日"
         val yesterday = LocalDate.now(zoneId).minusDays(1)
         val yesterdaySteps = storedData.stepDailyRecords.firstOrNull { it.targetDate == yesterday }
@@ -101,8 +109,13 @@ class HealthConnectDebugReader(private val context: Context) {
         )
     }
 
-    private fun loadLocalData(basalMetabolicRate: Int): StoredHealthData {
-        localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
+    private fun loadLocalData(
+        basalMetabolicRate: Int,
+        finalizePastDays: Boolean,
+    ): StoredHealthData {
+        if (finalizePastDays) {
+            localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
+        }
         return localStore.load()
     }
 

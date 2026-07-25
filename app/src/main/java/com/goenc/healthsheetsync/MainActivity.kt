@@ -131,7 +131,6 @@ class MainActivity : ComponentActivity() {
         healthRefreshJob = lifecycleScope.launch {
             healthState = healthState.copy(isLoading = true)
             val storedData = withContext(Dispatchers.IO) {
-                localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
                 localStore.load()
             }
             healthState = healthState.withStoredData(storedData)

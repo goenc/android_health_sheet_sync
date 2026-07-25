@@ -45,6 +45,9 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         if (oldVersion < 6) {
             db.createDailyEnergySnapshotsTable()
         }
+        if (oldVersion < 7) {
+            db.createDailyEnergyRepairsTable()
+        }
     }
 
     fun save(
@@ -103,6 +106,10 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
 
     fun finalizePastDailyEnergySnapshots(basalMetabolicRate: Int) {
         DailyEnergySnapshotStore(writableDatabase).finalizePastDays(basalMetabolicRate)
+    }
+
+    fun repairLegacySyncDailyEnergySnapshots(): Int {
+        return DailyEnergySnapshotStore(writableDatabase).repairLegacySyncSnapshots()
     }
 
     fun saveManualRecord(draft: ManualHealthRecordDraft) {

@@ -51,6 +51,48 @@ class DailyEnergySnapshotStoreTest {
         }
     }
 
+    @Test
+    fun repairsOnlyLegacySyncMismatchOnce() {
+        val db = createDatabase()
+        try {
+            insertStep(db, "2026-07-23", 20_021, "2026-07-24T11:09:15")
+            insertHealthConnectSteps(db, "2026-07-23", 20_021, "2026-07-24T11:09:15")
+            insertSnapshot(db, "2026-07-23", 5_593, 1_371, "2026-07-24T11:09:13")
+
+            val repaired = DailyEnergySnapshotStore(db).repairLegacySyncSnapshots(LocalDate.of(2026, 7, 25))
+
+            assertEquals(1, repaired)
+            val snapshot = DailyEnergySnapshotStore(db).load().single()
+            assertSnapshot(snapshot, 20_021, 1_371, 1.64903113, 2_261)
+
+            db.update(
+                TABLE_STEPS,
+                ContentValues().apply { put("steps", 18_049) },
+                "target_date = ?",
+                arrayOf("2026-07-23"),
+            )
+            assertEquals(0, DailyEnergySnapshotStore(db).repairLegacySyncSnapshots(LocalDate.of(2026, 7, 25)))
+            assertSnapshot(DailyEnergySnapshotStore(db).load().single(), 20_021, 1_371, 1.64903113, 2_261)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun doesNotRepairMismatchOutsideLegacySyncWindow() {
+        val db = createDatabase()
+        try {
+            insertStep(db, "2026-07-23", 20_021, "2026-07-24T12:00:00")
+            insertHealthConnectSteps(db, "2026-07-23", 20_021, "2026-07-24T12:00:00")
+            insertSnapshot(db, "2026-07-23", 5_593, 1_371, "2026-07-24T11:00:00")
+
+            assertEquals(0, DailyEnergySnapshotStore(db).repairLegacySyncSnapshots(LocalDate.of(2026, 7, 25)))
+            assertSnapshot(DailyEnergySnapshotStore(db).load().single(), 5_593, 1_371, 1.35282429, 1_855)
+        } finally {
+            db.close()
+        }
+    }
+
     private fun assertSnapshot(
         snapshot: DailyEnergySnapshot,
         steps: Long,
@@ -88,11 +130,18 @@ class DailyEnergySnapshotStoreTest {
                 )
                 """.trimIndent(),
             )
+            createManualRecordsTable()
             createDailyEnergySnapshotsTable()
+            createDailyEnergyRepairsTable()
         }
     }
 
-    private fun insertStep(db: SQLiteDatabase, targetDate: String, steps: Long) {
+    private fun insertStep(
+        db: SQLiteDatabase,
+        targetDate: String,
+        steps: Long,
+        updatedAt: String = "2026-07-24T00:00:00",
+    ) {
         db.insert(
             TABLE_STEPS,
             null,
@@ -101,7 +150,61 @@ class DailyEnergySnapshotStoreTest {
                 put("steps", steps)
                 put("aggregation_start_at", "${targetDate}T00:00:00")
                 put("aggregation_end_at", "${targetDate}T00:00:00")
-                put("updated_at", "2026-07-24T00:00:00")
+                put("updated_at", updatedAt)
+            },
+        )
+    }
+
+    private fun insertHealthConnectSteps(
+        db: SQLiteDatabase,
+        targetDate: String,
+        steps: Long,
+        updatedAt: String,
+    ) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_STEP_RECORDS (
+                health_connect_id TEXT PRIMARY KEY,
+                target_date TEXT NOT NULL,
+                start_at TEXT NOT NULL,
+                end_at TEXT NOT NULL,
+                steps INTEGER NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.insert(
+            TABLE_STEP_RECORDS,
+            null,
+            ContentValues().apply {
+                put("health_connect_id", "record-$targetDate")
+                put("target_date", targetDate)
+                put("start_at", "${targetDate}T12:00:00")
+                put("end_at", "${targetDate}T12:01:00")
+                put("steps", steps)
+                put("updated_at", updatedAt)
+            },
+        )
+    }
+
+    private fun insertSnapshot(
+        db: SQLiteDatabase,
+        targetDate: String,
+        steps: Long,
+        basalMetabolicRate: Int,
+        finalizedAt: String,
+    ) {
+        val calculation = com.goenc.healthsheetsync.health.DailyEnergyCalculator.calculate(steps, basalMetabolicRate)
+        db.insert(
+            TABLE_DAILY_ENERGY_SNAPSHOTS,
+            null,
+            ContentValues().apply {
+                put("target_date", targetDate)
+                put("steps", steps)
+                put("basal_metabolic_rate", basalMetabolicRate)
+                put("pal", calculation.pal)
+                put("estimated_total_kcal", calculation.estimatedTotalKcal)
+                put("finalized_at", finalizedAt)
             },
         )
     }
