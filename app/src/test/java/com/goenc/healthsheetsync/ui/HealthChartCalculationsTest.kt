@@ -130,22 +130,34 @@ class HealthChartCalculationsTest {
     @Test
     fun averageEstimatedTotalKcal_changes_with_chart_window() {
         val steps = listOf(
-            stepDaily(2026, 1, 8, 10_000),
-            stepDaily(2026, 1, 9, 10_000),
+            stepDaily(2026, 1, 1, 10_000),
+            stepDaily(2026, 1, 2, 10_000),
+            stepDaily(2026, 1, 3, 10_000),
+            stepDaily(2026, 1, 4, 10_000),
         )
         val snapshots = listOf(
-            energySnapshot(2026, 1, 8, 2_000),
-            energySnapshot(2026, 1, 9, 2_200),
+            energySnapshot(2026, 1, 1, 2_000),
+            energySnapshot(2026, 1, 2, 2_100),
+            energySnapshot(2026, 1, 3, 2_200),
+            energySnapshot(2026, 1, 4, 2_300),
         )
         val today = LocalDate.of(2026, 1, 10)
 
         assertEquals(
-            2_000,
-            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 8, 2026, 1, 8), today),
+            2_150,
+            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 1, 2026, 1, 10), today),
         )
         assertEquals(
-            2_100,
-            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 8, 2026, 1, 9), today),
+            2_200,
+            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 2, 2026, 1, 10), today),
+        )
+        assertEquals(
+            2_250,
+            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 3, 2026, 1, 10), today),
+        )
+        assertEquals(
+            2_300,
+            calculateAverageEstimatedTotalKcal(steps, snapshots, 1_371, chartWindow(2026, 1, 4, 2026, 1, 10), today),
         )
     }
 
