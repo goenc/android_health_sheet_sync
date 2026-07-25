@@ -60,7 +60,7 @@ fun HealthDebugScreen(
     onRestoreStoredRecord: (String, String) -> Unit,
     onDeleteStoredRecord: (String, String) -> Unit,
     basalMetabolicRate: Int,
-    onSaveBasalMetabolicRate: (Int, (Boolean) -> Unit) -> Unit,
+    onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }

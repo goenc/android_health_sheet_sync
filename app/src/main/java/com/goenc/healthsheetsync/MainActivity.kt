@@ -24,6 +24,7 @@ import com.goenc.healthsheetsync.health.HealthConnectDebugReader
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
+import com.goenc.healthsheetsync.health.ManualRecordType
 import com.goenc.healthsheetsync.share.SharedTextImporter
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
@@ -144,7 +145,6 @@ class MainActivity : ComponentActivity() {
         if (localRefreshJob?.isActive == true) return
         localRefreshJob = lifecycleScope.launch {
             val storedData = withContext(Dispatchers.IO) {
-                localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
                 localStore.load()
             }
             healthState = healthState.withStoredData(storedData)
@@ -153,8 +153,27 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun saveManualRecord(draft: ManualHealthRecordDraft) {
-        localStore.saveManualRecord(draft)
-        refreshLocalHealthData()
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    localStore.saveManualRecord(draft)
+                    true
+                }.getOrDefault(false)
+            }
+            if (saved && draft.type == ManualRecordType.Steps) {
+                val steps = draft.valueText.removeSuffix("歩").toLongOrNull()
+                if (steps != null) {
+                    withContext(Dispatchers.IO) {
+                        localStore.finalizeManualStepsForDate(
+                            targetDate = draft.measuredAt.toLocalDate(),
+                            steps = steps,
+                            basalMetabolicRate = basalMetabolicRate,
+                        )
+                    }
+                }
+            }
+            refreshLocalHealthData()
+        }
     }
 
     private fun invalidateManualRecord(id: String) {
@@ -187,21 +206,24 @@ class MainActivity : ComponentActivity() {
         refreshLocalHealthData()
     }
 
-    private fun saveBasalMetabolicRate(value: Int, onResult: (Boolean) -> Unit) {
+    private fun saveBasalMetabolicRate(value: Int, onResult: (String?) -> Unit) {
         val previousBasalMetabolicRate = basalMetabolicRate
         lifecycleScope.launch {
-            val saved = withContext(Dispatchers.IO) {
+            val errorMessage = withContext(Dispatchers.IO) {
                 runCatching {
-                    localStore.finalizePastDailyEnergySnapshots(previousBasalMetabolicRate)
+                    if (!localStore.finalizeManualOnlyPastDaysIfSafe(previousBasalMetabolicRate)) {
+                        return@runCatching UNSYNCED_PAST_STEPS_MESSAGE
+                    }
                     check(basalMetabolicRateSettingsStore.save(value))
-                }.isSuccess
+                    null
+                }.getOrElse { "基礎代謝量を保存できませんでした" }
             }
-            if (saved) {
+            if (errorMessage == null) {
                 basalMetabolicRate = value
-                onResult(true)
+                onResult(null)
                 refreshLocalHealthData()
             } else {
-                onResult(false)
+                onResult(errorMessage)
             }
         }
     }
@@ -267,3 +289,4 @@ private fun buildSourceSummaries(
 
 private const val TAG = "HealthSheetSync"
 private const val UNKNOWN = "不明"
+private const val UNSYNCED_PAST_STEPS_MESSAGE = "未同期の過去日の歩数があります。先にHealth Connectを更新してください"

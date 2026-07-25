@@ -53,7 +53,7 @@ internal fun SettingsScreen(
     csvShareStatus: String?,
     onRecordListVisibilityChanged: (Boolean) -> Unit,
     basalMetabolicRate: Int,
-    onSaveBasalMetabolicRate: (Int, (Boolean) -> Unit) -> Unit,
+    onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
     onBack: () -> Unit,
 ) {
@@ -333,7 +333,7 @@ private fun WeightDailySummary(records: List<DebugWeightRecord>) {
 private fun StepDailySummary(
     dailySteps: List<DebugStepDaily>,
     basalMetabolicRate: Int,
-    onSaveBasalMetabolicRate: (Int, (Boolean) -> Unit) -> Unit,
+    onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
 ) {
     var inputValue by remember(basalMetabolicRate) { mutableStateOf(basalMetabolicRate.toString()) }
@@ -372,12 +372,8 @@ private fun StepDailySummary(
                 } else if (value <= 0) {
                     inputError = "基礎代謝量は0より大きい整数で入力してください"
                 } else {
-                    onSaveBasalMetabolicRate(value) { success ->
-                        inputError = if (success) {
-                            null
-                        } else {
-                            "基礎代謝量を保存できませんでした"
-                        }
+                    onSaveBasalMetabolicRate(value) { errorMessage ->
+                        inputError = errorMessage
                     }
                 }
             },

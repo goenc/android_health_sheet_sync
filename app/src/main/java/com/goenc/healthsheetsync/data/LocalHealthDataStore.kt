@@ -14,6 +14,7 @@ import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
@@ -104,8 +105,24 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
 
     fun load(): StoredHealthData = HealthRecordQueries(readableDatabase).load()
 
-    fun finalizePastDailyEnergySnapshots(basalMetabolicRate: Int) {
-        DailyEnergySnapshotStore(writableDatabase).finalizePastDays(basalMetabolicRate)
+    fun finalizeHealthConnectDailyEnergySnapshotsAfterSync(basalMetabolicRate: Int) {
+        DailyEnergySnapshotStore(writableDatabase).finalizeHealthConnectPastDays(basalMetabolicRate)
+    }
+
+    fun finalizeManualStepsForDate(
+        targetDate: LocalDate,
+        steps: Long,
+        basalMetabolicRate: Int,
+    ): Boolean {
+        return DailyEnergySnapshotStore(writableDatabase).finalizeManualStepsForDate(
+            targetDate = targetDate,
+            steps = steps,
+            basalMetabolicRate = basalMetabolicRate,
+        )
+    }
+
+    fun finalizeManualOnlyPastDaysIfSafe(basalMetabolicRate: Int): Boolean {
+        return DailyEnergySnapshotStore(writableDatabase).finalizeManualOnlyPastDaysIfSafe(basalMetabolicRate)
     }
 
     fun repairLegacySyncDailyEnergySnapshots(): Int {

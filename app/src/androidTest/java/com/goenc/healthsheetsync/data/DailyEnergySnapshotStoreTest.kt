@@ -3,6 +3,7 @@ package com.goenc.healthsheetsync.data
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
@@ -17,7 +18,7 @@ class DailyEnergySnapshotStoreTest {
         val db = createDatabase()
         try {
             insertStep(db, "2026-07-23", 8_000)
-            DailyEnergySnapshotStore(db).finalizePastDays(1_371, LocalDate.of(2026, 7, 24))
+            DailyEnergySnapshotStore(db).finalizeHealthConnectPastDays(1_371, LocalDate.of(2026, 7, 24))
 
             val first = DailyEnergySnapshotStore(db).load().single()
             assertSnapshot(first, 8_000, 1_371, 1.40224, 1_922)
@@ -28,7 +29,7 @@ class DailyEnergySnapshotStoreTest {
                 "target_date = ?",
                 arrayOf("2026-07-23"),
             )
-            DailyEnergySnapshotStore(db).finalizePastDays(1_500, LocalDate.of(2026, 7, 24))
+            DailyEnergySnapshotStore(db).finalizeHealthConnectPastDays(1_500, LocalDate.of(2026, 7, 24))
 
             val unchanged = DailyEnergySnapshotStore(db).load().single()
             assertSnapshot(unchanged, 8_000, 1_371, 1.40224, 1_922)
@@ -43,7 +44,7 @@ class DailyEnergySnapshotStoreTest {
                 },
             )
             insertStep(db, "2026-07-22", 7_000)
-            DailyEnergySnapshotStore(db).finalizePastDays(1_371, LocalDate.of(2026, 7, 24))
+            DailyEnergySnapshotStore(db).finalizeHealthConnectPastDays(1_371, LocalDate.of(2026, 7, 24))
 
             assertEquals(1, DailyEnergySnapshotStore(db).load().size)
         } finally {
@@ -93,6 +94,79 @@ class DailyEnergySnapshotStoreTest {
         }
     }
 
+    @Test
+    fun finalizesOnlyTheExplicitManualStepsDate() {
+        val db = createDatabase()
+        try {
+            insertStep(db, "2026-07-22", 6_000)
+            insertStep(db, "2026-07-23", 7_000)
+            insertManualSteps(db, "2026-07-22", 6_000)
+            insertManualSteps(db, "2026-07-23", 7_000)
+
+            assertTrue(
+                DailyEnergySnapshotStore(db).finalizeManualStepsForDate(
+                    targetDate = LocalDate.of(2026, 7, 23),
+                    steps = 7_000,
+                    basalMetabolicRate = 1_371,
+                    today = LocalDate.of(2026, 7, 24),
+                ),
+            )
+
+            assertEquals(listOf(LocalDate.of(2026, 7, 23)), DailyEnergySnapshotStore(db).load().map { it.targetDate })
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun blocksBmrPreparationWithoutCreatingManualSnapshotsWhenHealthConnectDayRemains() {
+        val db = createDatabase()
+        try {
+            insertStep(db, "2026-07-22", 6_000)
+            insertManualSteps(db, "2026-07-22", 6_000)
+            insertStep(db, "2026-07-23", 20_000)
+            insertHealthConnectSteps(db, "2026-07-23", 20_000, "2026-07-24T00:00:00")
+
+            assertEquals(
+                false,
+                DailyEnergySnapshotStore(db).finalizeManualOnlyPastDaysIfSafe(
+                    basalMetabolicRate = 1_371,
+                    today = LocalDate.of(2026, 7, 24),
+                ),
+            )
+            assertTrue(DailyEnergySnapshotStore(db).load().isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun finalizesManualOnlyDaysForBmrPreparationWhenAllPendingDaysAreManual() {
+        val db = createDatabase()
+        try {
+            insertStep(db, "2026-07-23", 6_000)
+            insertManualSteps(db, "2026-07-23", 6_000)
+
+            assertEquals(
+                true,
+                DailyEnergySnapshotStore(db).finalizeManualOnlyPastDaysIfSafe(
+                    basalMetabolicRate = 1_371,
+                    today = LocalDate.of(2026, 7, 24),
+                ),
+            )
+            val calculation = DailyEnergyCalculator.calculate(6_000, 1_371)
+            assertSnapshot(
+                DailyEnergySnapshotStore(db).load().single(),
+                6_000,
+                1_371,
+                calculation.pal,
+                calculation.estimatedTotalKcal,
+            )
+        } finally {
+            db.close()
+        }
+    }
+
     private fun assertSnapshot(
         snapshot: DailyEnergySnapshot,
         steps: Long,
@@ -131,6 +205,7 @@ class DailyEnergySnapshotStoreTest {
                 """.trimIndent(),
             )
             createManualRecordsTable()
+            createHealthConnectStepRecordsTable()
             createDailyEnergySnapshotsTable()
             createDailyEnergyRepairsTable()
         }
@@ -205,6 +280,26 @@ class DailyEnergySnapshotStoreTest {
                 put("pal", calculation.pal)
                 put("estimated_total_kcal", calculation.estimatedTotalKcal)
                 put("finalized_at", finalizedAt)
+            },
+        )
+    }
+
+    private fun insertManualSteps(
+        db: SQLiteDatabase,
+        targetDate: String,
+        steps: Long,
+    ) {
+        db.insert(
+            TABLE_MANUAL,
+            null,
+            ContentValues().apply {
+                put("id", "manual-$targetDate-$steps")
+                put("type", "Steps")
+                put("measured_at", "${targetDate}T12:00:00")
+                put("value_text", "${steps}歩")
+                put("created_at", "${targetDate}T12:00:00")
+                put("updated_at", "${targetDate}T12:00:00")
+                putNull("invalidated_at")
             },
         )
     }

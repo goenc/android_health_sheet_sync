@@ -9,7 +9,6 @@ import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
-import com.goenc.healthsheetsync.data.StoredHealthData
 import com.goenc.healthsheetsync.widget.HealthGraphWidgetUpdater
 import java.time.LocalDate
 import java.time.ZoneId
@@ -25,7 +24,7 @@ class HealthConnectDebugReader(private val context: Context) {
         val availability = sdkStatusCheck.availability
         debugMessages += "HealthConnect SDK status: ${sdkStatusCheck.status.toSdkStatusLabel()} (${sdkStatusCheck.status})"
         if (availability !is HealthConnectAvailability.Available) {
-            val storedData = loadLocalData(basalMetabolicRate, finalizePastDays = true)
+            val storedData = localStore.load()
             return HealthDebugUiState(
                 availability = availability,
                 permissions = PermissionState.Unknown,
@@ -56,7 +55,7 @@ class HealthConnectDebugReader(private val context: Context) {
         }
 
         if (missingPermissions.isNotEmpty()) {
-            val storedData = loadLocalData(basalMetabolicRate, finalizePastDays = false)
+            val storedData = localStore.load()
             return HealthDebugUiState(
                 availability = availability,
                 permissions = permissionState,
@@ -80,12 +79,17 @@ class HealthConnectDebugReader(private val context: Context) {
         if (syncResult.changed) {
             HealthGraphWidgetUpdater.requestUpdate(context.applicationContext)
         }
-        if (syncAttempt.isSuccess) {
+        if (shouldFinalizePastDailyEnergySnapshotsAfterHealthConnectSync(
+                availability = availability,
+                hasMissingPermissions = missingPermissions.isNotEmpty(),
+                synchronizationSucceeded = syncAttempt.isSuccess,
+            )
+        ) {
             val repairedCount = localStore.repairLegacySyncDailyEnergySnapshots()
             if (repairedCount > 0) {
                 debugMessages += "同期前確定の推定総消費を${repairedCount}日修復"
             }
-            localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
+            localStore.finalizeHealthConnectDailyEnergySnapshotsAfterSync(basalMetabolicRate)
         }
         val storedData = localStore.load()
         debugMessages += "保存済み件数: 体重${storedData.weightRecords.size}件、血糖${storedData.glucoseRecords.size}件、歩数${storedData.stepDailyRecords.size}日"
@@ -107,16 +111,6 @@ class HealthConnectDebugReader(private val context: Context) {
             sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
             debugMessages = debugMessages,
         )
-    }
-
-    private fun loadLocalData(
-        basalMetabolicRate: Int,
-        finalizePastDays: Boolean,
-    ): StoredHealthData {
-        if (finalizePastDays) {
-            localStore.finalizePastDailyEnergySnapshots(basalMetabolicRate)
-        }
-        return localStore.load()
     }
 
     private fun checkSdkStatus(): SdkStatusCheck {
@@ -183,4 +177,14 @@ class HealthConnectDebugReader(private val context: Context) {
         fun permissionRequestContract() =
             PermissionController.createRequestPermissionResultContract()
     }
+}
+
+internal fun shouldFinalizePastDailyEnergySnapshotsAfterHealthConnectSync(
+    availability: HealthConnectAvailability,
+    hasMissingPermissions: Boolean,
+    synchronizationSucceeded: Boolean,
+): Boolean {
+    return availability is HealthConnectAvailability.Available &&
+        !hasMissingPermissions &&
+        synchronizationSucceeded
 }
