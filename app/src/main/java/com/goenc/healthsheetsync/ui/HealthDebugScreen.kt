@@ -32,6 +32,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
@@ -42,6 +43,10 @@ import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import java.time.Duration
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 @Composable
 fun HealthDebugScreen(
@@ -72,7 +77,18 @@ fun HealthDebugScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
     var shouldEnableSettingsScroll by remember { mutableStateOf(false) }
+    var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
     val shouldScrollRoot = showManualInput || (showSettings && shouldEnableSettingsScroll)
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val zoneId = ZoneId.systemDefault()
+            val now = ZonedDateTime.now(zoneId)
+            val nextDateStart = now.toLocalDate().plusDays(1).atStartOfDay(zoneId)
+            delay(Duration.between(now, nextDateStart).toMillis().coerceAtLeast(1L))
+            currentLocalDate = LocalDate.now(ZoneId.systemDefault())
+        }
+    }
 
     BackHandler(enabled = showSettings || showManualInput) {
         if (showManualInput) {
@@ -183,6 +199,7 @@ fun HealthDebugScreen(
                         MainSummaryValues(
                             records = state.weightRecords,
                             dailySteps = state.stepDailyRecords,
+                            targetDate = currentLocalDate,
                             glucoseRecords = state.glucoseRecords,
                             a1cDailyRecords = state.a1cDailyRecords,
                             manualRecords = state.manualRecords,
@@ -227,13 +244,14 @@ fun HealthDebugScreen(
 private fun MainSummaryValues(
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
+    targetDate: LocalDate,
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
     manualRecords: List<ManualHealthRecord>,
     modifier: Modifier = Modifier,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
-    val latestSteps = dailySteps.maxByOrNull { it.targetDate }
+    val todaySteps = stepsForSummary(dailySteps, targetDate)
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
     val latestA1c = a1cDailyRecords.maxByOrNull { it.targetDate }
     val latestWaist = manualRecords.latestManualValue(ManualRecordType.Waist)
@@ -249,7 +267,7 @@ private fun MainSummaryValues(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-", ChartBlue)
-            SummaryValue("歩数", latestSteps?.let { "${it.steps}歩" } ?: "-", ChartStepText)
+            SummaryValue("歩数", "${todaySteps}歩", ChartStepText)
             SummaryValue(
                 "血糖",
                 latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
@@ -267,6 +285,11 @@ private fun MainSummaryValues(
         }
     }
 }
+
+internal fun stepsForSummary(
+    dailySteps: List<DebugStepDaily>,
+    targetDate: LocalDate,
+): Long = dailySteps.firstOrNull { it.targetDate == targetDate }?.steps ?: 0L
 
 @Composable
 private fun SummaryValue(
