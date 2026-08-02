@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
     private var localRefreshJob: Job? = null
     private var automaticSpreadsheetSyncJob: Job? = null
     private var isAutomaticSpreadsheetSyncing = false
+    private var automaticSpreadsheetSyncPending = false
     private var hasCompletedInitialHealthLoad = false
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
@@ -247,7 +248,7 @@ class MainActivity : ComponentActivity() {
             }
             refreshLocalHealthData()
             if (saved) {
-                scheduleAutomaticSpreadsheetSync()
+                requestImmediateAutomaticSpreadsheetSync()
             }
         }
     }
@@ -426,19 +427,32 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             spreadsheetUploadStatus = "スプレッドシートへ同期中"
-            spreadsheetUploadStatus = when (
-                val result = spreadsheetUploader.upload(
-                    state = healthState,
-                    accessToken = accessToken,
-                )
-            ) {
+            val currentData = withContext(Dispatchers.IO) {
+                localStore.load()
+            }
+            val result = spreadsheetUploader.upload(
+                data = currentData,
+                accessToken = accessToken,
+            )
+            spreadsheetUploadStatus = when (result) {
                 is SpreadsheetUploadResult.Success ->
                     "同期完了: ${result.synchronizedCount}件を携帯側の状態へ更新"
                 is SpreadsheetUploadResult.Failure ->
                     "同期失敗: ${result.message}"
             }
             isSpreadsheetUploading = false
+            if (result is SpreadsheetUploadResult.Success) {
+                retryPendingAutomaticSpreadsheetSync()
+            } else {
+                automaticSpreadsheetSyncPending = false
+            }
         }
+    }
+
+    private fun requestImmediateAutomaticSpreadsheetSync() {
+        automaticSpreadsheetSyncJob?.cancel()
+        automaticSpreadsheetSyncJob = null
+        startAutomaticSpreadsheetSync()
     }
 
     private fun scheduleAutomaticSpreadsheetSync() {
@@ -450,8 +464,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startAutomaticSpreadsheetSync() {
-        if (isAutomaticSpreadsheetSyncing || isSpreadsheetUploading) return
+        if (isAutomaticSpreadsheetSyncing || isSpreadsheetUploading) {
+            automaticSpreadsheetSyncPending = true
+            return
+        }
 
+        automaticSpreadsheetSyncPending = false
         isAutomaticSpreadsheetSyncing = true
         spreadsheetUploadStatus = "携帯側を正として自動同期中"
         val authorizationRequest = AuthorizationRequest.builder()
@@ -462,6 +480,7 @@ class MainActivity : ComponentActivity() {
             .addOnSuccessListener { authorizationResult ->
                 if (authorizationResult.hasResolution()) {
                     isAutomaticSpreadsheetSyncing = false
+                    automaticSpreadsheetSyncPending = false
                     spreadsheetUploadStatus = "自動同期待機: 設定画面で一度スプレッドシート同期を許可してください"
                     return@addOnSuccessListener
                 }
@@ -470,6 +489,7 @@ class MainActivity : ComponentActivity() {
             .addOnFailureListener { error ->
                 Log.e(TAG, "Automatic Google Sheets synchronization failed.", error)
                 isAutomaticSpreadsheetSyncing = false
+                automaticSpreadsheetSyncPending = false
                 spreadsheetUploadStatus = "自動同期失敗: ${googleAuthorizationFailureMessage(error)}"
             }
     }
@@ -477,6 +497,7 @@ class MainActivity : ComponentActivity() {
     private fun continueAutomaticSpreadsheetUpload(accessToken: String?) {
         if (accessToken.isNullOrBlank()) {
             isAutomaticSpreadsheetSyncing = false
+            automaticSpreadsheetSyncPending = false
             spreadsheetUploadStatus = "自動同期待機: スプレッドシート権限が必要です"
             return
         }
@@ -496,7 +517,18 @@ class MainActivity : ComponentActivity() {
                     "自動同期失敗: ${result.message}"
             }
             isAutomaticSpreadsheetSyncing = false
+            if (result is SpreadsheetUploadResult.Success) {
+                retryPendingAutomaticSpreadsheetSync()
+            } else {
+                automaticSpreadsheetSyncPending = false
+            }
         }
+    }
+
+    private fun retryPendingAutomaticSpreadsheetSync() {
+        if (!automaticSpreadsheetSyncPending) return
+        automaticSpreadsheetSyncPending = false
+        startAutomaticSpreadsheetSync()
     }
 
     private fun googleAuthorizationFailureMessage(error: Exception): String {
