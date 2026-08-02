@@ -1,11 +1,15 @@
 package com.goenc.healthsheetsync
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
@@ -14,6 +18,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
 import com.goenc.healthsheetsync.data.BasalMetabolicRateSettingsStore
 import com.goenc.healthsheetsync.data.StoredHealthData
@@ -45,6 +53,8 @@ class MainActivity : ComponentActivity() {
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var basalMetabolicRate by mutableStateOf(DailyEnergyCalculator.DEFAULT_BASAL_METABOLIC_RATE)
     private var csvShareStatus by mutableStateOf<String?>(null)
+    private var googleDriveStatus by mutableStateOf<String?>(null)
+    private var isGoogleDriveAuthorizing by mutableStateOf(false)
     private var sharedText by mutableStateOf<String?>(null)
     private var sharedTextImportStatus by mutableStateOf<String?>(null)
     private var healthRefreshJob: Job? = null
@@ -59,6 +69,24 @@ class MainActivity : ComponentActivity() {
             }",
         )
         refreshHealthData()
+    }
+    private val startGoogleAuthorization = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        try {
+            val authorizationResult = Identity.getAuthorizationClient(this)
+                .getAuthorizationResultFromIntent(result.data)
+            if (authorizationResult.accessToken.isNullOrBlank()) {
+                googleDriveStatus = "Google Driveの認証トークンを取得できませんでした"
+            } else {
+                googleDriveStatus = "Google Driveに接続しました"
+            }
+        } catch (error: ApiException) {
+            Log.e(TAG, "Google Drive authorization failed.", error)
+            googleDriveStatus = "Google Drive接続に失敗しました: ${googleAuthorizationFailureMessage(error)}"
+        } finally {
+            isGoogleDriveAuthorizing = false
+        }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +115,9 @@ class MainActivity : ComponentActivity() {
                         onRefresh = { refreshHealthData() },
                         onShareCsvToDrive = { shareCsvToDrive() },
                         csvShareStatus = csvShareStatus,
+                        onGoogleDriveLogin = { authorizeGoogleDrive() },
+                        googleDriveStatus = googleDriveStatus,
+                        isGoogleDriveAuthorizing = isGoogleDriveAuthorizing,
                         sharedText = sharedText,
                         sharedTextImportStatus = sharedTextImportStatus,
                         onSaveManualRecord = { draft -> saveManualRecord(draft) },
@@ -256,6 +287,71 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun authorizeGoogleDrive() {
+        if (isGoogleDriveAuthorizing) {
+            return
+        }
+
+        isGoogleDriveAuthorizing = true
+        googleDriveStatus = "Google Driveの接続を確認中"
+        val authorizationRequest = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(DRIVE_FILE_SCOPE)))
+            .build()
+        Identity.getAuthorizationClient(this)
+            .authorize(authorizationRequest)
+            .addOnSuccessListener { authorizationResult ->
+                if (!authorizationResult.hasResolution()) {
+                    if (authorizationResult.accessToken.isNullOrBlank()) {
+                        googleDriveStatus = "Google Driveの認証トークンを取得できませんでした"
+                    } else {
+                        googleDriveStatus = "Google Driveに接続しました"
+                    }
+                    isGoogleDriveAuthorizing = false
+                    return@addOnSuccessListener
+                }
+
+                val pendingIntent = authorizationResult.pendingIntent
+                if (pendingIntent == null) {
+                    googleDriveStatus = "Google Driveの認証画面を開けませんでした"
+                    isGoogleDriveAuthorizing = false
+                    return@addOnSuccessListener
+                }
+                googleDriveStatus = "Google Driveの認証を完了してください"
+                startGoogleAuthorization.launch(
+                    IntentSenderRequest.Builder(pendingIntent.intentSender).build(),
+                )
+            }
+            .addOnFailureListener { error ->
+                Log.e(TAG, "Failed to authorize Google Drive access.", error)
+                googleDriveStatus = "Google Drive接続に失敗しました: ${googleAuthorizationFailureMessage(error)}"
+                isGoogleDriveAuthorizing = false
+            }
+    }
+
+    private fun googleAuthorizationFailureMessage(error: Exception): String {
+        val message = error.localizedMessage ?: error.message
+        if (message?.contains(API_CONSOLE_UNREGISTERED_STATUS, ignoreCase = true) == true) {
+            return "OAuth Androidクライアント未登録です。packageName=$packageName、SHA-1=${currentSigningSha1() ?: "取得失敗"} を登録してください"
+        }
+        return message ?: "原因不明"
+    }
+
+    private fun currentSigningSha1(): String? = runCatching {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                .signingInfo
+                ?.apkContentsSigners
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+        }
+        val signature = signatures?.firstOrNull()
+            ?: return null
+        java.security.MessageDigest.getInstance("SHA-1")
+            .digest(signature.toByteArray())
+            .joinToString(":") { byte -> "%02X".format(byte.toInt() and 0xFF) }
+    }.getOrNull()
+
 }
 
 private fun HealthDebugUiState.withStoredData(storedData: StoredHealthData): HealthDebugUiState {
@@ -289,4 +385,6 @@ private fun buildSourceSummaries(
 
 private const val TAG = "HealthSheetSync"
 private const val UNKNOWN = "不明"
+private const val DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
 private const val UNSYNCED_PAST_STEPS_MESSAGE = "未同期の過去日の歩数があります。先にHealth Connectを更新してください"

@@ -51,6 +51,9 @@ internal fun SettingsScreen(
     onRefresh: () -> Unit,
     onShareCsvToDrive: () -> Unit,
     csvShareStatus: String?,
+    onGoogleDriveLogin: () -> Unit,
+    googleDriveStatus: String?,
+    isGoogleDriveAuthorizing: Boolean,
     onRecordListVisibilityChanged: (Boolean) -> Unit,
     basalMetabolicRate: Int,
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
@@ -103,6 +106,21 @@ internal fun SettingsScreen(
             }
         }
         csvShareStatus?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        OutlinedButton(
+            onClick = onGoogleDriveLogin,
+            enabled = !isGoogleDriveAuthorizing,
+            shape = CircleShape,
+            modifier = Modifier.defaultMinSize(minWidth = 196.dp, minHeight = 48.dp),
+        ) {
+            Text(if (isGoogleDriveAuthorizing) "接続中" else "Google Driveに接続")
+        }
+        googleDriveStatus?.let { status ->
             Text(
                 text = status,
                 style = MaterialTheme.typography.bodyMedium,
