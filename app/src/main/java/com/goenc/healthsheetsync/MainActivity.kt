@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
         sharedTextImportStatus = result.status
         if (result.imported) {
             refreshLocalHealthData()
-            scheduleAutomaticSpreadsheetSync()
+            requestImmediateAutomaticSpreadsheetSync()
         }
     }
 
@@ -256,37 +256,37 @@ class MainActivity : ComponentActivity() {
     private fun invalidateManualRecord(id: String) {
         localStore.invalidateManualRecord(id)
         refreshLocalHealthData()
-        scheduleAutomaticSpreadsheetSync()
+        requestImmediateAutomaticSpreadsheetSync()
     }
 
     private fun restoreManualRecord(id: String) {
         localStore.restoreManualRecord(id)
         refreshLocalHealthData()
-        scheduleAutomaticSpreadsheetSync()
+        requestImmediateAutomaticSpreadsheetSync()
     }
 
     private fun deleteManualRecord(id: String) {
         localStore.deleteManualRecord(id)
         refreshLocalHealthData()
-        scheduleAutomaticSpreadsheetSync()
+        requestImmediateAutomaticSpreadsheetSync()
     }
 
     private fun invalidateStoredRecord(recordType: String, uniqueKey: String) {
         localStore.invalidateStoredRecord(recordType, uniqueKey)
         refreshLocalHealthData()
-        scheduleAutomaticSpreadsheetSync()
+        requestImmediateAutomaticSpreadsheetSync()
     }
 
     private fun restoreStoredRecord(recordType: String, uniqueKey: String) {
         localStore.restoreStoredRecord(recordType, uniqueKey)
         refreshLocalHealthData()
-        scheduleAutomaticSpreadsheetSync()
+        requestImmediateAutomaticSpreadsheetSync()
     }
 
     private fun deleteStoredRecord(recordType: String, uniqueKey: String) {
         localStore.deleteStoredRecord(recordType, uniqueKey)
         refreshLocalHealthData()
-        scheduleAutomaticSpreadsheetSync()
+        requestImmediateAutomaticSpreadsheetSync()
     }
 
     private fun saveBasalMetabolicRate(value: Int, onResult: (String?) -> Unit) {
