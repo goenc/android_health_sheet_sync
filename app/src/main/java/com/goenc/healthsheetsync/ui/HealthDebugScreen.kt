@@ -53,6 +53,9 @@ fun HealthDebugScreen(
     onGoogleDriveLogin: () -> Unit,
     googleDriveStatus: String?,
     isGoogleDriveAuthorizing: Boolean,
+    onUploadSpreadsheet: () -> Unit,
+    spreadsheetUploadStatus: String?,
+    isSpreadsheetUploading: Boolean,
     sharedText: String?,
     sharedTextImportStatus: String?,
     onSaveManualRecord: (ManualHealthRecordDraft) -> Unit,
@@ -142,6 +145,9 @@ fun HealthDebugScreen(
                             onGoogleDriveLogin = onGoogleDriveLogin,
                             googleDriveStatus = googleDriveStatus,
                             isGoogleDriveAuthorizing = isGoogleDriveAuthorizing,
+                            onUploadSpreadsheet = onUploadSpreadsheet,
+                            spreadsheetUploadStatus = spreadsheetUploadStatus,
+                            isSpreadsheetUploading = isSpreadsheetUploading,
                             onRecordListVisibilityChanged = { isVisible ->
                                 shouldEnableSettingsScroll = isVisible
                             },

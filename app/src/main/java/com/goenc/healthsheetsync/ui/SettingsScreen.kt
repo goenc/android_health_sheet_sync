@@ -54,6 +54,9 @@ internal fun SettingsScreen(
     onGoogleDriveLogin: () -> Unit,
     googleDriveStatus: String?,
     isGoogleDriveAuthorizing: Boolean,
+    onUploadSpreadsheet: () -> Unit,
+    spreadsheetUploadStatus: String?,
+    isSpreadsheetUploading: Boolean,
     onRecordListVisibilityChanged: (Boolean) -> Unit,
     basalMetabolicRate: Int,
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
@@ -121,6 +124,27 @@ internal fun SettingsScreen(
             Text(if (isGoogleDriveAuthorizing) "接続中" else "Google Driveに接続")
         }
         googleDriveStatus?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Button(
+            onClick = onUploadSpreadsheet,
+            enabled = !state.isLoading &&
+                !isGoogleDriveAuthorizing &&
+                !isSpreadsheetUploading,
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AppPrimary,
+                contentColor = Color.White,
+            ),
+            modifier = Modifier.defaultMinSize(minWidth = 196.dp, minHeight = 48.dp),
+        ) {
+            Text(if (isSpreadsheetUploading) "同期中" else "スプレッドシートへ同期")
+        }
+        spreadsheetUploadStatus?.let { status ->
             Text(
                 text = status,
                 style = MaterialTheme.typography.bodyMedium,

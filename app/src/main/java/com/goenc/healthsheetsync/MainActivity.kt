@@ -24,6 +24,8 @@ import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
 import com.goenc.healthsheetsync.data.BasalMetabolicRateSettingsStore
+import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
+import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import com.goenc.healthsheetsync.data.StoredHealthData
 import com.goenc.healthsheetsync.export.HealthCsvShareExporter
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
@@ -50,11 +52,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var basalMetabolicRateSettingsStore: BasalMetabolicRateSettingsStore
     private lateinit var sharedTextImporter: SharedTextImporter
     private lateinit var healthCsvShareExporter: HealthCsvShareExporter
+    private val spreadsheetUploader = SpreadsheetUploader()
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var basalMetabolicRate by mutableStateOf(DailyEnergyCalculator.DEFAULT_BASAL_METABOLIC_RATE)
     private var csvShareStatus by mutableStateOf<String?>(null)
     private var googleDriveStatus by mutableStateOf<String?>(null)
     private var isGoogleDriveAuthorizing by mutableStateOf(false)
+    private var spreadsheetUploadStatus by mutableStateOf<String?>(null)
+    private var isSpreadsheetUploading by mutableStateOf(false)
+    private var pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ConnectDrive
     private var sharedText by mutableStateOf<String?>(null)
     private var sharedTextImportStatus by mutableStateOf<String?>(null)
     private var healthRefreshJob: Job? = null
@@ -73,19 +79,35 @@ class MainActivity : ComponentActivity() {
     private val startGoogleAuthorization = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
     ) { result ->
+        val action = pendingGoogleAuthorizationAction
         try {
             val authorizationResult = Identity.getAuthorizationClient(this)
                 .getAuthorizationResultFromIntent(result.data)
-            if (authorizationResult.accessToken.isNullOrBlank()) {
-                googleDriveStatus = "Google Driveの認証トークンを取得できませんでした"
-            } else {
-                googleDriveStatus = "Google Driveに接続しました"
+            when (action) {
+                GoogleAuthorizationAction.ConnectDrive -> {
+                    googleDriveStatus = if (authorizationResult.accessToken.isNullOrBlank()) {
+                        "Google Driveの認証トークンを取得できませんでした"
+                    } else {
+                        "Google Driveに接続しました"
+                    }
+                    isGoogleDriveAuthorizing = false
+                }
+                GoogleAuthorizationAction.UploadSpreadsheet -> {
+                    continueSpreadsheetUpload(authorizationResult.accessToken)
+                }
             }
         } catch (error: ApiException) {
             Log.e(TAG, "Google Drive authorization failed.", error)
-            googleDriveStatus = "Google Drive接続に失敗しました: ${googleAuthorizationFailureMessage(error)}"
-        } finally {
-            isGoogleDriveAuthorizing = false
+            when (action) {
+                GoogleAuthorizationAction.ConnectDrive -> {
+                    googleDriveStatus = "Google Drive接続に失敗しました: ${googleAuthorizationFailureMessage(error)}"
+                    isGoogleDriveAuthorizing = false
+                }
+                GoogleAuthorizationAction.UploadSpreadsheet -> {
+                    spreadsheetUploadStatus = "スプレッドシート認証に失敗しました: ${googleAuthorizationFailureMessage(error)}"
+                    isSpreadsheetUploading = false
+                }
+            }
         }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,6 +140,9 @@ class MainActivity : ComponentActivity() {
                         onGoogleDriveLogin = { authorizeGoogleDrive() },
                         googleDriveStatus = googleDriveStatus,
                         isGoogleDriveAuthorizing = isGoogleDriveAuthorizing,
+                        onUploadSpreadsheet = { uploadSpreadsheetData() },
+                        spreadsheetUploadStatus = spreadsheetUploadStatus,
+                        isSpreadsheetUploading = isSpreadsheetUploading,
                         sharedText = sharedText,
                         sharedTextImportStatus = sharedTextImportStatus,
                         onSaveManualRecord = { draft -> saveManualRecord(draft) },
@@ -292,6 +317,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ConnectDrive
         isGoogleDriveAuthorizing = true
         googleDriveStatus = "Google Driveの接続を確認中"
         val authorizationRequest = AuthorizationRequest.builder()
@@ -326,6 +352,67 @@ class MainActivity : ComponentActivity() {
                 googleDriveStatus = "Google Drive接続に失敗しました: ${googleAuthorizationFailureMessage(error)}"
                 isGoogleDriveAuthorizing = false
             }
+    }
+
+    private fun uploadSpreadsheetData() {
+        if (isSpreadsheetUploading || healthState.isLoading) {
+            return
+        }
+
+        pendingGoogleAuthorizationAction = GoogleAuthorizationAction.UploadSpreadsheet
+        isSpreadsheetUploading = true
+        spreadsheetUploadStatus = "スプレッドシートの権限を確認中"
+        val authorizationRequest = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(SHEETS_SCOPE)))
+            .build()
+        Identity.getAuthorizationClient(this)
+            .authorize(authorizationRequest)
+            .addOnSuccessListener { authorizationResult ->
+                if (!authorizationResult.hasResolution()) {
+                    continueSpreadsheetUpload(authorizationResult.accessToken)
+                    return@addOnSuccessListener
+                }
+
+                val pendingIntent = authorizationResult.pendingIntent
+                if (pendingIntent == null) {
+                    spreadsheetUploadStatus = "スプレッドシートの認証画面を開けませんでした"
+                    isSpreadsheetUploading = false
+                    return@addOnSuccessListener
+                }
+                spreadsheetUploadStatus = "スプレッドシートの認証を完了してください"
+                startGoogleAuthorization.launch(
+                    IntentSenderRequest.Builder(pendingIntent.intentSender).build(),
+                )
+            }
+            .addOnFailureListener { error ->
+                Log.e(TAG, "Failed to authorize Google Sheets access.", error)
+                spreadsheetUploadStatus = "スプレッドシート認証に失敗しました: ${googleAuthorizationFailureMessage(error)}"
+                isSpreadsheetUploading = false
+            }
+    }
+
+    private fun continueSpreadsheetUpload(accessToken: String?) {
+        if (accessToken.isNullOrBlank()) {
+            spreadsheetUploadStatus = "スプレッドシートの認証トークンを取得できませんでした"
+            isSpreadsheetUploading = false
+            return
+        }
+
+        lifecycleScope.launch {
+            spreadsheetUploadStatus = "スプレッドシートへ同期中"
+            spreadsheetUploadStatus = when (
+                val result = spreadsheetUploader.upload(
+                    state = healthState,
+                    accessToken = accessToken,
+                )
+            ) {
+                is SpreadsheetUploadResult.Success ->
+                    "同期完了: 追加${result.addedCount}件、既存${result.skippedCount}件"
+                is SpreadsheetUploadResult.Failure ->
+                    "同期失敗: ${result.message}"
+            }
+            isSpreadsheetUploading = false
+        }
     }
 
     private fun googleAuthorizationFailureMessage(error: Exception): String {
@@ -383,8 +470,14 @@ private fun buildSourceSummaries(
     }
 }
 
+private enum class GoogleAuthorizationAction {
+    ConnectDrive,
+    UploadSpreadsheet,
+}
+
 private const val TAG = "HealthSheetSync"
 private const val UNKNOWN = "不明"
 private const val DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
+private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
 private const val UNSYNCED_PAST_STEPS_MESSAGE = "未同期の過去日の歩数があります。先にHealth Connectを更新してください"
