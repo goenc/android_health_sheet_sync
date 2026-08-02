@@ -35,6 +35,7 @@ import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.PermissionState
 import com.goenc.healthsheetsync.share.SharedTextImporter
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
@@ -43,6 +44,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -65,6 +67,9 @@ class MainActivity : ComponentActivity() {
     private var sharedTextImportStatus by mutableStateOf<String?>(null)
     private var healthRefreshJob: Job? = null
     private var localRefreshJob: Job? = null
+    private var automaticSpreadsheetSyncJob: Job? = null
+    private var isAutomaticSpreadsheetSyncing = false
+    private var hasCompletedInitialHealthLoad = false
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
     ) { grantedPermissions ->
@@ -180,19 +185,31 @@ class MainActivity : ComponentActivity() {
         val result = sharedTextImporter.importFrom(intent) ?: return
         sharedText = result.text
         sharedTextImportStatus = result.status
-        if (result.imported) refreshLocalHealthData()
+        if (result.imported) {
+            refreshLocalHealthData()
+            scheduleAutomaticSpreadsheetSync()
+        }
     }
 
     private fun refreshHealthData() {
         if (healthRefreshJob?.isActive == true) return
         healthRefreshJob = lifecycleScope.launch {
             healthState = healthState.copy(isLoading = true)
+            val previousState = healthState
             val storedData = withContext(Dispatchers.IO) {
                 localStore.load()
             }
             healthState = healthState.withStoredData(storedData)
-            healthState = withContext(Dispatchers.IO) {
+            val loadedState = withContext(Dispatchers.IO) {
                 healthReader.load(basalMetabolicRate)
+            }
+            healthState = loadedState
+            val shouldSync = !hasCompletedInitialHealthLoad ||
+                (loadedState.permissions is PermissionState.Granted &&
+                    previousState.hasMirrorDataChanged(loadedState))
+            hasCompletedInitialHealthLoad = true
+            if (shouldSync) {
+                scheduleAutomaticSpreadsheetSync()
             }
         }
     }
@@ -229,37 +246,46 @@ class MainActivity : ComponentActivity() {
                 }
             }
             refreshLocalHealthData()
+            if (saved) {
+                scheduleAutomaticSpreadsheetSync()
+            }
         }
     }
 
     private fun invalidateManualRecord(id: String) {
         localStore.invalidateManualRecord(id)
         refreshLocalHealthData()
+        scheduleAutomaticSpreadsheetSync()
     }
 
     private fun restoreManualRecord(id: String) {
         localStore.restoreManualRecord(id)
         refreshLocalHealthData()
+        scheduleAutomaticSpreadsheetSync()
     }
 
     private fun deleteManualRecord(id: String) {
         localStore.deleteManualRecord(id)
         refreshLocalHealthData()
+        scheduleAutomaticSpreadsheetSync()
     }
 
     private fun invalidateStoredRecord(recordType: String, uniqueKey: String) {
         localStore.invalidateStoredRecord(recordType, uniqueKey)
         refreshLocalHealthData()
+        scheduleAutomaticSpreadsheetSync()
     }
 
     private fun restoreStoredRecord(recordType: String, uniqueKey: String) {
         localStore.restoreStoredRecord(recordType, uniqueKey)
         refreshLocalHealthData()
+        scheduleAutomaticSpreadsheetSync()
     }
 
     private fun deleteStoredRecord(recordType: String, uniqueKey: String) {
         localStore.deleteStoredRecord(recordType, uniqueKey)
         refreshLocalHealthData()
+        scheduleAutomaticSpreadsheetSync()
     }
 
     private fun saveBasalMetabolicRate(value: Int, onResult: (String?) -> Unit) {
@@ -407,11 +433,69 @@ class MainActivity : ComponentActivity() {
                 )
             ) {
                 is SpreadsheetUploadResult.Success ->
-                    "同期完了: 追加${result.addedCount}件、既存${result.skippedCount}件"
+                    "同期完了: ${result.synchronizedCount}件を携帯側の状態へ更新"
                 is SpreadsheetUploadResult.Failure ->
                     "同期失敗: ${result.message}"
             }
             isSpreadsheetUploading = false
+        }
+    }
+
+    private fun scheduleAutomaticSpreadsheetSync() {
+        automaticSpreadsheetSyncJob?.cancel()
+        automaticSpreadsheetSyncJob = lifecycleScope.launch {
+            delay(AUTOMATIC_SYNC_DEBOUNCE_MS)
+            startAutomaticSpreadsheetSync()
+        }
+    }
+
+    private fun startAutomaticSpreadsheetSync() {
+        if (isAutomaticSpreadsheetSyncing || isSpreadsheetUploading) return
+
+        isAutomaticSpreadsheetSyncing = true
+        spreadsheetUploadStatus = "携帯側を正として自動同期中"
+        val authorizationRequest = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(SHEETS_SCOPE)))
+            .build()
+        Identity.getAuthorizationClient(this)
+            .authorize(authorizationRequest)
+            .addOnSuccessListener { authorizationResult ->
+                if (authorizationResult.hasResolution()) {
+                    isAutomaticSpreadsheetSyncing = false
+                    spreadsheetUploadStatus = "自動同期待機: 設定画面で一度スプレッドシート同期を許可してください"
+                    return@addOnSuccessListener
+                }
+                continueAutomaticSpreadsheetUpload(authorizationResult.accessToken)
+            }
+            .addOnFailureListener { error ->
+                Log.e(TAG, "Automatic Google Sheets synchronization failed.", error)
+                isAutomaticSpreadsheetSyncing = false
+                spreadsheetUploadStatus = "自動同期失敗: ${googleAuthorizationFailureMessage(error)}"
+            }
+    }
+
+    private fun continueAutomaticSpreadsheetUpload(accessToken: String?) {
+        if (accessToken.isNullOrBlank()) {
+            isAutomaticSpreadsheetSyncing = false
+            spreadsheetUploadStatus = "自動同期待機: スプレッドシート権限が必要です"
+            return
+        }
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                val currentData = localStore.load()
+                spreadsheetUploader.upload(
+                    data = currentData,
+                    accessToken = accessToken,
+                )
+            }
+            spreadsheetUploadStatus = when (result) {
+                is SpreadsheetUploadResult.Success ->
+                    "自動同期完了: ${result.synchronizedCount}件を反映"
+                is SpreadsheetUploadResult.Failure ->
+                    "自動同期失敗: ${result.message}"
+            }
+            isAutomaticSpreadsheetSyncing = false
         }
     }
 
@@ -457,6 +541,13 @@ private fun HealthDebugUiState.withStoredData(storedData: StoredHealthData): Hea
     )
 }
 
+private fun HealthDebugUiState.hasMirrorDataChanged(other: HealthDebugUiState): Boolean {
+    return weightRecords != other.weightRecords ||
+        glucoseRecords != other.glucoseRecords ||
+        stepDailyRecords != other.stepDailyRecords ||
+        a1cDailyRecords != other.a1cDailyRecords
+}
+
 private fun buildSourceSummaries(
     weightRecords: List<DebugWeightRecord>,
     glucoseRecords: List<DebugGlucoseRecord>,
@@ -481,3 +572,4 @@ private const val DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file
 private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
 private const val UNSYNCED_PAST_STEPS_MESSAGE = "未同期の過去日の歩数があります。先にHealth Connectを更新してください"
+private const val AUTOMATIC_SYNC_DEBOUNCE_MS = 1_000L

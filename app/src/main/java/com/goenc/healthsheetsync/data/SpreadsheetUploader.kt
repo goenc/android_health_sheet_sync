@@ -1,6 +1,10 @@
 package com.goenc.healthsheetsync.data
 
 import com.goenc.healthsheetsync.health.HealthDebugUiState
+import com.goenc.healthsheetsync.health.DebugA1cDaily
+import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.DebugStepDaily
+import com.goenc.healthsheetsync.health.DebugWeightRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -14,6 +18,36 @@ class SpreadsheetUploader {
     suspend fun upload(
         state: HealthDebugUiState,
         accessToken: String,
+    ): SpreadsheetUploadResult {
+        return upload(
+            accessToken = accessToken,
+            tables = uploadTables(
+                weightRecords = state.weightRecords,
+                glucoseRecords = state.glucoseRecords,
+                stepDailyRecords = state.stepDailyRecords,
+                a1cDailyRecords = state.a1cDailyRecords,
+            ),
+        )
+    }
+
+    suspend fun upload(
+        data: StoredHealthData,
+        accessToken: String,
+    ): SpreadsheetUploadResult {
+        return upload(
+            accessToken = accessToken,
+            tables = uploadTables(
+                weightRecords = data.weightRecords,
+                glucoseRecords = data.glucoseRecords,
+                stepDailyRecords = data.stepDailyRecords,
+                a1cDailyRecords = data.a1cDailyRecords,
+            ),
+        )
+    }
+
+    private suspend fun upload(
+        accessToken: String,
+        tables: List<SpreadsheetUploadTable>,
     ): SpreadsheetUploadResult = withContext(Dispatchers.IO) {
         if (accessToken.isBlank()) {
             return@withContext SpreadsheetUploadResult.Failure("Google認証トークンが空です")
@@ -21,34 +55,26 @@ class SpreadsheetUploader {
 
         runCatching {
             val sheetNames = loadSheetNames(accessToken).toMutableSet()
-            var addedCount = 0
-            var skippedCount = 0
-            uploadTables(state).forEach { table ->
-                if (table.values.isEmpty()) {
-                    return@forEach
-                }
-                ensureSheet(accessToken, table, sheetNames)
-                val keyColumnIndex = loadKeyColumnIndex(accessToken, table)
-                val existingKeys = loadExistingKeys(accessToken, table, keyColumnIndex)
-                val rowsToAppend = table.values
-                    .filter { row -> rowKey(row, keyColumnIndex) !in existingKeys }
-                    .distinctBy { row -> rowKey(row, keyColumnIndex) }
-                skippedCount += table.values.size - rowsToAppend.size
-                if (rowsToAppend.isNotEmpty()) {
-                    appendRows(accessToken, table, rowsToAppend)
-                    addedCount += rowsToAppend.size
-                }
+            var synchronizedCount = 0
+            tables.forEach { table ->
+                val header = ensureSheet(accessToken, table, sheetNames)
+                replaceRows(accessToken, table, header)
+                synchronizedCount += table.values.size
             }
             SpreadsheetUploadResult.Success(
-                addedCount = addedCount,
-                skippedCount = skippedCount,
+                synchronizedCount = synchronizedCount,
             )
         }.getOrElse { error ->
             SpreadsheetUploadResult.Failure(error.message ?: "原因不明")
         }
     }
 
-    private fun uploadTables(state: HealthDebugUiState): List<SpreadsheetUploadTable> {
+    private fun uploadTables(
+        weightRecords: List<DebugWeightRecord>,
+        glucoseRecords: List<DebugGlucoseRecord>,
+        stepDailyRecords: List<DebugStepDaily>,
+        a1cDailyRecords: List<DebugA1cDaily>,
+    ): List<SpreadsheetUploadTable> {
         return listOf(
             SpreadsheetUploadTable(
                 sheetName = "weightRecords",
@@ -61,8 +87,7 @@ class SpreadsheetUploader {
                     "sourceAppName",
                     "sourcePackageName",
                 ),
-                keyColumnName = "healthConnectId",
-                values = state.weightRecords.map { record ->
+                values = weightRecords.map { record ->
                     listOf(
                         record.measuredAt.toString(),
                         record.targetDate.toString(),
@@ -86,8 +111,7 @@ class SpreadsheetUploader {
                     "sourceAppName",
                     "sourcePackageName",
                 ),
-                keyColumnName = "healthConnectId",
-                values = state.glucoseRecords.map { record ->
+                values = glucoseRecords.map { record ->
                     listOf(
                         record.measuredAt.toString(),
                         record.targetDate.toString(),
@@ -108,8 +132,7 @@ class SpreadsheetUploader {
                     "aggregationStartAt",
                     "aggregationEndAt",
                 ),
-                keyColumnName = "targetDate",
-                values = state.stepDailyRecords.map { record ->
+                values = stepDailyRecords.map { record ->
                     listOf(
                         record.targetDate.toString(),
                         record.steps,
@@ -126,8 +149,7 @@ class SpreadsheetUploader {
                     "a1cPercent",
                     "manualId",
                 ),
-                keyColumnName = "manualId",
-                values = state.a1cDailyRecords.map { record ->
+                values = a1cDailyRecords.map { record ->
                     listOf(
                         record.targetDate.toString(),
                         record.measuredAt.toString(),
@@ -164,7 +186,7 @@ class SpreadsheetUploader {
         accessToken: String,
         table: SpreadsheetUploadTable,
         sheetNames: MutableSet<String>,
-    ) {
+    ): List<String> {
         if (!sheetNames.contains(table.sheetName)) {
             runCatching {
                 addSheet(accessToken, table.sheetName)
@@ -178,66 +200,39 @@ class SpreadsheetUploader {
             }
             sheetNames.add(table.sheetName)
         }
-        if (!hasHeader(accessToken, table.sheetName)) {
+        val header = loadHeader(accessToken, table.sheetName)
+        if (header.isEmpty()) {
             writeHeader(accessToken, table)
+            return table.headers
         }
+        val normalizedHeader = header.map(::normalizeHeader).toSet()
+        val missingHeaders = table.headers.filterNot { headerName ->
+            normalizeHeader(headerName) in normalizedHeader
+        }
+        check(missingHeaders.isEmpty()) {
+            "シート ${table.sheetName} に必要な列がありません: ${missingHeaders.joinToString() }"
+        }
+        return header
     }
 
-    private fun loadKeyColumnIndex(
+    private fun loadHeader(
         accessToken: String,
-        table: SpreadsheetUploadTable,
-    ): Int {
-        val range = encodePathSegment("'${table.sheetName}'!A1:Z1")
+        sheetName: String,
+    ): List<String> {
+        val range = encodePathSegment("'$sheetName'!A1:Z1")
         val url = URL(
             "https://sheets.googleapis.com/v4/spreadsheets/" +
                 "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range",
         )
-        val header = requestJson(accessToken, url, method = "GET")
+        val values = requestJson(accessToken, url, method = "GET")
             .optJSONArray("values")
             ?.optJSONArray(0)
-            ?: error("シート ${table.sheetName} のヘッダーを取得できません")
-        return (0 until header.length())
-            .firstOrNull {
-                normalizeHeader(header.optString(it)) == normalizeHeader(table.keyColumnName)
-            }
-            ?: error("シート ${table.sheetName} に重複判定列 ${table.keyColumnName} がありません")
+            ?: return emptyList()
+        return (0 until values.length()).map { index -> values.optString(index) }
     }
 
     private fun normalizeHeader(value: String): String {
         return value.filter { character -> character.isLetterOrDigit() }.lowercase()
-    }
-
-    private fun loadExistingKeys(
-        accessToken: String,
-        table: SpreadsheetUploadTable,
-        keyColumnIndex: Int,
-    ): Set<String> {
-        val range = encodePathSegment("'${table.sheetName}'!A:Z")
-        val url = URL(
-            "https://sheets.googleapis.com/v4/spreadsheets/" +
-                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range",
-        )
-        val rows = requestJson(accessToken, url, method = "GET").optJSONArray("values")
-            ?: return emptySet()
-        return buildSet {
-            for (index in 1 until rows.length()) {
-                rows.optJSONArray(index)?.let { row ->
-                    add(rowKey(row, keyColumnIndex))
-                }
-            }
-        }
-    }
-
-    private fun rowKey(row: List<Any>, keyColumnIndex: Int): String {
-        return row.getOrNull(keyColumnIndex)?.toString()?.trim()
-            ?.takeUnless { it.isNullOrBlank() }
-            ?: row.joinToString("|")
-    }
-
-    private fun rowKey(row: JSONArray, keyColumnIndex: Int): String {
-        return row.optString(keyColumnIndex).trim()
-            .takeUnless { it.isBlank() }
-            ?: row.toString()
     }
 
     private fun addSheet(accessToken: String, sheetName: String) {
@@ -264,17 +259,6 @@ class SpreadsheetUploader {
         requestJson(accessToken, url, method = "POST", payload = payload)
     }
 
-    private fun hasHeader(accessToken: String, sheetName: String): Boolean {
-        val range = encodePathSegment("'$sheetName'!A1:Z1")
-        val url = URL(
-            "https://sheets.googleapis.com/v4/spreadsheets/" +
-                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range",
-        )
-        val values = requestJson(accessToken, url, method = "GET").optJSONArray("values")
-        val firstRowLength = values?.optJSONArray(0)?.length() ?: 0
-        return firstRowLength > 0
-    }
-
     private fun writeHeader(accessToken: String, table: SpreadsheetUploadTable) {
         val range = encodePathSegment("'${table.sheetName}'!A1")
         val url = URL(
@@ -287,25 +271,39 @@ class SpreadsheetUploader {
         requestJson(accessToken, url, method = "PUT", payload = payload)
     }
 
-    private fun appendRows(
+    private fun replaceRows(
         accessToken: String,
         table: SpreadsheetUploadTable,
-        rows: List<List<Any>>,
+        header: List<String>,
     ) {
-        if (rows.isEmpty()) {
-            return
+        clearRows(accessToken, table.sheetName)
+        if (table.values.isEmpty()) return
+
+        val valuesByHeader = table.values.map { row ->
+            val values = table.headers.mapIndexed { index, name ->
+                normalizeHeader(name) to row.getOrNull(index)
+            }.toMap()
+            header.map { name -> values[normalizeHeader(name)] ?: "" }
         }
 
-        val range = encodePathSegment("'${table.sheetName}'!A1")
+        val range = encodePathSegment("'${table.sheetName}'!A2")
         val url = URL(
             "https://sheets.googleapis.com/v4/spreadsheets/" +
-                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range:append" +
-                "?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
+                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range?valueInputOption=RAW",
         )
         val payload = JSONObject()
             .put("majorDimension", "ROWS")
-            .put("values", JSONArray(rows.map { row -> JSONArray(row) }))
-        requestJson(accessToken, url, method = "POST", payload = payload)
+            .put("values", JSONArray(valuesByHeader.map { row -> JSONArray(row) }))
+        requestJson(accessToken, url, method = "PUT", payload = payload)
+    }
+
+    private fun clearRows(accessToken: String, sheetName: String) {
+        val range = encodePathSegment("'$sheetName'!A2:Z")
+        val url = URL(
+            "https://sheets.googleapis.com/v4/spreadsheets/" +
+                "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range:clear",
+        )
+        requestJson(accessToken, url, method = "POST", payload = JSONObject())
     }
 
     private fun requestJson(
@@ -348,14 +346,12 @@ class SpreadsheetUploader {
 private data class SpreadsheetUploadTable(
     val sheetName: String,
     val headers: List<String>,
-    val keyColumnName: String,
     val values: List<List<Any>>,
 )
 
 sealed interface SpreadsheetUploadResult {
     data class Success(
-        val addedCount: Int,
-        val skippedCount: Int,
+        val synchronizedCount: Int,
     ) : SpreadsheetUploadResult
 
     data class Failure(val message: String) : SpreadsheetUploadResult
