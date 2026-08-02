@@ -5,6 +5,8 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.ManualHealthRecord
+import com.goenc.healthsheetsync.health.ManualRecordType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -26,6 +28,7 @@ class SpreadsheetUploader {
                 glucoseRecords = state.glucoseRecords,
                 stepDailyRecords = state.stepDailyRecords,
                 a1cDailyRecords = state.a1cDailyRecords,
+                manualRecords = state.manualRecords,
             ),
         )
     }
@@ -41,6 +44,7 @@ class SpreadsheetUploader {
                 glucoseRecords = data.glucoseRecords,
                 stepDailyRecords = data.stepDailyRecords,
                 a1cDailyRecords = data.a1cDailyRecords,
+                manualRecords = data.manualRecords,
             ),
         )
     }
@@ -74,6 +78,7 @@ class SpreadsheetUploader {
         glucoseRecords: List<DebugGlucoseRecord>,
         stepDailyRecords: List<DebugStepDaily>,
         a1cDailyRecords: List<DebugA1cDaily>,
+        manualRecords: List<ManualHealthRecord>,
     ): List<SpreadsheetUploadTable> {
         return listOf(
             SpreadsheetUploadTable(
@@ -157,6 +162,24 @@ class SpreadsheetUploader {
                         record.manualId,
                     )
                 },
+            ),
+            SpreadsheetUploadTable(
+                sheetName = "bloodPressureRecords",
+                headers = listOf("measuredAt", "valueText", "manualId"),
+                values = manualRecords
+                    .filter { it.type == ManualRecordType.BloodPressure && it.invalidatedAt == null }
+                    .map { record ->
+                        listOf(record.measuredAt.toString(), record.valueText, record.id)
+                    },
+            ),
+            SpreadsheetUploadTable(
+                sheetName = "waistRecords",
+                headers = listOf("measuredAt", "valueText", "manualId"),
+                values = manualRecords
+                    .filter { it.type == ManualRecordType.Waist && it.invalidatedAt == null }
+                    .map { record ->
+                        listOf(record.measuredAt.toString(), record.valueText, record.id)
+                    },
             ),
         )
     }

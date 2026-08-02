@@ -545,7 +545,8 @@ private fun HealthDebugUiState.hasMirrorDataChanged(other: HealthDebugUiState): 
     return weightRecords != other.weightRecords ||
         glucoseRecords != other.glucoseRecords ||
         stepDailyRecords != other.stepDailyRecords ||
-        a1cDailyRecords != other.a1cDailyRecords
+        a1cDailyRecords != other.a1cDailyRecords ||
+        manualRecords != other.manualRecords
 }
 
 private fun buildSourceSummaries(
