@@ -166,7 +166,16 @@ class SpreadsheetUploader {
         sheetNames: MutableSet<String>,
     ) {
         if (!sheetNames.contains(table.sheetName)) {
-            addSheet(accessToken, table.sheetName)
+            runCatching {
+                addSheet(accessToken, table.sheetName)
+            }.getOrElse { error ->
+                // 一覧取得の応答遅延などで既存タブを見落としても、同期を継続する。
+                if (!error.message.orEmpty().contains("already exists") &&
+                    !error.message.orEmpty().contains("すでに存在")
+                ) {
+                    throw error
+                }
+            }
             sheetNames.add(table.sheetName)
         }
         if (!hasHeader(accessToken, table.sheetName)) {
@@ -188,8 +197,14 @@ class SpreadsheetUploader {
             ?.optJSONArray(0)
             ?: error("シート ${table.sheetName} のヘッダーを取得できません")
         return (0 until header.length())
-            .firstOrNull { header.optString(it) == table.keyColumnName }
+            .firstOrNull {
+                normalizeHeader(header.optString(it)) == normalizeHeader(table.keyColumnName)
+            }
             ?: error("シート ${table.sheetName} に重複判定列 ${table.keyColumnName} がありません")
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value.filter { character -> character.isLetterOrDigit() }.lowercase()
     }
 
     private fun loadExistingKeys(
