@@ -212,6 +212,7 @@ fun HealthDebugScreen(
                             glucoseRecords = state.glucoseRecords,
                             a1cDailyRecords = state.a1cDailyRecords,
                             manualRecords = state.manualRecords,
+                            dailyBodySettings = state.dailyBodySettings,
                             modifier = Modifier.padding(start = 8.dp, top = 6.dp, end = 44.dp),
                         )
 
@@ -262,9 +263,11 @@ private fun MainSummaryValues(
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
     manualRecords: List<ManualHealthRecord>,
+    dailyBodySettings: List<DailyBodySetting>,
     modifier: Modifier = Modifier,
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
+    val bmi = bmiForSummary(records, dailyBodySettings)
     val todaySteps = stepsForSummary(dailySteps, targetDate)
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
     val latestA1c = a1cDailyRecords.maxByOrNull { it.targetDate }
@@ -297,6 +300,15 @@ private fun MainSummaryValues(
             SummaryValue("腹囲", latestWaist ?: "-", ChartSummary)
             SummaryValue("血圧", averageBloodPressure ?: "-", AppMutedBlue)
         }
+        bmi?.let { value ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryValue("BMI", formatDecimal(value), ChartSummary)
+            }
+        }
     }
 }
 
@@ -304,6 +316,26 @@ internal fun stepsForSummary(
     dailySteps: List<DebugStepDaily>,
     targetDate: LocalDate,
 ): Long = dailySteps.firstOrNull { it.targetDate == targetDate }?.steps ?: 0L
+
+internal fun bmiForSummary(
+    weightRecords: List<DebugWeightRecord>,
+    dailyBodySettings: List<DailyBodySetting>,
+): Double? {
+    val morningWeight = weightRecords
+        .filter { it.timeBand == "朝" }
+        .maxByOrNull { it.measuredAt }
+        ?.weightKg
+        ?: return null
+    val heightCm = dailyBodySettings
+        .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
+        ?.heightCm
+        ?: return null
+    if (!morningWeight.isFinite() || morningWeight <= 0.0 || !heightCm.isFinite() || heightCm <= 0.0) {
+        return null
+    }
+    val heightM = heightCm / 100.0
+    return (morningWeight / (heightM * heightM)).takeIf { it.isFinite() && it > 0.0 }
+}
 
 @Composable
 private fun SummaryValue(

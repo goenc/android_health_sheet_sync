@@ -2,9 +2,11 @@ package com.goenc.healthsheetsync.ui
 
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import java.time.LocalDate
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HealthDebugScreenTest {
@@ -74,6 +76,43 @@ class HealthDebugScreenTest {
     }
 
     @Test
+    fun bmiForSummary_usesLatestMorningWeightOnly() {
+        val date = LocalDate.of(2026, 8, 3)
+
+        assertEquals(
+            22.2222,
+            requireNotNull(bmiForSummary(
+                listOf(
+                    weightRecord(date, 90.0, timeBand = "夜"),
+                    weightRecord(date.minusDays(1), 70.0),
+                    weightRecord(date, 72.0, hour = 8),
+                ),
+                listOf(bodySetting(date, 180.0)),
+            )),
+            0.0001,
+        )
+    }
+
+    @Test
+    fun bmiForSummary_returnsNullWhenMorningWeightDoesNotExist() {
+        val date = LocalDate.of(2026, 8, 3)
+
+        assertNull(
+            bmiForSummary(
+                listOf(weightRecord(date, 90.0, timeBand = "夜")),
+                listOf(bodySetting(date, 180.0)),
+            ),
+        )
+    }
+
+    @Test
+    fun bmiForSummary_returnsNullWhenHeightDoesNotExist() {
+        val date = LocalDate.of(2026, 8, 3)
+
+        assertNull(bmiForSummary(listOf(weightRecord(date, 72.0)), emptyList()))
+    }
+
+    @Test
     fun latestChartTargetDate_returns_date_of_latest_weight_record() {
         val latestDate = LocalDate.of(2026, 8, 3)
 
@@ -97,15 +136,29 @@ class HealthDebugScreenTest {
         )
     }
 
-    private fun weightRecord(targetDate: LocalDate, weightKg: Double): DebugWeightRecord {
+    private fun weightRecord(
+        targetDate: LocalDate,
+        weightKg: Double,
+        timeBand: String = "朝",
+        hour: Int = if (timeBand == "朝") 7 else 20,
+    ): DebugWeightRecord {
         return DebugWeightRecord(
-            measuredAt = targetDate.atTime(7, 0),
+            measuredAt = targetDate.atTime(hour, 0),
             targetDate = targetDate,
-            timeBand = "朝",
+            timeBand = timeBand,
             weightKg = weightKg,
             healthConnectId = "weight-$targetDate",
             sourceAppName = "test",
             sourcePackageName = "test",
+        )
+    }
+
+    private fun bodySetting(targetDate: LocalDate, heightCm: Double): DailyBodySetting {
+        return DailyBodySetting(
+            targetDate = targetDate,
+            heightCm = heightCm,
+            averageIntakeKcal = 2_000,
+            updatedAt = targetDate.atTime(12, 0),
         )
     }
 }
