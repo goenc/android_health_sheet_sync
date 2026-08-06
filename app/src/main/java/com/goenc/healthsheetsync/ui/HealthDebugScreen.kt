@@ -297,11 +297,17 @@ private fun MainSummaryValues(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SummaryValue("A1c", latestA1c?.let { "${formatDecimal(it.a1cPercent)}%" } ?: "-", ChartA1c)
+            SummaryValue("血圧", averageBloodPressure ?: "-", AppMutedBlue)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             SummaryValue("腹囲", latestWaist ?: "-", ChartSummary)
             bmi?.let { value ->
                 SummaryValue("BMI", formatDecimal(value), ChartSummary)
             }
-            SummaryValue("血圧", averageBloodPressure ?: "-", AppMutedBlue)
         }
     }
 }
