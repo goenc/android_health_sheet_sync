@@ -20,7 +20,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +57,6 @@ internal fun SettingsScreen(
     onUploadSpreadsheet: () -> Unit,
     spreadsheetUploadStatus: String?,
     isSpreadsheetUploading: Boolean,
-    onRecordListVisibilityChanged: (Boolean) -> Unit,
     basalMetabolicRate: Int,
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     weightMovingAverageMode: WeightMovingAverageMode,
@@ -68,9 +66,6 @@ internal fun SettingsScreen(
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
     var weightMovingAverageError by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(selectedRecordList) {
-        onRecordListVisibilityChanged(selectedRecordList != null)
-    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),

@@ -79,9 +79,8 @@ fun HealthDebugScreen(
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
-    var shouldEnableSettingsScroll by remember { mutableStateOf(false) }
     var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
-    val shouldScrollRoot = showManualInput || (showSettings && shouldEnableSettingsScroll)
+    val shouldScrollRoot = showManualInput || showSettings
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -167,9 +166,6 @@ fun HealthDebugScreen(
                             onUploadSpreadsheet = onUploadSpreadsheet,
                             spreadsheetUploadStatus = spreadsheetUploadStatus,
                             isSpreadsheetUploading = isSpreadsheetUploading,
-                            onRecordListVisibilityChanged = { isVisible ->
-                                shouldEnableSettingsScroll = isVisible
-                            },
                             basalMetabolicRate = basalMetabolicRate,
                             onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
                             weightMovingAverageMode = weightMovingAverageMode,
