@@ -898,7 +898,7 @@ private fun SelectedDaySummary(
             .fillMaxWidth()
             .height(114.dp)
             .background(PopupBackground, RoundedCornerShape(8.dp))
-            .padding(start = 10.dp, end = 6.dp),
+            .padding(start = 20.dp, end = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
