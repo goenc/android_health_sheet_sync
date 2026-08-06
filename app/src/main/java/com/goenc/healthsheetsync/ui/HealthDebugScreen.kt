@@ -285,17 +285,17 @@ private fun MainSummaryValues(
         ) {
             SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-", ChartBlue)
             SummaryValue("歩数", "${todaySteps}歩", ChartStepText)
-            SummaryValue(
-                "血糖",
-                latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
-                ChartGlucose,
-            )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            SummaryValue(
+                "血糖",
+                latestFastingGlucose?.let { "${formatDecimal(it.bloodGlucoseMgDl)}" } ?: "-",
+                ChartGlucose,
+            )
             SummaryValue("A1c", latestA1c?.let { "${formatDecimal(it.a1cPercent)}%" } ?: "-", ChartA1c)
             SummaryValue("血圧", averageBloodPressure ?: "-", AppMutedBlue)
         }
