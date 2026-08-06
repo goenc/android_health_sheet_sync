@@ -639,7 +639,7 @@ internal fun WeightTrendChart(
 
             waistChart?.let { chart ->
                 val linePoints = chart.lineRecords
-                clipRect(chartLeft, waistTop, chartRight, chartBottom) {
+                clipRect(chartLeft, chartTop, chartRight, chartBottom) {
                     if (linePoints.isNotEmpty()) {
                         val waistPath = Path()
                         linePoints.forEachIndexed { index, record ->
@@ -676,7 +676,7 @@ internal fun WeightTrendChart(
                 }
                 chart.displayRecord()?.let { latest ->
                     val latestLabelY = waistYAt(latest.value)
-                        .coerceIn(waistTop + 16.dp.toPx(), chartBottom - 4.dp.toPx())
+                        .coerceIn(chartTop + 16.dp.toPx(), chartBottom - 4.dp.toPx())
                     drawContext.canvas.nativeCanvas.apply {
                         waistPaint.textAlign = Paint.Align.RIGHT
                         drawText(
