@@ -864,7 +864,10 @@ internal fun WeightTrendChart(
             }
         }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            ) {
                 WeightChartRange.entries.forEach { range ->
                     WeightChartRangeButton(
                         range = range,
