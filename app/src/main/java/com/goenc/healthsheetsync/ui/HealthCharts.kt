@@ -167,6 +167,7 @@ internal fun WeightTrendChart(
     val movingAverageLineColor = ChartMovingAverage
 
     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Spacer(modifier = Modifier.height(6.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -877,7 +878,7 @@ internal fun WeightTrendChart(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(18.dp))
         SelectedDaySummary(
             day = selectedDay,
             graphValues = selectedGraphValues,

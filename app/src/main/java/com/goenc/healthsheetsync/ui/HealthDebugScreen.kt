@@ -214,7 +214,7 @@ fun HealthDebugScreen(
                             dailyBodySettings = state.dailyBodySettings,
                             modifier = Modifier
                                 .padding(start = 8.dp, end = 44.dp)
-                                .offset(y = 6.dp),
+                                .offset(y = 12.dp),
                         )
 
                         Column(
