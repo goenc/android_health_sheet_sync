@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -274,6 +275,7 @@ internal fun WeightTrendChart(
                     textSize = 12.sp.toPx()
                 }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
+                val waistTop = chartTop + chartHeight * WAIST_CHART_TOP_RATIO
 
             fun xAtTime(measuredAt: LocalDateTime): Float {
                 val totalMillis = max(1L, Duration.between(visibleWindow.startAt, visibleWindow.endAt).toMillis())
@@ -300,7 +302,6 @@ internal fun WeightTrendChart(
             }
 
             fun waistYAt(value: Double): Float {
-                val waistTop = chartTop + chartHeight * WAIST_CHART_TOP_RATIO
                 val waistHeight = max(1f, chartBottom - waistTop)
                 val ratio = ((value - WAIST_CHART_MIN_CM) /
                     (WAIST_CHART_GUIDE_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
@@ -638,44 +639,50 @@ internal fun WeightTrendChart(
 
             waistChart?.let { chart ->
                 val linePoints = chart.lineRecords
-                if (linePoints.isNotEmpty()) {
-                    val waistPath = Path()
-                    linePoints.forEachIndexed { index, record ->
-                        val point = Offset(xAtTime(record.measuredAt), waistYAt(record.value))
-                        if (index == 0) {
-                            waistPath.moveTo(point.x, point.y)
-                        } else {
-                            waistPath.lineTo(point.x, point.y)
+                clipRect(chartLeft, waistTop, chartRight, chartBottom) {
+                    if (linePoints.isNotEmpty()) {
+                        val waistPath = Path()
+                        linePoints.forEachIndexed { index, record ->
+                            val point = Offset(xAtTime(record.measuredAt), waistYAt(record.value))
+                            if (index == 0) {
+                                waistPath.moveTo(point.x, point.y)
+                            } else {
+                                waistPath.lineTo(point.x, point.y)
+                            }
                         }
+                        drawPath(
+                            path = waistPath,
+                            color = ChartWaist,
+                            style = Stroke(width = 2.dp.toPx()),
+                        )
                     }
-                    drawPath(
-                        path = waistPath,
-                        color = ChartWaist,
-                        style = Stroke(width = 2.dp.toPx()),
-                    )
-                }
-                chart.visibleRecords.forEach { record ->
-                    drawCircle(
-                        color = ChartWaist,
-                        radius = 4.dp.toPx(),
-                        center = Offset(xAtTime(record.measuredAt), waistYAt(record.value)),
-                    )
+                    chart.visibleRecords.forEach { record ->
+                        drawCircle(
+                            color = ChartWaist,
+                            radius = 4.dp.toPx(),
+                            center = Offset(xAtTime(record.measuredAt), waistYAt(record.value)),
+                        )
+                    }
+                    chart.displayRecord()?.let { latest ->
+                        val latestX = xAtTime(latest.measuredAt)
+                        val latestY = waistYAt(latest.value)
+                        drawLine(
+                            color = ChartWaist,
+                            start = Offset(latestX, latestY),
+                            end = Offset(chartRight, latestY),
+                            strokeWidth = 1.5.dp.toPx(),
+                        )
+                    }
                 }
                 chart.displayRecord()?.let { latest ->
-                    val latestX = xAtTime(latest.measuredAt)
-                    val latestY = waistYAt(latest.value)
-                    drawLine(
-                        color = ChartWaist,
-                        start = Offset(latestX, latestY),
-                        end = Offset(chartRight, latestY),
-                        strokeWidth = 1.5.dp.toPx(),
-                    )
+                    val latestLabelY = waistYAt(latest.value)
+                        .coerceIn(waistTop + 16.dp.toPx(), chartBottom - 4.dp.toPx())
                     drawContext.canvas.nativeCanvas.apply {
                         waistPaint.textAlign = Paint.Align.RIGHT
                         drawText(
                             formatDecimal(latest.value),
                             chartRight - 4.dp.toPx(),
-                            latestY - 4.dp.toPx(),
+                            latestLabelY - 4.dp.toPx(),
                             waistPaint,
                         )
                     }
