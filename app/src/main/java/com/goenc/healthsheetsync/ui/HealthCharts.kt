@@ -75,10 +75,13 @@ internal fun WeightTrendChart(
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
     manualRecords: List<ManualHealthRecord>,
+    selectedRange: WeightChartRange,
+    onSelectedRangeChange: (WeightChartRange) -> Unit,
+    selectedDate: LocalDate?,
+    onSelectedDateChange: (LocalDate?) -> Unit,
     onAddManualRecord: () -> Unit,
 ) {
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
-    var selectedRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var chartEndAt by remember(sortedRecords, selectedRange) {
         mutableStateOf(sortedRecords.lastOrNull()?.measuredAt)
     }
@@ -95,7 +98,6 @@ internal fun WeightTrendChart(
     val movingAveragePoints = remember(allChartPoints, weightMovingAverageMode) {
         calculateWeightMovingAverage(allChartPoints, weightMovingAverageMode)
     }
-    var selectedDate by remember(chartPoints) { mutableStateOf<LocalDate?>(null) }
     val selectedDay = remember(
         chartPoints,
         dailySteps,
@@ -185,15 +187,17 @@ internal fun WeightTrendChart(
                         detectTapGestures { offset ->
                             if (chartPoints.isEmpty()) return@detectTapGestures
                             val visibleWindow = chartWindow ?: return@detectTapGestures
-                            selectedDate = nearestChartIndex(
-                                touchX = offset.x,
-                                width = size.width.toFloat(),
-                                records = chartPoints,
-                                rangeStartAt = visibleWindow.startAt,
-                                rangeEndAt = visibleWindow.endAt,
-                                leftPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
-                                rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx(),
-                            ).let { chartPoints.getOrNull(it)?.targetDate }
+                            onSelectedDateChange(
+                                nearestChartIndex(
+                                    touchX = offset.x,
+                                    width = size.width.toFloat(),
+                                    records = chartPoints,
+                                    rangeStartAt = visibleWindow.startAt,
+                                    rangeEndAt = visibleWindow.endAt,
+                                    leftPadding = CHART_LEFT_PADDING_DP.dp.toPx(),
+                                    rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx(),
+                                ).let { chartPoints.getOrNull(it)?.targetDate },
+                            )
                         }
                     }
             ) {
@@ -869,7 +873,7 @@ internal fun WeightTrendChart(
                 WeightChartRangeButton(
                     range = range,
                     selected = range == selectedRange,
-                    onClick = { selectedRange = range },
+                    onClick = { onSelectedRangeChange(range) },
                 )
             }
         }

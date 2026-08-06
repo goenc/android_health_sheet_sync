@@ -65,6 +65,10 @@ internal enum class WeightChartRange(
     }
 }
 
+internal fun latestChartTargetDate(records: List<DebugWeightRecord>): LocalDate? {
+    return records.maxByOrNull { it.measuredAt }?.targetDate
+}
+
 internal data class WeightTrendLine(
     val startWeightKg: Double,
     val endWeightKg: Double,

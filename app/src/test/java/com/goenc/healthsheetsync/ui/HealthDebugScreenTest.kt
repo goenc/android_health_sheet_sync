@@ -1,6 +1,7 @@
 package com.goenc.healthsheetsync.ui
 
 import com.goenc.healthsheetsync.health.DebugStepDaily
+import com.goenc.healthsheetsync.health.DebugWeightRecord
 import java.time.LocalDate
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
@@ -72,12 +73,39 @@ class HealthDebugScreenTest {
         assertEquals(0L, stepsForSummary(listOf(stepDaily(today, 0L)), today))
     }
 
+    @Test
+    fun latestChartTargetDate_returns_date_of_latest_weight_record() {
+        val latestDate = LocalDate.of(2026, 8, 3)
+
+        assertEquals(
+            latestDate,
+            latestChartTargetDate(
+                listOf(
+                    weightRecord(latestDate.minusDays(1), 60.0),
+                    weightRecord(latestDate, 59.5),
+                ).reversed(),
+            ),
+        )
+    }
+
     private fun stepDaily(targetDate: LocalDate, steps: Long): DebugStepDaily {
         return DebugStepDaily(
             targetDate = targetDate,
             steps = steps,
             aggregationStartAt = LocalDateTime.of(targetDate, java.time.LocalTime.MIDNIGHT),
             aggregationEndAt = LocalDateTime.of(targetDate.plusDays(1), java.time.LocalTime.MIDNIGHT),
+        )
+    }
+
+    private fun weightRecord(targetDate: LocalDate, weightKg: Double): DebugWeightRecord {
+        return DebugWeightRecord(
+            measuredAt = targetDate.atTime(7, 0),
+            targetDate = targetDate,
+            timeBand = "朝",
+            weightKg = weightKg,
+            healthConnectId = "weight-$targetDate",
+            sourceAppName = "test",
+            sourcePackageName = "test",
         )
     }
 }

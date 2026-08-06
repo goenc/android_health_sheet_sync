@@ -83,6 +83,9 @@ fun HealthDebugScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
     var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
+    var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
+    var selectedChartDate by remember { mutableStateOf<LocalDate?>(null) }
+    val chartSelectionDate = selectedChartDate ?: latestChartTargetDate(state.weightRecords)
     val shouldScrollRoot = showManualInput || showSettings
 
     LaunchedEffect(Unit) {
@@ -213,14 +216,18 @@ fun HealthDebugScreen(
                         )
 
                         WeightTrendChart(
-                            state.weightRecords,
-                            state.stepDailyRecords,
-                            state.dailyEnergySnapshots,
-                            basalMetabolicRate,
-                            weightMovingAverageMode,
-                            state.glucoseRecords,
-                            state.a1cDailyRecords,
-                            state.manualRecords,
+                            records = state.weightRecords,
+                            dailySteps = state.stepDailyRecords,
+                            dailyEnergySnapshots = state.dailyEnergySnapshots,
+                            basalMetabolicRate = basalMetabolicRate,
+                            weightMovingAverageMode = weightMovingAverageMode,
+                            glucoseRecords = state.glucoseRecords,
+                            a1cDailyRecords = state.a1cDailyRecords,
+                            manualRecords = state.manualRecords,
+                            selectedRange = selectedChartRange,
+                            onSelectedRangeChange = { selectedChartRange = it },
+                            selectedDate = chartSelectionDate,
+                            onSelectedDateChange = { selectedChartDate = it },
                             onAddManualRecord = { showManualInput = true },
                         )
 
