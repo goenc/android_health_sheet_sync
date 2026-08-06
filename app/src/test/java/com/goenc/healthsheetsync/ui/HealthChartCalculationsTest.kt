@@ -130,6 +130,33 @@ class HealthChartCalculationsTest {
     }
 
     @Test
+    fun selectedGraphValues_uses_nearest_a1c_record_on_or_before_selected_date() {
+        val selectedDate = LocalDate.of(2026, 1, 5)
+        val result = selectedGraphValuesFor(
+            date = selectedDate,
+            glucoseRecords = emptyList(),
+            a1cDailyRecords = listOf(
+                a1cRecord(2026, 1, 1, 5.8),
+                a1cRecord(2026, 1, 10, 6.2),
+            ),
+            manualRecords = emptyList(),
+            window = chartWindow(2026, 1, 1, 2026, 1, 10),
+        )
+
+        assertEquals("5.8%", result.a1cText)
+    }
+
+    @Test
+    fun nearestA1cRecordOnOrBefore_returns_null_when_all_records_are_future() {
+        assertNull(
+            nearestA1cRecordOnOrBefore(
+                date = LocalDate.of(2026, 1, 5),
+                records = listOf(a1cRecord(2026, 1, 10, 6.2)),
+            ),
+        )
+    }
+
+    @Test
     fun averageEstimatedTotalKcal_changes_with_chart_window() {
         val steps = listOf(
             stepDaily(2026, 1, 1, 10_000),

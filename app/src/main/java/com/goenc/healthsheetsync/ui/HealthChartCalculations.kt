@@ -713,8 +713,7 @@ internal fun selectedGraphValuesFor(
 ): SelectedGraphValues {
     val fastingGlucose = calculateFastingGlucoseChart(glucoseRecords, window)
         ?.selectedValueText(date)
-    val a1c = a1cDailyRecords
-        .maxByOrNull { it.measuredAt }
+    val a1c = nearestA1cRecordOnOrBefore(date, a1cDailyRecords)
         ?.let { "${formatDecimal(it.a1cPercent)}%" }
     val bloodPressure = calculateBloodPressureChart(manualRecords, window)
         ?.visibleRecords
@@ -728,6 +727,15 @@ internal fun selectedGraphValuesFor(
         bloodPressureText = bloodPressure,
         waistText = waist,
     )
+}
+
+internal fun nearestA1cRecordOnOrBefore(
+    date: LocalDate,
+    records: List<DebugA1cDaily>,
+): DebugA1cDaily? {
+    return records
+        .filter { !it.targetDate.isAfter(date) }
+        .maxWithOrNull(compareBy<DebugA1cDaily> { it.targetDate }.thenBy { it.measuredAt })
 }
 
 internal fun List<GraphValue>.selectedOrAverageText(date: LocalDate, suffix: String): String? {
