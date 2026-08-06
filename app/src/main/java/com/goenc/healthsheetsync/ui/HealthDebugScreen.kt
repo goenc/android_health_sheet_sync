@@ -229,6 +229,7 @@ fun HealthDebugScreen(
                                 glucoseRecords = state.glucoseRecords,
                                 a1cDailyRecords = state.a1cDailyRecords,
                                 manualRecords = state.manualRecords,
+                                dailyBodySettings = state.dailyBodySettings,
                                 selectedRange = selectedChartRange,
                                 onSelectedRangeChange = { selectedChartRange = it },
                                 selectedDate = chartSelectionDate,

@@ -55,6 +55,7 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
@@ -78,6 +79,7 @@ internal fun WeightTrendChart(
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
     manualRecords: List<ManualHealthRecord>,
+    dailyBodySettings: List<DailyBodySetting>,
     selectedRange: WeightChartRange,
     onSelectedRangeChange: (WeightChartRange) -> Unit,
     selectedDate: LocalDate?,
@@ -882,6 +884,7 @@ internal fun WeightTrendChart(
         SelectedDaySummary(
             day = selectedDay,
             graphValues = selectedGraphValues,
+            dailyBodySettings = dailyBodySettings,
             onAddManualRecord = onAddManualRecord,
         )
     }
@@ -891,6 +894,7 @@ internal fun WeightTrendChart(
 private fun SelectedDaySummary(
     day: ChartDaySelection?,
     graphValues: SelectedGraphValues?,
+    dailyBodySettings: List<DailyBodySetting>,
     onAddManualRecord: () -> Unit,
 ) {
     Row(
@@ -927,7 +931,16 @@ private fun SelectedDaySummary(
             SummaryInfoLine("歩数 ${day?.steps?.steps?.let { "${it}歩" } ?: "-"}")
             SummaryInfoLine("血糖値 ${graphValues?.glucoseText ?: "-"}  A1c ${graphValues?.a1cText ?: "-"}")
             SummaryInfoLine("血圧 ${graphValues?.bloodPressureText ?: "-"}")
-            SummaryInfoLine("腹囲 ${graphValues?.waistText ?: "-"}")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryInfoLine("腹囲 ${graphValues?.waistText ?: "-"}")
+                selectedDayBmiText(day, dailyBodySettings)?.let { bmiText ->
+                    SummaryInfoLine("BMI $bmiText")
+                }
+            }
         }
         FloatingActionButton(
             onClick = onAddManualRecord,
@@ -942,6 +955,24 @@ private fun SelectedDaySummary(
             )
         }
     }
+}
+
+private fun selectedDayBmiText(
+    day: ChartDaySelection?,
+    dailyBodySettings: List<DailyBodySetting>,
+): String? {
+    val morningWeightKg = day?.morning?.weightKg ?: return null
+    val heightCm = dailyBodySettings
+        .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
+        ?.heightCm
+        ?: return null
+    if (!morningWeightKg.isFinite() || morningWeightKg <= 0.0 || !heightCm.isFinite() || heightCm <= 0.0) {
+        return null
+    }
+    val heightM = heightCm / 100.0
+    return (morningWeightKg / (heightM * heightM))
+        .takeIf { it.isFinite() && it > 0.0 }
+        ?.let(::formatDecimal)
 }
 
 @Composable
