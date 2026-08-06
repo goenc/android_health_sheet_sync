@@ -6,6 +6,7 @@ import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
@@ -24,7 +25,32 @@ internal class HealthRecordQueries(
             a1cDailyRecords = loadA1cDailyRecords(),
             invalidatedGraphRecords = loadInvalidatedGraphRecords(),
             dailyEnergySnapshots = DailyEnergySnapshotStore(db).load(),
+            dailyBodySettings = loadDailyBodySettings(),
         )
+    }
+
+    private fun loadDailyBodySettings(): List<DailyBodySetting> {
+        db.rawQuery(
+            """
+            SELECT target_date, height_cm, average_intake_kcal, updated_at
+            FROM daily_body_settings
+            ORDER BY target_date DESC
+            """.trimIndent(),
+            emptyArray(),
+        ).use { cursor ->
+            return buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        DailyBodySetting(
+                            targetDate = LocalDate.parse(cursor.getString(0)),
+                            heightCm = cursor.getDouble(1),
+                            averageIntakeKcal = cursor.getInt(2),
+                            updatedAt = LocalDateTime.parse(cursor.getString(3)),
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     private fun loadWeightRecords(): List<DebugWeightRecord> {

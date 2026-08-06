@@ -36,6 +36,7 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.HealthDebugUiState
@@ -61,11 +62,23 @@ internal fun SettingsScreen(
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     weightMovingAverageMode: WeightMovingAverageMode,
     onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
+    dailyBodySettings: List<DailyBodySetting>,
+    onSaveDailyBodySetting: (Double, Int, (String?) -> Unit) -> Unit,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
     onBack: () -> Unit,
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
     var weightMovingAverageError by remember { mutableStateOf<String?>(null) }
+    val latestDailyBodySetting = dailyBodySettings.maxWithOrNull(
+        compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt },
+    )
+    var heightInput by remember(latestDailyBodySetting) {
+        mutableStateOf(latestDailyBodySetting?.heightCm?.let(::formatDecimal).orEmpty())
+    }
+    var averageIntakeInput by remember(latestDailyBodySetting) {
+        mutableStateOf(latestDailyBodySetting?.averageIntakeKcal?.toString().orEmpty())
+    }
+    var dailyBodySettingError by remember { mutableStateOf<String?>(null) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -151,6 +164,83 @@ internal fun SettingsScreen(
             )
         }
         HorizontalDivider(color = DividerColor)
+    }
+    DebugSection(title = "身体設定") {
+        latestDailyBodySetting?.let { setting ->
+            Text(
+                text = "最新保存日: ${setting.targetDate}",
+                style = MaterialTheme.typography.bodySmall,
+                color = AppMutedBlue,
+            )
+        } ?: Text(
+            text = "未登録",
+            style = MaterialTheme.typography.bodySmall,
+            color = AppMutedBlue,
+        )
+        OutlinedTextField(
+            value = heightInput,
+            onValueChange = {
+                heightInput = it
+                dailyBodySettingError = null
+            },
+            label = { Text("身長（cm）") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            isError = dailyBodySettingError != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = averageIntakeInput,
+            onValueChange = {
+                averageIntakeInput = it
+                dailyBodySettingError = null
+            },
+            label = { Text("平均摂取カロリー（kcal/日）") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            isError = dailyBodySettingError != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        dailyBodySettingError?.let { errorMessage ->
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        Button(
+            onClick = {
+                val height = heightInput.trim().toDoubleOrNull()
+                val averageIntake = averageIntakeInput.trim().toIntOrNull()
+                when {
+                    height == null -> {
+                        dailyBodySettingError = "身長は数値で入力してください"
+                    }
+                    height <= 0.0 -> {
+                        dailyBodySettingError = "身長は0より大きい値で入力してください"
+                    }
+                    averageIntake == null -> {
+                        dailyBodySettingError = "平均摂取カロリーは整数で入力してください"
+                    }
+                    averageIntake <= 0 -> {
+                        dailyBodySettingError = "平均摂取カロリーは0より大きい整数で入力してください"
+                    }
+                    else -> {
+                        onSaveDailyBodySetting(height, averageIntake) { errorMessage ->
+                            dailyBodySettingError = errorMessage
+                        }
+                    }
+                }
+            },
+            shape = CircleShape,
+        ) {
+            Text("保存")
+        }
+        Text(
+            text = "日付ごとに1件。今日保存した値は同日再保存で上書き",
+            style = MaterialTheme.typography.bodySmall,
+            color = AppMutedBlue,
+        )
     }
     DebugSection(title = "7日移動平均の対象") {
         Text(

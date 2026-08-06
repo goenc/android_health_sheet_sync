@@ -3,7 +3,7 @@ package com.goenc.healthsheetsync.data
 import android.database.sqlite.SQLiteDatabase
 
 internal const val DATABASE_NAME = "health_sheet_sync.db"
-internal const val DATABASE_VERSION = 7
+internal const val DATABASE_VERSION = 8
 internal const val TABLE_WEIGHT = "weight_records"
 internal const val TABLE_GLUCOSE = "glucose_records"
 internal const val TABLE_STEPS = "step_daily_records"
@@ -13,6 +13,7 @@ internal const val TABLE_MANUAL = "manual_records"
 internal const val TABLE_INVALIDATED = "invalidated_record_keys"
 internal const val TABLE_DAILY_ENERGY_SNAPSHOTS = "daily_energy_snapshots"
 internal const val TABLE_DAILY_ENERGY_REPAIRS = "daily_energy_repairs"
+internal const val TABLE_DAILY_BODY_SETTINGS = "daily_body_settings"
 internal const val MANUAL_SOURCE = "手入力"
 internal const val MANUAL_PACKAGE = "manual"
 internal const val UNKNOWN = "不明"
@@ -151,6 +152,19 @@ internal fun SQLiteDatabase.createDailyEnergyRepairsTable() {
         CREATE TABLE IF NOT EXISTS daily_energy_repairs (
             repair_key TEXT PRIMARY KEY,
             completed_at TEXT NOT NULL
+        )
+        """.trimIndent(),
+    )
+}
+
+internal fun SQLiteDatabase.createDailyBodySettingsTable() {
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS daily_body_settings (
+            target_date TEXT PRIMARY KEY,
+            height_cm REAL NOT NULL CHECK(height_cm > 0),
+            average_intake_kcal INTEGER NOT NULL CHECK(average_intake_kcal > 0),
+            updated_at TEXT NOT NULL
         )
         """.trimIndent(),
     )

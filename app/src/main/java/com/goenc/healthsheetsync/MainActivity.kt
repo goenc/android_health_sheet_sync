@@ -178,6 +178,10 @@ class MainActivity : ComponentActivity() {
                         onSaveWeightMovingAverageMode = { mode, onResult ->
                             saveWeightMovingAverageMode(mode, onResult)
                         },
+                        dailyBodySettings = healthState.dailyBodySettings,
+                        onSaveDailyBodySetting = { heightCm, averageIntakeKcal, onResult ->
+                            saveDailyBodySetting(heightCm, averageIntakeKcal, onResult)
+                        },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }
@@ -336,6 +340,34 @@ class MainActivity : ComponentActivity() {
                 weightMovingAverageMode = mode
             }
             onResult(errorMessage)
+        }
+    }
+
+    private fun saveDailyBodySetting(
+        heightCm: Double,
+        averageIntakeKcal: Int,
+        onResult: (String?) -> Unit,
+    ) {
+        lifecycleScope.launch {
+            val errorMessage = withContext(Dispatchers.IO) {
+                runCatching {
+                    check(
+                        localStore.saveDailyBodySetting(
+                            targetDate = LocalDate.now(ZoneId.systemDefault()),
+                            heightCm = heightCm,
+                            averageIntakeKcal = averageIntakeKcal,
+                        ),
+                    )
+                    null
+                }.getOrElse { "身長・平均摂取カロリーを保存できませんでした" }
+            }
+            if (errorMessage == null) {
+                onResult(null)
+                refreshLocalHealthData()
+                requestImmediateAutomaticSpreadsheetSync()
+            } else {
+                onResult(errorMessage)
+            }
         }
     }
 
@@ -596,6 +628,7 @@ private fun HealthDebugUiState.withStoredData(storedData: StoredHealthData): Hea
         manualRecords = storedData.manualRecords,
         invalidatedGraphRecords = storedData.invalidatedGraphRecords,
         dailyEnergySnapshots = storedData.dailyEnergySnapshots,
+        dailyBodySettings = storedData.dailyBodySettings,
         yesterdaySteps = storedData.stepDailyRecords.firstOrNull { it.targetDate == yesterday },
         sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
     )
@@ -606,7 +639,8 @@ private fun HealthDebugUiState.hasMirrorDataChanged(other: HealthDebugUiState): 
         glucoseRecords != other.glucoseRecords ||
         stepDailyRecords != other.stepDailyRecords ||
         a1cDailyRecords != other.a1cDailyRecords ||
-        manualRecords != other.manualRecords
+        manualRecords != other.manualRecords ||
+        dailyBodySettings != other.dailyBodySettings
 }
 
 private fun buildSourceSummaries(

@@ -39,6 +39,7 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.HealthConnectAvailability
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
@@ -75,6 +76,8 @@ fun HealthDebugScreen(
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     weightMovingAverageMode: WeightMovingAverageMode,
     onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
+    dailyBodySettings: List<DailyBodySetting>,
+    onSaveDailyBodySetting: (Double, Int, (String?) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -170,6 +173,8 @@ fun HealthDebugScreen(
                             onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
                             weightMovingAverageMode = weightMovingAverageMode,
                             onSaveWeightMovingAverageMode = onSaveWeightMovingAverageMode,
+                            dailyBodySettings = dailyBodySettings,
+                            onSaveDailyBodySetting = onSaveDailyBodySetting,
                             onBack = { showSettings = false },
                             dailyEnergySnapshots = state.dailyEnergySnapshots,
                         )

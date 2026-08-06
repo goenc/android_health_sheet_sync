@@ -5,6 +5,7 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,7 @@ class SpreadsheetUploader {
                 stepDailyRecords = state.stepDailyRecords,
                 a1cDailyRecords = state.a1cDailyRecords,
                 manualRecords = state.manualRecords,
+                dailyBodySettings = state.dailyBodySettings,
             ),
         )
     }
@@ -45,6 +47,7 @@ class SpreadsheetUploader {
                 stepDailyRecords = data.stepDailyRecords,
                 a1cDailyRecords = data.a1cDailyRecords,
                 manualRecords = data.manualRecords,
+                dailyBodySettings = data.dailyBodySettings,
             ),
         )
     }
@@ -79,8 +82,23 @@ class SpreadsheetUploader {
         stepDailyRecords: List<DebugStepDaily>,
         a1cDailyRecords: List<DebugA1cDaily>,
         manualRecords: List<ManualHealthRecord>,
+        dailyBodySettings: List<DailyBodySetting>,
     ): List<SpreadsheetUploadTable> {
         return listOf(
+            SpreadsheetUploadTable(
+                sheetName = "dailyBodySettings",
+                headers = listOf("targetDate", "heightCm", "averageIntakeKcal", "updatedAt"),
+                values = dailyBodySettings
+                    .sortedBy { it.targetDate }
+                    .map { setting ->
+                        listOf(
+                            setting.targetDate.toString(),
+                            setting.heightCm,
+                            setting.averageIntakeKcal,
+                            setting.updatedAt.toString(),
+                        )
+                    },
+            ),
             SpreadsheetUploadTable(
                 sheetName = "weightRecords",
                 headers = listOf(

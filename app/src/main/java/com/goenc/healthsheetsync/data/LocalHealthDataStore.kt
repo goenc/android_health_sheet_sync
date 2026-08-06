@@ -10,6 +10,7 @@ import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugStepRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
@@ -27,6 +28,7 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         db.createHealthConnectTables()
         db.createManualRecordsTable()
         db.createA1cDailyRecordsTable()
+        db.createDailyBodySettingsTable()
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -48,6 +50,9 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         }
         if (oldVersion < 7) {
             db.createDailyEnergyRepairsTable()
+        }
+        if (oldVersion < 8) {
+            db.createDailyBodySettingsTable()
         }
     }
 
@@ -104,6 +109,29 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
     }
 
     fun load(): StoredHealthData = HealthRecordQueries(readableDatabase).load()
+
+    fun saveDailyBodySetting(
+        targetDate: LocalDate,
+        heightCm: Double,
+        averageIntakeKcal: Int,
+    ): Boolean {
+        if (!heightCm.isFinite() || heightCm <= 0.0 || averageIntakeKcal <= 0) {
+            return false
+        }
+        return runCatching {
+            val rowId = writableDatabase.replace(
+                TABLE_DAILY_BODY_SETTINGS,
+                null,
+                ContentValues().apply {
+                    put("target_date", targetDate.toString())
+                    put("height_cm", heightCm)
+                    put("average_intake_kcal", averageIntakeKcal)
+                    put("updated_at", LocalDateTime.now().toString())
+                },
+            )
+            rowId != -1L
+        }.getOrDefault(false)
+    }
 
     fun finalizeHealthConnectDailyEnergySnapshotsAfterSync(basalMetabolicRate: Int) {
         DailyEnergySnapshotStore(writableDatabase).finalizeHealthConnectPastDays(basalMetabolicRate)
@@ -238,4 +266,5 @@ data class StoredHealthData(
     val manualRecords: List<ManualHealthRecord>,
     val invalidatedGraphRecords: List<InvalidatedGraphRecord>,
     val dailyEnergySnapshots: List<DailyEnergySnapshot>,
+    val dailyBodySettings: List<DailyBodySetting> = emptyList(),
 )

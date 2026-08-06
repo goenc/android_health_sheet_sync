@@ -32,6 +32,7 @@ class HealthConnectDebugReader(private val context: Context) {
                 manualRecords = storedData.manualRecords,
                 invalidatedGraphRecords = storedData.invalidatedGraphRecords,
                 dailyEnergySnapshots = storedData.dailyEnergySnapshots,
+                dailyBodySettings = storedData.dailyBodySettings,
                 debugMessages = debugMessages,
             )
         }
@@ -63,6 +64,7 @@ class HealthConnectDebugReader(private val context: Context) {
                 manualRecords = storedData.manualRecords,
                 invalidatedGraphRecords = storedData.invalidatedGraphRecords,
                 dailyEnergySnapshots = storedData.dailyEnergySnapshots,
+                dailyBodySettings = storedData.dailyBodySettings,
                 debugMessages = debugMessages,
             )
         }
@@ -107,6 +109,7 @@ class HealthConnectDebugReader(private val context: Context) {
             manualRecords = storedData.manualRecords,
             invalidatedGraphRecords = storedData.invalidatedGraphRecords,
             dailyEnergySnapshots = storedData.dailyEnergySnapshots,
+            dailyBodySettings = storedData.dailyBodySettings,
             yesterdaySteps = yesterdaySteps,
             sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
             debugMessages = debugMessages,
