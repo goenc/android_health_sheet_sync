@@ -10,12 +10,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
@@ -135,6 +138,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             HealthSheetSyncTheme {
                 Scaffold { innerPadding ->
+                    val layoutDirection = LocalLayoutDirection.current
+                    val contentPadding = PaddingValues(
+                        start = innerPadding.calculateLeftPadding(layoutDirection),
+                        top = innerPadding.calculateTopPadding(),
+                        end = innerPadding.calculateRightPadding(layoutDirection),
+                        bottom = (innerPadding.calculateBottomPadding() - 20.dp).coerceAtLeast(0.dp),
+                    )
                     HealthDebugScreen(
                         state = healthState,
                         onRequestPermissions = {
@@ -182,7 +192,7 @@ class MainActivity : ComponentActivity() {
                         onSaveDailyBodySetting = { heightCm, averageIntakeKcal, onResult ->
                             saveDailyBodySetting(heightCm, averageIntakeKcal, onResult)
                         },
-                        modifier = Modifier.padding(innerPadding),
+                        modifier = Modifier.padding(contentPadding),
                     )
                 }
             }

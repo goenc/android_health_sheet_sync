@@ -87,7 +87,7 @@ fun HealthDebugScreen(
     var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var selectedChartDate by remember { mutableStateOf<LocalDate?>(null) }
     val chartSelectionDate = selectedChartDate ?: latestChartTargetDate(state.weightRecords)
-    val shouldScrollRoot = true
+    val shouldScrollRoot = showManualInput || showSettings
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -189,7 +189,7 @@ fun HealthDebugScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 22.dp, top = 4.dp, end = 22.dp, bottom = 8.dp),
+                        .padding(horizontal = 22.dp),
                 ) {
                     IconButton(
                         onClick = { showSettings = true },
@@ -201,10 +201,8 @@ fun HealthDebugScreen(
                         )
                     }
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 2.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         MainSummaryValues(
                             records = state.weightRecords,
@@ -214,11 +212,12 @@ fun HealthDebugScreen(
                             a1cDailyRecords = state.a1cDailyRecords,
                             manualRecords = state.manualRecords,
                             dailyBodySettings = state.dailyBodySettings,
-                            modifier = Modifier.padding(start = 8.dp, top = 6.dp, end = 44.dp),
+                            modifier = Modifier
+                                .padding(start = 8.dp, end = 44.dp)
+                                .offset(y = 6.dp),
                         )
 
                         Column(
-                            modifier = Modifier.offset(y = (-30).dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             WeightTrendChart(

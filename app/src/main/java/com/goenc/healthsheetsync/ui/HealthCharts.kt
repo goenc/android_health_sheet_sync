@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,10 +22,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -163,7 +166,7 @@ internal fun WeightTrendChart(
     val missingPointColor = ChartMissingPoint
     val movingAverageLineColor = ChartMovingAverage
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -860,15 +863,18 @@ internal fun WeightTrendChart(
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            WeightChartRange.entries.forEach { range ->
-                WeightChartRangeButton(
-                    range = range,
-                    selected = range == selectedRange,
-                    onClick = { onSelectedRangeChange(range) },
-                )
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                WeightChartRange.entries.forEach { range ->
+                    WeightChartRangeButton(
+                        range = range,
+                        selected = range == selectedRange,
+                        onClick = { onSelectedRangeChange(range) },
+                    )
+                }
             }
         }
+        Spacer(modifier = Modifier.height(24.dp))
         SelectedDaySummary(
             day = selectedDay,
             graphValues = selectedGraphValues,
@@ -886,9 +892,9 @@ private fun SelectedDaySummary(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(114.dp)
             .background(PopupBackground, RoundedCornerShape(8.dp))
-            .padding(start = 10.dp, top = 6.dp, end = 6.dp, bottom = 6.dp),
+            .padding(start = 10.dp, end = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -973,8 +979,10 @@ private fun WeightChartRangeButton(
                 containerColor = AppPrimary,
                 contentColor = Color.White,
             ),
-            modifier = Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 40.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .height(32.dp)
+                .defaultMinSize(minWidth = 72.dp, minHeight = 32.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp),
         ) {
             Text(range.label)
         }
@@ -983,8 +991,10 @@ private fun WeightChartRangeButton(
             onClick = onClick,
             shape = CircleShape,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
-            modifier = Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 40.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .height(32.dp)
+                .defaultMinSize(minWidth = 72.dp, minHeight = 32.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp),
         ) {
             Text(range.label)
         }
