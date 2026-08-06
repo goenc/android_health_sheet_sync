@@ -379,12 +379,6 @@ internal object HealthGraphWidgetRenderer {
             chartTop + (31f * density),
             summaryPaint,
         )
-        canvas.drawText(
-            "平均血糖 ${glucoseChart?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL" } ?: "-"}",
-            chartLeft + (8f * density),
-            chartTop + (48f * density),
-            summaryPaint,
-        )
 
         calculateStepBars(storedData.stepDailyRecords, window).forEach { stepBar ->
             val stepRatio = (stepBar.steps.toFloat() / STEP_CHART_MAX_STEPS).coerceIn(0f, 1f)

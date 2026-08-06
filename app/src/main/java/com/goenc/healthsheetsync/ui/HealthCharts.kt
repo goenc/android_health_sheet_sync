@@ -474,8 +474,6 @@ internal fun WeightTrendChart(
                 }
                 val trendText = trendLine?.let { formatTrendChange(it, selectedRange, trendDuration) }
                 val averageStepsText = "平均歩数 ${averageSteps?.let { "%,d歩".format(it) } ?: "-"}"
-                val averageGlucoseText =
-                    "平均血糖 ${glucoseChart?.let { "${formatDecimal(it.weightedAverageMgDl)} mg/dL" } ?: "-"}"
                 val averageEstimatedTotalText =
                     "平均 ${averageEstimatedTotalKcal?.let(::formatIntegerWithGrouping) ?: "-"} kcal/日"
                 val summaryLeftX = chartLeft + 8.dp.toPx()
@@ -511,12 +509,6 @@ internal fun WeightTrendChart(
                     averageStepsText,
                     summaryLeftX,
                     chartTop + 34.dp.toPx(),
-                    trendSummaryPaint,
-                )
-                drawText(
-                    averageGlucoseText,
-                    summaryLeftX,
-                    chartTop + 52.dp.toPx(),
                     trendSummaryPaint,
                 )
             }
