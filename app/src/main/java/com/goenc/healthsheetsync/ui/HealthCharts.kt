@@ -922,12 +922,29 @@ private fun SelectedDaySummary(
                     bold = true,
                 )
             }
-            SummaryInfoLine(
-                day?.let { "朝 ${it.morning.weightText()}  夜 ${it.night.weightText()}  差 ${it.weightDifferenceText()}" }
-                    ?: "朝 -  夜 -  差 -",
-                ChartBlue,
-                true,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryInfoLine(
+                    text = "朝 ${day?.morning.weightText() ?: "-"}",
+                    color = ChartBlue,
+                    bold = true,
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryInfoLine(
+                    text = "夜 ${day?.night.weightText() ?: "-"}",
+                    color = ChartBlue,
+                    bold = true,
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryInfoLine(
+                    text = "差 ${day?.weightDifferenceText() ?: "-"}",
+                    color = ChartBlue,
+                    bold = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             SummaryInfoLine("歩数 ${day?.steps?.steps?.let { "${it}歩" } ?: "-"}")
             SummaryInfoLine("血糖値 ${graphValues?.glucoseText ?: "-"}  A1c ${graphValues?.a1cText ?: "-"}")
             SummaryInfoLine("血圧 ${graphValues?.bloodPressureText ?: "-"}")
@@ -980,6 +997,7 @@ private fun SummaryInfoLine(
     text: String,
     color: Color = AppText,
     bold: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val displayText = buildAnnotatedString {
         text.split(ASSUMED_VALUE_SUFFIX).forEachIndexed { index, part ->
@@ -993,6 +1011,7 @@ private fun SummaryInfoLine(
     }
     Text(
         text = displayText,
+        modifier = modifier,
         style = MaterialTheme.typography.bodySmall,
         fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
         color = color,
