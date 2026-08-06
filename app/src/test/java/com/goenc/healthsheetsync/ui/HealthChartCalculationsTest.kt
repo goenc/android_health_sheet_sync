@@ -1,8 +1,10 @@
 package com.goenc.healthsheetsync.ui
 
+import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
+import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
@@ -423,6 +425,183 @@ class HealthChartCalculationsTest {
         assertEquals(window.startAt, lineRecords[0].measuredAt)
         assertEquals(LocalDateTime.of(2026, 1, 3, 7, 0), lineRecords[1].measuredAt)
         assertEquals(window.endAt, lineRecords[2].measuredAt)
+    }
+
+    @Test
+    fun weightMovingAverage_all_uses_all_fourteen_points_with_equal_weight() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = dailyWeightRecords(start, (0..6).map { 60.0 + it }) +
+            dailyWeightRecords(start, (0..6).map { 80.0 + it }, timeBand = "夜")
+
+        val result = calculateWeightMovingAverage(
+            records.toChartWeightPoints(),
+            WeightMovingAverageMode.All,
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(73.0, result.single().weightKg, 0.0)
+        assertEquals(start.plusDays(6).atTime(20, 0), result.single().measuredAt)
+    }
+
+    @Test
+    fun weightMovingAverage_morningOnly_excludes_night_records() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = dailyWeightRecords(start, (0..6).map { 60.0 + it }) +
+            dailyWeightRecords(start, (0..6).map { 100.0 + it }, timeBand = "夜")
+
+        val result = calculateWeightMovingAverage(
+            records.toChartWeightPoints(),
+            WeightMovingAverageMode.MorningOnly,
+        )
+
+        assertEquals(63.0, result.single().weightKg, 0.0)
+        assertEquals(start.plusDays(6).atTime(8, 0), result.single().measuredAt)
+    }
+
+    @Test
+    fun weightMovingAverage_nightOnly_excludes_morning_records() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = dailyWeightRecords(start, (0..6).map { 100.0 + it }) +
+            dailyWeightRecords(start, (0..6).map { 80.0 + it }, timeBand = "夜")
+
+        val result = calculateWeightMovingAverage(
+            records.toChartWeightPoints(),
+            WeightMovingAverageMode.NightOnly,
+        )
+
+        assertEquals(83.0, result.single().weightKg, 0.0)
+        assertEquals(start.plusDays(6).atTime(20, 0), result.single().measuredAt)
+    }
+
+    @Test
+    fun weightMovingAverage_aggregates_duplicate_same_band_before_averaging_days() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = listOf(
+            weightRecord(start, "朝", 60.0),
+            weightRecord(start.plusDays(1), "朝", 61.0),
+            weightRecord(start.plusDays(2), "朝", 62.0),
+            weightRecord(start.plusDays(3), "朝", 60.0, suffix = "a"),
+            weightRecord(start.plusDays(3), "朝", 80.0, suffix = "b"),
+            weightRecord(start.plusDays(4), "朝", 64.0),
+            weightRecord(start.plusDays(5), "朝", 65.0),
+            weightRecord(start.plusDays(6), "朝", 66.0),
+        )
+
+        val chartPoints = records.toChartWeightPoints()
+        val result = calculateWeightMovingAverage(chartPoints, WeightMovingAverageMode.MorningOnly)
+
+        assertEquals(7, chartPoints.size)
+        assertEquals(70.0, chartPoints[3].weightKg, 0.0)
+        assertEquals(64.0, result.single().weightKg, 0.0)
+    }
+
+    @Test
+    fun weightMovingAverage_interpolates_one_missing_midpoint() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = listOf(60.0, 61.0, 62.0, 64.0, 65.0, 66.0).mapIndexed { index, value ->
+            weightRecord(start.plusDays(if (index < 3) index.toLong() else (index + 1).toLong()), "朝", value)
+        }
+
+        val result = calculateWeightMovingAverage(records.toChartWeightPoints(), WeightMovingAverageMode.MorningOnly)
+
+        assertEquals(63.0, result.single().weightKg, 0.0)
+    }
+
+    @Test
+    fun weightMovingAverage_interpolates_multiple_continuous_missing_days_linearly() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = listOf(
+            weightRecord(start, "朝", 60.0),
+            weightRecord(start.plusDays(3), "朝", 66.0),
+            weightRecord(start.plusDays(6), "朝", 72.0),
+        )
+
+        val result = calculateWeightMovingAverage(records.toChartWeightPoints(), WeightMovingAverageMode.MorningOnly)
+
+        assertEquals(66.0, result.single().weightKg, 0.0)
+    }
+
+    @Test
+    fun weightMovingAverage_does_not_extrapolate_leading_missing_days() {
+        val start = LocalDate.of(2026, 1, 2)
+        val records = dailyWeightRecords(start, (0..6).map { 60.0 + it })
+
+        val result = calculateWeightMovingAverage(records.toChartWeightPoints(), WeightMovingAverageMode.MorningOnly)
+
+        assertEquals(listOf(start.plusDays(6)), result.map { it.targetDate })
+    }
+
+    @Test
+    fun weightMovingAverage_does_not_extrapolate_trailing_missing_days() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = dailyWeightRecords(start, (0..6).map { 60.0 + it })
+
+        val result = calculateWeightMovingAverage(records.toChartWeightPoints(), WeightMovingAverageMode.MorningOnly)
+
+        assertEquals(listOf(start.plusDays(6)), result.map { it.targetDate })
+    }
+
+    @Test
+    fun weightMovingAverage_omits_first_six_incomplete_windows() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = dailyWeightRecords(start, (0..7).map { 60.0 + it })
+
+        val result = calculateWeightMovingAverage(records.toChartWeightPoints(), WeightMovingAverageMode.MorningOnly)
+
+        assertEquals(listOf(start.plusDays(6), start.plusDays(7)), result.map { it.targetDate })
+    }
+
+    @Test
+    fun weightMovingAverage_uses_history_before_display_window_for_left_edge() {
+        val start = LocalDate.of(2026, 1, 1)
+        val records = dailyWeightRecords(start, (0..9).map { 60.0 + it })
+        val allMovingAveragePoints = calculateWeightMovingAverage(
+            records.toChartWeightPoints(),
+            WeightMovingAverageMode.MorningOnly,
+        )
+        val displayWindow = chartWindow(2026, 1, 8, 2026, 1, 10)
+
+        val visiblePoints = allMovingAveragePoints.filter {
+            !it.measuredAt.isBefore(displayWindow.startAt) &&
+                !it.measuredAt.isAfter(displayWindow.endAt)
+        }
+
+        assertEquals(
+            listOf(start.plusDays(7), start.plusDays(8), start.plusDays(9)),
+            visiblePoints.map { it.targetDate },
+        )
+        assertEquals(64.0, visiblePoints.first().weightKg, 0.0)
+    }
+
+    @Test
+    fun weightMovingAverage_unknown_setting_falls_back_to_all() {
+        assertEquals(WeightMovingAverageMode.All, WeightMovingAverageMode.fromStorageValue("future_value"))
+    }
+
+    private fun dailyWeightRecords(
+        start: LocalDate,
+        values: List<Double>,
+        timeBand: String = "朝",
+    ): List<DebugWeightRecord> = values.mapIndexed { index, value ->
+        weightRecord(start.plusDays(index.toLong()), timeBand, value)
+    }
+
+    private fun weightRecord(
+        date: LocalDate,
+        timeBand: String,
+        value: Double,
+        suffix: String = "",
+    ): DebugWeightRecord {
+        val measuredAt = date.atStartOfDay().plusHours(if (timeBand == "朝") 8 else 20)
+        return DebugWeightRecord(
+            measuredAt = measuredAt,
+            targetDate = date,
+            timeBand = timeBand,
+            weightKg = value,
+            healthConnectId = "$date-$timeBand-$suffix",
+            sourceAppName = "test",
+            sourcePackageName = "test.package",
+        )
     }
 
     private fun glucoseRecord(

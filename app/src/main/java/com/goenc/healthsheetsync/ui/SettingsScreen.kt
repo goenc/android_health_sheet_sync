@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -60,10 +61,13 @@ internal fun SettingsScreen(
     onRecordListVisibilityChanged: (Boolean) -> Unit,
     basalMetabolicRate: Int,
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
+    weightMovingAverageMode: WeightMovingAverageMode,
+    onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
     onBack: () -> Unit,
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
+    var weightMovingAverageError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(selectedRecordList) {
         onRecordListVisibilityChanged(selectedRecordList != null)
     }
@@ -152,6 +156,39 @@ internal fun SettingsScreen(
             )
         }
         HorizontalDivider(color = DividerColor)
+    }
+    DebugSection(title = "7日移動平均の対象") {
+        Text(
+            text = "移動平均へ使用する体重記録",
+            style = MaterialTheme.typography.bodyMedium,
+            color = AppText,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            WeightMovingAverageMode.entries.forEach { mode ->
+                WeightMovingAverageModeButton(
+                    mode = mode,
+                    selected = mode == weightMovingAverageMode,
+                    onClick = {
+                        if (mode != weightMovingAverageMode) {
+                            weightMovingAverageError = null
+                            onSaveWeightMovingAverageMode(mode) { errorMessage ->
+                                weightMovingAverageError = errorMessage
+                            }
+                        }
+                    },
+                )
+            }
+        }
+        weightMovingAverageError?.let { errorMessage ->
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
     DebugSection(title = "記録一覧") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -321,6 +358,42 @@ private fun RecordListButton(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         ) {
             Text(label)
+        }
+    }
+}
+
+@Composable
+private fun RowScope.WeightMovingAverageModeButton(
+    mode: WeightMovingAverageMode,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AppPrimary,
+                contentColor = Color.White,
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 44.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            Text(mode.label, maxLines = 1)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            shape = CircleShape,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppText),
+            modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 44.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            Text(mode.label, maxLines = 1)
         }
     }
 }

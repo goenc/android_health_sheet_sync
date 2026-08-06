@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -69,6 +70,7 @@ internal fun WeightTrendChart(
     dailySteps: List<DebugStepDaily>,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
     basalMetabolicRate: Int,
+    weightMovingAverageMode: WeightMovingAverageMode,
     glucoseRecords: List<DebugGlucoseRecord>,
     a1cDailyRecords: List<DebugA1cDaily>,
     manualRecords: List<ManualHealthRecord>,
@@ -88,6 +90,10 @@ internal fun WeightTrendChart(
         } ?: emptyList()
     }
     val chartPoints = remember(chartRecords) { chartRecords.toChartWeightPoints() }
+    val allChartPoints = remember(sortedRecords) { sortedRecords.toChartWeightPoints() }
+    val movingAveragePoints = remember(allChartPoints, weightMovingAverageMode) {
+        calculateWeightMovingAverage(allChartPoints, weightMovingAverageMode)
+    }
     var selectedDate by remember(chartPoints) { mutableStateOf<LocalDate?>(null) }
     val selectedDay = remember(
         chartPoints,
@@ -152,6 +158,7 @@ internal fun WeightTrendChart(
     val weekBoundaryColor = ChartGrid
     val axisColor = ChartLabel
     val missingPointColor = ChartMissingPoint
+    val movingAverageLineColor = ChartMovingAverage
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
@@ -191,6 +198,10 @@ internal fun WeightTrendChart(
             ) {
                 if (chartPoints.isEmpty()) return@Canvas
                 val visibleWindow = chartWindow ?: return@Canvas
+                val visibleMovingAveragePoints = movingAveragePoints.filter { point ->
+                    !point.measuredAt.isBefore(visibleWindow.startAt) &&
+                        !point.measuredAt.isAfter(visibleWindow.endAt)
+                }
 
                 val leftPadding = CHART_LEFT_PADDING_DP.dp.toPx()
                 val rightPadding = CHART_RIGHT_PADDING_DP.dp.toPx()
@@ -202,8 +213,10 @@ internal fun WeightTrendChart(
                 val chartBottom = size.height - bottomPadding
                 val chartWidth = max(1f, chartRight - chartLeft)
                 val chartHeight = max(1f, chartBottom - chartTop)
-                val minWeight = floor(chartPoints.minOf { it.weightKg } - CHART_WEIGHT_LOWER_PADDING_KG)
-                val maxWeight = ceil(chartPoints.maxOf { it.weightKg } + CHART_WEIGHT_UPPER_PADDING_KG)
+                val weightValues = chartPoints.map { it.weightKg } +
+                    visibleMovingAveragePoints.map { it.weightKg }
+                val minWeight = floor(weightValues.minOrNull()!! - CHART_WEIGHT_LOWER_PADDING_KG)
+                val maxWeight = ceil(weightValues.maxOrNull()!! + CHART_WEIGHT_UPPER_PADDING_KG)
                 val weightRange = max(1.0, maxWeight - minWeight)
                 val trendLine = calculateTrendLine(chartPoints)
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
@@ -741,6 +754,30 @@ internal fun WeightTrendChart(
                             bloodPressurePaint,
                         )
                     }
+                }
+            }
+
+            val movingAveragePathEffect = PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 5.dp.toPx()))
+            splitIntoContiguousWeightMovingAverageSegments(visibleMovingAveragePoints).forEach { segment ->
+                if (segment.size > 1) {
+                    val movingAveragePath = Path()
+                    segment.forEachIndexed { index, point ->
+                        val x = xAtTime(point.measuredAt)
+                        val y = yAt(point.weightKg)
+                        if (index == 0) {
+                            movingAveragePath.moveTo(x, y)
+                        } else {
+                            movingAveragePath.lineTo(x, y)
+                        }
+                    }
+                    drawPath(
+                        path = movingAveragePath,
+                        color = movingAverageLineColor,
+                        style = Stroke(
+                            width = 3.dp.toPx(),
+                            pathEffect = movingAveragePathEffect,
+                        ),
+                    )
                 }
             }
 

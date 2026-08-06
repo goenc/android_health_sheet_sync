@@ -1,5 +1,6 @@
 package com.goenc.healthsheetsync.ui
 
+import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -18,6 +19,8 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+
+private const val MOVING_AVERAGE_DAYS = 7
 
 internal enum class WeightChartRange(
     val label: String,
@@ -78,6 +81,12 @@ internal data class ChartWeightPoint(
     val isAverage: Boolean
         get() = sourceCount >= 2
 }
+
+internal data class WeightMovingAveragePoint(
+    val targetDate: LocalDate,
+    val measuredAt: LocalDateTime,
+    val weightKg: Double,
+)
 
 internal data class ChartDaySelection(
     val date: LocalDate,
@@ -256,6 +265,125 @@ internal fun String.chartTimeBandOrder(): Int =
 
 internal fun String.chartRepresentativeTime(): LocalTime =
     if (this == "朝") LocalTime.of(8, 0) else LocalTime.of(20, 0)
+
+internal fun calculateWeightMovingAverage(
+    records: List<ChartWeightPoint>,
+    mode: WeightMovingAverageMode,
+): List<WeightMovingAveragePoint> {
+    if (records.isEmpty()) return emptyList()
+
+    val values = when (mode) {
+        WeightMovingAverageMode.All -> interpolateWeightValues(
+            records.map { it.chartGroupIndex() to it.weightKg },
+        )
+        WeightMovingAverageMode.MorningOnly,
+        WeightMovingAverageMode.NightOnly,
+        -> interpolateWeightValues(
+            records
+                .filter { it.timeBand == mode.timeBand() }
+                .map { it.targetDate.toEpochDay() to it.weightKg },
+        )
+    }
+    if (values.isEmpty()) return emptyList()
+
+    val firstDate = when (mode) {
+        WeightMovingAverageMode.All -> records.minOf { it.targetDate }
+        WeightMovingAverageMode.MorningOnly,
+        WeightMovingAverageMode.NightOnly,
+        -> records.filter { it.timeBand == mode.timeBand() }.minOfOrNull { it.targetDate } ?: return emptyList()
+    }
+    val lastDate = when (mode) {
+        WeightMovingAverageMode.All -> records.maxOf { it.targetDate }
+        WeightMovingAverageMode.MorningOnly,
+        WeightMovingAverageMode.NightOnly,
+        -> records.filter { it.timeBand == mode.timeBand() }.maxOfOrNull { it.targetDate } ?: return emptyList()
+    }
+    val expectedPointCount = if (mode == WeightMovingAverageMode.All) {
+        CHART_TIME_BAND_COUNT * MOVING_AVERAGE_DAYS
+    } else {
+        MOVING_AVERAGE_DAYS
+    }
+    val targetDates = generateSequence(firstDate.plusDays(MOVING_AVERAGE_DAYS - 1L)) { date ->
+        date.plusDays(1)
+            .takeIf { !it.isAfter(lastDate) }
+    }
+
+    return targetDates.mapNotNull { targetDate ->
+        val windowDates = (0 until MOVING_AVERAGE_DAYS).map { offset ->
+            targetDate.minusDays(offset.toLong())
+        }
+        val windowValues = when (mode) {
+            WeightMovingAverageMode.All -> windowDates.flatMap { date ->
+                listOfNotNull(
+                    values[date.toEpochDay() * CHART_TIME_BAND_COUNT + CHART_TIME_BAND_MORNING],
+                    values[date.toEpochDay() * CHART_TIME_BAND_COUNT + CHART_TIME_BAND_NIGHT],
+                )
+            }
+            WeightMovingAverageMode.MorningOnly,
+            WeightMovingAverageMode.NightOnly,
+            -> windowDates.mapNotNull { date -> values[date.toEpochDay()] }
+        }
+        if (windowValues.size != expectedPointCount) return@mapNotNull null
+
+        WeightMovingAveragePoint(
+            targetDate = targetDate,
+            measuredAt = targetDate.atTime(mode.movingAverageRepresentativeTime()),
+            weightKg = windowValues.average(),
+        )
+    }.toList()
+}
+
+private fun interpolateWeightValues(knownValues: List<Pair<Long, Double>>): Map<Long, Double> {
+    val sortedValues = knownValues.sortedBy { it.first }
+    if (sortedValues.isEmpty()) return emptyMap()
+
+    val values = sortedValues.toMap().toMutableMap()
+    sortedValues.zipWithNext().forEach { (previous, current) ->
+        val gap = current.first - previous.first
+        if (gap <= 1L) return@forEach
+
+        for (offset in 1L until gap) {
+            val ratio = offset.toDouble() / gap.toDouble()
+            values[previous.first + offset] = previous.second +
+                (current.second - previous.second) * ratio
+        }
+    }
+    return values
+}
+
+private fun WeightMovingAverageMode.timeBand(): String {
+    return when (this) {
+        WeightMovingAverageMode.All -> error("全部モードには時間帯がない")
+        WeightMovingAverageMode.MorningOnly -> "朝"
+        WeightMovingAverageMode.NightOnly -> "夜"
+    }
+}
+
+private fun WeightMovingAverageMode.movingAverageRepresentativeTime(): LocalTime {
+    return when (this) {
+        WeightMovingAverageMode.All,
+        WeightMovingAverageMode.NightOnly,
+        -> "夜".chartRepresentativeTime()
+        WeightMovingAverageMode.MorningOnly -> "朝".chartRepresentativeTime()
+    }
+}
+
+internal fun splitIntoContiguousWeightMovingAverageSegments(
+    points: List<WeightMovingAveragePoint>,
+): List<List<WeightMovingAveragePoint>> {
+    if (points.isEmpty()) return emptyList()
+
+    val segments = mutableListOf<MutableList<WeightMovingAveragePoint>>()
+    points.sortedBy { it.measuredAt }.forEach { point ->
+        val currentSegment = segments.lastOrNull()
+        if (currentSegment == null || point.targetDate != currentSegment.last().targetDate.plusDays(1)) {
+            segments += mutableListOf(point)
+        } else {
+            currentSegment += point
+        }
+    }
+    return segments
+}
 
 internal fun LocalDate.shouldShowChartDateNumber(): Boolean {
     if (isMonthEnd()) return true

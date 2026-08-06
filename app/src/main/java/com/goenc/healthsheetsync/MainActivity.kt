@@ -27,6 +27,8 @@ import com.goenc.healthsheetsync.data.BasalMetabolicRateSettingsStore
 import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import com.goenc.healthsheetsync.data.StoredHealthData
+import com.goenc.healthsheetsync.data.WeightMovingAverageMode
+import com.goenc.healthsheetsync.data.WeightMovingAverageSettingsStore
 import com.goenc.healthsheetsync.export.HealthCsvShareExporter
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
@@ -52,11 +54,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
     private lateinit var localStore: LocalHealthDataStore
     private lateinit var basalMetabolicRateSettingsStore: BasalMetabolicRateSettingsStore
+    private lateinit var weightMovingAverageSettingsStore: WeightMovingAverageSettingsStore
     private lateinit var sharedTextImporter: SharedTextImporter
     private lateinit var healthCsvShareExporter: HealthCsvShareExporter
     private val spreadsheetUploader = SpreadsheetUploader()
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var basalMetabolicRate by mutableStateOf(DailyEnergyCalculator.DEFAULT_BASAL_METABOLIC_RATE)
+    private var weightMovingAverageMode by mutableStateOf(WeightMovingAverageMode.All)
     private var csvShareStatus by mutableStateOf<String?>(null)
     private var googleDriveStatus by mutableStateOf<String?>(null)
     private var isGoogleDriveAuthorizing by mutableStateOf(false)
@@ -122,6 +126,8 @@ class MainActivity : ComponentActivity() {
         localStore = LocalHealthDataStore(applicationContext)
         basalMetabolicRateSettingsStore = BasalMetabolicRateSettingsStore(applicationContext)
         basalMetabolicRate = basalMetabolicRateSettingsStore.load()
+        weightMovingAverageSettingsStore = WeightMovingAverageSettingsStore(applicationContext)
+        weightMovingAverageMode = weightMovingAverageSettingsStore.load()
         sharedTextImporter = SharedTextImporter(applicationContext, localStore)
         healthCsvShareExporter = HealthCsvShareExporter(applicationContext)
         handleSharedText(intent)
@@ -167,6 +173,10 @@ class MainActivity : ComponentActivity() {
                         basalMetabolicRate = basalMetabolicRate,
                         onSaveBasalMetabolicRate = { value, onResult ->
                             saveBasalMetabolicRate(value, onResult)
+                        },
+                        weightMovingAverageMode = weightMovingAverageMode,
+                        onSaveWeightMovingAverageMode = { mode, onResult ->
+                            saveWeightMovingAverageMode(mode, onResult)
                         },
                         modifier = Modifier.padding(innerPadding),
                     )
@@ -308,6 +318,24 @@ class MainActivity : ComponentActivity() {
             } else {
                 onResult(errorMessage)
             }
+        }
+    }
+
+    private fun saveWeightMovingAverageMode(
+        mode: WeightMovingAverageMode,
+        onResult: (String?) -> Unit,
+    ) {
+        lifecycleScope.launch {
+            val errorMessage = withContext(Dispatchers.IO) {
+                runCatching {
+                    check(weightMovingAverageSettingsStore.save(mode))
+                    null
+                }.getOrElse { "7日移動平均の設定を保存できませんでした" }
+            }
+            if (errorMessage == null) {
+                weightMovingAverageMode = mode
+            }
+            onResult(errorMessage)
         }
     }
 

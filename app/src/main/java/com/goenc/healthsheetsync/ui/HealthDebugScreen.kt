@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import com.goenc.healthsheetsync.R
+import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -72,6 +73,8 @@ fun HealthDebugScreen(
     onDeleteStoredRecord: (String, String) -> Unit,
     basalMetabolicRate: Int,
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
+    weightMovingAverageMode: WeightMovingAverageMode,
+    onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -169,6 +172,8 @@ fun HealthDebugScreen(
                             },
                             basalMetabolicRate = basalMetabolicRate,
                             onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
+                            weightMovingAverageMode = weightMovingAverageMode,
+                            onSaveWeightMovingAverageMode = onSaveWeightMovingAverageMode,
                             onBack = { showSettings = false },
                             dailyEnergySnapshots = state.dailyEnergySnapshots,
                         )
@@ -211,6 +216,7 @@ fun HealthDebugScreen(
                             state.stepDailyRecords,
                             state.dailyEnergySnapshots,
                             basalMetabolicRate,
+                            weightMovingAverageMode,
                             state.glucoseRecords,
                             state.a1cDailyRecords,
                             state.manualRecords,
