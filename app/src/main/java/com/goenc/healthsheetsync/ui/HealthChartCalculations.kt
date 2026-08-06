@@ -711,8 +711,9 @@ internal fun selectedGraphValuesFor(
     manualRecords: List<ManualHealthRecord>,
     window: ChartTimeWindow,
 ): SelectedGraphValues {
-    val fastingGlucose = calculateFastingGlucoseChart(glucoseRecords, window)
-        ?.selectedValueText(date)
+    val fastingGlucose = nearestFastingGlucoseRecord(date, glucoseRecords)
+        ?.bloodGlucoseMgDl
+        ?.let(::formatDecimal)
     val a1c = nearestA1cRecordOnOrBefore(date, a1cDailyRecords)
         ?.let { "${formatDecimal(it.a1cPercent)}%" }
     val bloodPressure = calculateBloodPressureChart(manualRecords, window)
@@ -726,6 +727,18 @@ internal fun selectedGraphValuesFor(
         a1cText = a1c,
         bloodPressureText = bloodPressure,
         waistText = waist,
+    )
+}
+
+internal fun nearestFastingGlucoseRecord(
+    date: LocalDate,
+    records: List<DebugGlucoseRecord>,
+): DebugGlucoseRecord? {
+    val targetAt = date.atStartOfDay()
+    return records.fastingGlucoseRecords().minWithOrNull(
+        compareBy<DebugGlucoseRecord> {
+            abs(Duration.between(targetAt, it.targetDate.atStartOfDay()).toDays())
+        }.thenByDescending { it.measuredAt },
     )
 }
 

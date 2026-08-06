@@ -946,16 +946,33 @@ private fun SelectedDaySummary(
                 )
             }
             SummaryInfoLine("歩数 ${day?.steps?.steps?.let { "${it}歩" } ?: "-"}")
-            SummaryInfoLine("血糖値 ${graphValues?.glucoseText ?: "-"}  A1c ${graphValues?.a1cText ?: "-"}")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryInfoLine(
+                    text = "血糖値 ${graphValues?.glucoseText ?: "-"}",
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryInfoLine(
+                    text = "A1c ${graphValues?.a1cText ?: "-"}",
+                    modifier = Modifier.weight(1f),
+                )
+            }
             SummaryInfoLine("血圧 ${graphValues?.bloodPressureText ?: "-"}")
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SummaryInfoLine("腹囲 ${graphValues?.waistText ?: "-"}")
+                SummaryInfoLine(
+                    text = "腹囲 ${graphValues?.waistText ?: "-"}",
+                    modifier = Modifier.weight(1f),
+                )
                 selectedDayBmiText(day, dailyBodySettings)?.let { bmiText ->
-                    SummaryInfoLine("BMI $bmiText")
+                    SummaryInfoLine(
+                        text = "BMI $bmiText",
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }

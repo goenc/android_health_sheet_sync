@@ -147,6 +147,23 @@ class HealthChartCalculationsTest {
     }
 
     @Test
+    fun selectedGraphValues_uses_nearest_actual_fasting_glucose_without_unit_or_assumption() {
+        val selectedDate = LocalDate.of(2026, 1, 5)
+        val result = selectedGraphValuesFor(
+            date = selectedDate,
+            glucoseRecords = listOf(
+                glucoseRecord(2026, 1, 3, 100.0),
+                glucoseRecord(2026, 1, 8, 101.2),
+            ),
+            a1cDailyRecords = emptyList(),
+            manualRecords = emptyList(),
+            window = chartWindow(2026, 1, 1, 2026, 1, 10),
+        )
+
+        assertEquals("100", result.glucoseText)
+    }
+
+    @Test
     fun nearestA1cRecordOnOrBefore_returns_null_when_all_records_are_future() {
         assertNull(
             nearestA1cRecordOnOrBefore(
