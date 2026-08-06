@@ -189,7 +189,7 @@ fun HealthDebugScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 22.dp),
+                        .padding(horizontal = 11.dp),
                 ) {
                     IconButton(
                         onClick = { showSettings = true },
