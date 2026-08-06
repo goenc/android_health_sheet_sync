@@ -9,6 +9,7 @@ import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -216,36 +217,41 @@ fun HealthDebugScreen(
                             modifier = Modifier.padding(start = 8.dp, top = 6.dp, end = 44.dp),
                         )
 
-                        WeightTrendChart(
-                            records = state.weightRecords,
-                            dailySteps = state.stepDailyRecords,
-                            dailyEnergySnapshots = state.dailyEnergySnapshots,
-                            basalMetabolicRate = basalMetabolicRate,
-                            weightMovingAverageMode = weightMovingAverageMode,
-                            glucoseRecords = state.glucoseRecords,
-                            a1cDailyRecords = state.a1cDailyRecords,
-                            manualRecords = state.manualRecords,
-                            selectedRange = selectedChartRange,
-                            onSelectedRangeChange = { selectedChartRange = it },
-                            selectedDate = chartSelectionDate,
-                            onSelectedDateChange = { selectedChartDate = it },
-                            onAddManualRecord = { showManualInput = true },
-                        )
+                        Column(
+                            modifier = Modifier.offset(y = (-30).dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            WeightTrendChart(
+                                records = state.weightRecords,
+                                dailySteps = state.stepDailyRecords,
+                                dailyEnergySnapshots = state.dailyEnergySnapshots,
+                                basalMetabolicRate = basalMetabolicRate,
+                                weightMovingAverageMode = weightMovingAverageMode,
+                                glucoseRecords = state.glucoseRecords,
+                                a1cDailyRecords = state.a1cDailyRecords,
+                                manualRecords = state.manualRecords,
+                                selectedRange = selectedChartRange,
+                                onSelectedRangeChange = { selectedChartRange = it },
+                                selectedDate = chartSelectionDate,
+                                onSelectedDateChange = { selectedChartDate = it },
+                                onAddManualRecord = { showManualInput = true },
+                            )
 
-                        sharedText?.takeIf { it.isNotBlank() }?.let { text ->
-                            DebugSection(title = "共有テキスト") {
-                                sharedTextImportStatus?.let { status ->
+                            sharedText?.takeIf { it.isNotBlank() }?.let { text ->
+                                DebugSection(title = "共有テキスト") {
+                                    sharedTextImportStatus?.let { status ->
+                                        Text(
+                                            text = status,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = AppMutedBlue,
+                                        )
+                                    }
                                     Text(
-                                        text = status,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = AppMutedBlue,
+                                        text = text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AppText,
                                     )
                                 }
-                                Text(
-                                    text = text,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = AppText,
-                                )
                             }
                         }
                     }
