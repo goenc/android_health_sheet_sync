@@ -886,7 +886,7 @@ private fun SelectedDaySummary(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(126.dp)
+            .height(180.dp)
             .background(PopupBackground, RoundedCornerShape(8.dp))
             .padding(start = 10.dp, top = 6.dp, end = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

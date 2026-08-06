@@ -87,7 +87,7 @@ fun HealthDebugScreen(
     var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var selectedChartDate by remember { mutableStateOf<LocalDate?>(null) }
     val chartSelectionDate = selectedChartDate ?: latestChartTargetDate(state.weightRecords)
-    val shouldScrollRoot = showManualInput || showSettings
+    val shouldScrollRoot = true
 
     LaunchedEffect(Unit) {
         while (true) {
