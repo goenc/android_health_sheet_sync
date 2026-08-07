@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
     private var isAutomaticSpreadsheetSyncing = false
     private var automaticSpreadsheetSyncPending = false
     private var hasCompletedInitialHealthLoad = false
+    private val healthPermissionRequestPreferences by lazy {
+        getSharedPreferences(HEALTH_PERMISSION_REQUEST_PREFERENCES, MODE_PRIVATE)
+    }
     private val requestPermissions = registerForActivityResult(
         HealthConnectDebugReader.permissionRequestContract(),
     ) { grantedPermissions ->
@@ -156,7 +159,7 @@ class MainActivity : ComponentActivity() {
                             )
                             requestPermissions.launch(HealthConnectDebugReader.REQUIRED_PERMISSIONS)
                         },
-                        onRefresh = { refreshHealthData() },
+                        onRefresh = { requestMissingHealthPermissionsOrRefresh() },
                         onShareCsvToDrive = { shareCsvToDrive() },
                         csvShareStatus = csvShareStatus,
                         onGoogleDriveLogin = { authorizeGoogleDrive() },
@@ -229,6 +232,7 @@ class MainActivity : ComponentActivity() {
                 healthReader.load(basalMetabolicRate)
             }
             healthState = loadedState
+            requestMissingHealthPermissionsAutomatically(loadedState.permissions)
             val shouldSync = !hasCompletedInitialHealthLoad ||
                 (loadedState.permissions is PermissionState.Granted &&
                     previousState.hasMirrorDataChanged(loadedState))
@@ -237,6 +241,40 @@ class MainActivity : ComponentActivity() {
                 scheduleAutomaticSpreadsheetSync()
             }
         }
+    }
+
+    private fun requestMissingHealthPermissionsOrRefresh() {
+        val missingPermissions = healthState.permissions.missingPermissions()
+        if (missingPermissions.isEmpty()) {
+            refreshHealthData()
+            return
+        }
+        requestPermissions.launch(missingPermissions)
+    }
+
+    private fun requestMissingHealthPermissionsAutomatically(permissionState: PermissionState) {
+        val missingPermissions = permissionState.missingPermissions()
+        if (missingPermissions.isEmpty()) return
+
+        val requestSignature = HealthConnectDebugReader.REQUIRED_PERMISSIONS
+            .sorted()
+            .joinToString("|")
+        val previousSignature = healthPermissionRequestPreferences.getString(
+            HEALTH_PERMISSION_REQUEST_SIGNATURE_KEY,
+            null,
+        )
+        if (previousSignature == requestSignature) return
+
+        healthPermissionRequestPreferences.edit()
+            .putString(HEALTH_PERMISSION_REQUEST_SIGNATURE_KEY, requestSignature)
+            .apply()
+        Log.d(
+            TAG,
+            "Automatically requesting missing Health Connect permissions: ${
+                missingPermissions.sorted().joinToString()
+            }",
+        )
+        requestPermissions.launch(missingPermissions)
     }
 
     private fun refreshLocalHealthData() {
@@ -671,8 +709,14 @@ private enum class GoogleAuthorizationAction {
     UploadSpreadsheet,
 }
 
+private fun PermissionState.missingPermissions(): Set<String> {
+    return (this as? PermissionState.Missing)?.missingPermissions?.toSet().orEmpty()
+}
+
 private const val TAG = "HealthSheetSync"
 private const val UNKNOWN = "不明"
+private const val HEALTH_PERMISSION_REQUEST_PREFERENCES = "health_permission_request"
+private const val HEALTH_PERMISSION_REQUEST_SIGNATURE_KEY = "automatically_requested_signature"
 private const val DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
