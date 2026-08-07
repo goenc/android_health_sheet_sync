@@ -274,7 +274,8 @@ private fun MainSummaryValues(
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
     val bmi = bmiForSummary(records, dailyBodySettings)
-    val todaySteps = stepsForSummary(dailySteps, targetDate)
+    val todayStepRecord = dailySteps.firstOrNull { it.targetDate == targetDate }
+    val todaySteps = todayStepRecord?.steps ?: 0L
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
     val latestA1c = a1cDailyRecords.maxByOrNull { it.targetDate }
     val latestWaist = manualRecords.latestManualValue(ManualRecordType.Waist)
@@ -291,6 +292,7 @@ private fun MainSummaryValues(
         ) {
             SummaryValue("体重", latestRecord?.let { "${formatDecimal(it.weightKg)}kg" } ?: "-", ChartBlue)
             SummaryValue("歩数", "${todaySteps}歩", ChartStepText)
+            SummaryValue("距離", formatDistanceMeters(todayStepRecord?.distanceMeters), ChartStepText)
         }
         Row(
             modifier = Modifier.fillMaxWidth(),

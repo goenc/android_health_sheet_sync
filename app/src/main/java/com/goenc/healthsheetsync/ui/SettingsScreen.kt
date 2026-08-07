@@ -604,7 +604,19 @@ private fun StepDailySummary(
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text("${formatIntegerWithGrouping(energy?.steps ?: steps.steps)}歩")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = "${formatIntegerWithGrouping(energy?.steps ?: steps.steps)}歩",
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "距離 ${formatDistanceMeters(steps.distanceMeters)}",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 Text("基礎代謝 ${energy?.basalMetabolicRate?.let(::formatIntegerWithGrouping) ?: "-"} kcal/日")
                 Text("PAL ${energy?.pal?.let(::formatPal) ?: "-"}")
                 Text("推定総消費 ${energy?.estimatedTotalKcal?.let(::formatIntegerWithGrouping) ?: "-"} kcal/日")

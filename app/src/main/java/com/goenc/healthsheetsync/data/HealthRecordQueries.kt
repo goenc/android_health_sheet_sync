@@ -121,7 +121,7 @@ internal class HealthRecordQueries(
     private fun loadStepDailyRecords(): List<DebugStepDaily> {
         db.rawQuery(
             """
-            SELECT target_date, steps, aggregation_start_at, aggregation_end_at
+            SELECT target_date, steps, distance_meters, aggregation_start_at, aggregation_end_at
             FROM step_daily_records
             WHERE NOT EXISTS (
                 SELECT 1 FROM invalidated_record_keys
@@ -138,8 +138,9 @@ internal class HealthRecordQueries(
                         DebugStepDaily(
                             targetDate = LocalDate.parse(cursor.getString(0)),
                             steps = cursor.getLong(1),
-                            aggregationStartAt = LocalDateTime.parse(cursor.getString(2)),
-                            aggregationEndAt = LocalDateTime.parse(cursor.getString(3)),
+                            distanceMeters = cursor.getDouble(2).takeUnless { cursor.isNull(2) },
+                            aggregationStartAt = LocalDateTime.parse(cursor.getString(3)),
+                            aggregationEndAt = LocalDateTime.parse(cursor.getString(4)),
                         ),
                     )
                 }
@@ -240,7 +241,7 @@ internal class HealthRecordQueries(
     private fun loadInvalidatedStepRecords(): List<InvalidatedGraphRecord> {
         db.rawQuery(
             """
-            SELECT step_daily_records.target_date, steps, invalidated_record_keys.invalidated_at
+            SELECT step_daily_records.target_date, steps, distance_meters, invalidated_record_keys.invalidated_at
             FROM step_daily_records
             INNER JOIN invalidated_record_keys
             ON invalidated_record_keys.record_type = 'steps'
@@ -258,8 +259,8 @@ internal class HealthRecordQueries(
                             uniqueKey = cursor.getString(0),
                             manualType = ManualRecordType.Steps,
                             measuredAt = targetDate.atStartOfDay(),
-                            text = "$targetDate  ${cursor.getLong(1)}歩",
-                            invalidatedAt = LocalDateTime.parse(cursor.getString(2)),
+                            text = "$targetDate  ${cursor.getLong(1)}歩 / 距離 ${cursor.getDouble(2).takeUnless { cursor.isNull(2) }?.let { formatDistance(it) } ?: "-"}",
+                            invalidatedAt = LocalDateTime.parse(cursor.getString(3)),
                         ),
                     )
                 }
@@ -307,5 +308,9 @@ internal class HealthRecordQueries(
         } else {
             roundedOneDecimal.toString()
         }
+    }
+
+    private fun formatDistance(distanceMeters: Double): String {
+        return "${formatDecimal(distanceMeters / 1_000.0)}km"
     }
 }

@@ -63,6 +63,7 @@ data class DebugGlucoseRecord(
 data class DebugStepDaily(
     val targetDate: LocalDate,
     val steps: Long,
+    val distanceMeters: Double? = null,
     val aggregationStartAt: LocalDateTime,
     val aggregationEndAt: LocalDateTime,
 )
@@ -73,6 +74,14 @@ data class DebugStepRecord(
     val startAt: LocalDateTime,
     val endAt: LocalDateTime,
     val steps: Long,
+)
+
+data class DebugDistanceRecord(
+    val healthConnectId: String,
+    val targetDate: LocalDate,
+    val startAt: LocalDateTime,
+    val endAt: LocalDateTime,
+    val distanceMeters: Double,
 )
 
 data class DailyEnergySnapshot(

@@ -35,7 +35,7 @@ class PermissionsRationaleActivity : ComponentActivity() {
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            text = "このアプリは、Health Connect から体重、血糖値、歩数を読み取り、同期前の確認用として画面に表示します。",
+                            text = "このアプリは、Health Connect から体重、血糖値、歩数、距離を読み取り、同期前の確認用として画面に表示します。",
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         Text(

@@ -42,6 +42,7 @@ internal fun String.toPermissionLabel(): String {
         contains("READ_WEIGHT") -> "体重の読み取り"
         contains("READ_BLOOD_GLUCOSE") -> "血糖値の読み取り"
         contains("READ_STEPS") -> "歩数の読み取り"
+        contains("READ_DISTANCE") -> "距離の読み取り"
         else -> this
     }
 }
@@ -57,6 +58,11 @@ internal fun formatIntegerWithGrouping(value: Int): String =
 
 internal fun formatPal(value: Double): String =
     String.format(Locale.US, "%.3f", value)
+
+internal fun formatDistanceMeters(distanceMeters: Double?): String {
+    if (distanceMeters == null || !distanceMeters.isFinite() || distanceMeters < 0.0) return "-"
+    return "${formatDecimal(distanceMeters / 1_000.0)}km"
+}
 
 internal fun LocalDate.formatMonthDayWithWeekday(): String =
     "${monthValue}月${dayOfMonth}日(${dayOfWeek.japaneseShortName()})"
@@ -179,7 +185,7 @@ internal fun ManualRecordType.toGraphDataItems(
                 GraphDataItem(
                     recordType = "steps",
                     uniqueKey = steps.targetDate.toString(),
-                    text = "${steps.targetDate}  ${steps.steps}歩",
+                    text = "${steps.targetDate}  ${steps.steps}歩 / 距離 ${formatDistanceMeters(steps.distanceMeters)}",
                     measuredAt = steps.targetDate.atStartOfDay(),
                     invalidatedAt = null,
                 )

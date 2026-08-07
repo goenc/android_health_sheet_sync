@@ -60,12 +60,23 @@ internal class ManualRecordRepository(
                 ManualRecordType.Steps -> {
                     val steps = draft.valueText.removeSuffix("歩").toLongOrNull() ?: return@runInTransaction
                     val targetDate = draft.measuredAt.toLocalDate()
+                    val distanceMeters = db.rawQuery(
+                        "SELECT distance_meters FROM $TABLE_STEPS WHERE target_date = ?",
+                        arrayOf(targetDate.toString()),
+                    ).use { cursor ->
+                        if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getDouble(0) else null
+                    }
                     replace(
                         TABLE_STEPS,
                         null,
                         ContentValues().apply {
                             put("target_date", targetDate.toString())
                             put("steps", steps)
+                            if (distanceMeters == null) {
+                                putNull("distance_meters")
+                            } else {
+                                put("distance_meters", distanceMeters)
+                            }
                             put("aggregation_start_at", targetDate.atStartOfDay().toString())
                             put("aggregation_end_at", targetDate.plusDays(1).atStartOfDay().toString())
                             put("updated_at", now)

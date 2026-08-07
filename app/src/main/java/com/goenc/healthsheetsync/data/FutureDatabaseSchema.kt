@@ -36,6 +36,7 @@ object FutureDatabaseSchema {
         id
         target_date UNIQUE
         steps
+        distance_meters
         aggregation_start_at
         aggregation_end_at
         uploaded_at
@@ -67,7 +68,7 @@ object FutureDatabaseSchema {
     val sheets = listOf(
         "weight_logs: 測定日時 | 対象日 | 時間帯 | 体重kg | 更新日時",
         "glucose_logs: 測定日時 | 対象日 | 時間帯 | 血糖値mg/dL | 食前食後タグ | 更新日時",
-        "step_daily: 対象日 | 歩数 | 集計開始日時 | 集計終了日時 | 更新日時",
+        "step_daily: 対象日 | 歩数 | 距離m | 集計開始日時 | 集計終了日時 | 更新日時",
         "debug_health_connect_records: 種類 | 測定日時 | 値 | 対象アプリ | パッケージ名 | 取得日時",
     )
 }

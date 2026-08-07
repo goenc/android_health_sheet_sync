@@ -20,6 +20,12 @@ class HealthUiFormattersTest {
     }
 
     @Test
+    fun formatsDistanceInKilometers() {
+        assertEquals("6.5km", formatDistanceMeters(6_543.0))
+        assertEquals("-", formatDistanceMeters(null))
+    }
+
+    @Test
     fun bloodPressureDefaultsToMorningBeforeFivePm() {
         assertEquals("朝", ManualRecordType.BloodPressure.defaultManualTimeBand(LocalTime.of(16, 59)))
     }

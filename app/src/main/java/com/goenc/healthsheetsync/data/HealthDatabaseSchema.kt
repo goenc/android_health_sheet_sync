@@ -3,11 +3,12 @@ package com.goenc.healthsheetsync.data
 import android.database.sqlite.SQLiteDatabase
 
 internal const val DATABASE_NAME = "health_sheet_sync.db"
-internal const val DATABASE_VERSION = 8
+internal const val DATABASE_VERSION = 9
 internal const val TABLE_WEIGHT = "weight_records"
 internal const val TABLE_GLUCOSE = "glucose_records"
 internal const val TABLE_STEPS = "step_daily_records"
 internal const val TABLE_STEP_RECORDS = "health_connect_step_records"
+internal const val TABLE_DISTANCE_RECORDS = "health_connect_distance_records"
 internal const val TABLE_A1C_DAILY = "a1c_daily_records"
 internal const val TABLE_MANUAL = "manual_records"
 internal const val TABLE_INVALIDATED = "invalidated_record_keys"
@@ -55,6 +56,7 @@ internal fun SQLiteDatabase.createHealthConnectTables() {
         CREATE TABLE step_daily_records (
             target_date TEXT PRIMARY KEY,
             steps INTEGER NOT NULL,
+            distance_meters REAL,
             aggregation_start_at TEXT NOT NULL,
             aggregation_end_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -62,9 +64,31 @@ internal fun SQLiteDatabase.createHealthConnectTables() {
         """.trimIndent(),
     )
     createHealthConnectStepRecordsTable()
+    createHealthConnectDistanceRecordsTable()
     createInvalidatedRecordsTable()
     createDailyEnergySnapshotsTable()
     createDailyEnergyRepairsTable()
+}
+
+internal fun SQLiteDatabase.createHealthConnectDistanceRecordsTable() {
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS health_connect_distance_records (
+            health_connect_id TEXT PRIMARY KEY,
+            target_date TEXT NOT NULL,
+            start_at TEXT NOT NULL,
+            end_at TEXT NOT NULL,
+            distance_meters REAL NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """.trimIndent(),
+    )
+    execSQL(
+        """
+        CREATE INDEX IF NOT EXISTS index_health_connect_distance_records_target_date
+        ON health_connect_distance_records(target_date)
+        """.trimIndent(),
+    )
 }
 
 internal fun SQLiteDatabase.createHealthConnectStepRecordsTable() {

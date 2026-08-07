@@ -3,6 +3,7 @@ package com.goenc.healthsheetsync.data
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.DebugDistanceRecord
 import com.goenc.healthsheetsync.health.DebugStepRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
@@ -16,15 +17,18 @@ internal class HealthConnectRecordStore(
         weightRecords: List<DebugWeightRecord>,
         glucoseRecords: List<DebugGlucoseRecord>,
         stepRecords: List<DebugStepRecord>,
+        distanceRecords: List<DebugDistanceRecord>,
     ) {
         val updatedAt = LocalDateTime.now().toString()
         db.runInTransaction {
             deleteHealthConnectMeasurements()
             delete(TABLE_STEP_RECORDS, null, null)
+            delete(TABLE_DISTANCE_RECORDS, null, null)
             delete(TABLE_STEPS, null, null)
             saveWeightRecords(weightRecords, updatedAt)
             saveGlucoseRecords(glucoseRecords, updatedAt)
             saveStepRecords(stepRecords, updatedAt)
+            saveDistanceRecords(distanceRecords, updatedAt)
             rebuildAllStepDailyRecords(updatedAt)
         }
     }
@@ -33,6 +37,7 @@ internal class HealthConnectRecordStore(
         weightRecords: List<DebugWeightRecord>,
         glucoseRecords: List<DebugGlucoseRecord>,
         stepRecords: List<DebugStepRecord>,
+        distanceRecords: List<DebugDistanceRecord>,
         deletedRecordIds: Set<String>,
     ) {
         val updatedAt = LocalDateTime.now().toString()
@@ -40,7 +45,9 @@ internal class HealthConnectRecordStore(
             val affectedStepDates = mutableSetOf<LocalDate>()
             deletedRecordIds.forEach { recordId ->
                 findStepRecordDate(recordId)?.let(affectedStepDates::add)
+                findDistanceRecordDate(recordId)?.let(affectedStepDates::add)
                 delete(TABLE_STEP_RECORDS, "health_connect_id = ?", arrayOf(recordId))
+                delete(TABLE_DISTANCE_RECORDS, "health_connect_id = ?", arrayOf(recordId))
                 deleteHealthConnectMeasurementById(TABLE_WEIGHT, recordId)
                 deleteHealthConnectMeasurementById(TABLE_GLUCOSE, recordId)
             }
@@ -48,9 +55,14 @@ internal class HealthConnectRecordStore(
                 findStepRecordDate(record.healthConnectId)?.let(affectedStepDates::add)
                 affectedStepDates += record.targetDate
             }
+            distanceRecords.forEach { record ->
+                findDistanceRecordDate(record.healthConnectId)?.let(affectedStepDates::add)
+                affectedStepDates += record.targetDate
+            }
             saveWeightRecords(weightRecords, updatedAt)
             saveGlucoseRecords(glucoseRecords, updatedAt)
             saveStepRecords(stepRecords, updatedAt)
+            saveDistanceRecords(distanceRecords, updatedAt)
             affectedStepDates.forEach { targetDate ->
                 rebuildStepDailyRecord(targetDate, updatedAt)
             }
@@ -133,6 +145,26 @@ internal class HealthConnectRecordStore(
         }
     }
 
+    private fun SQLiteDatabase.saveDistanceRecords(
+        records: List<DebugDistanceRecord>,
+        updatedAt: String,
+    ) {
+        records.forEach { record ->
+            replace(
+                TABLE_DISTANCE_RECORDS,
+                null,
+                ContentValues().apply {
+                    put("health_connect_id", record.healthConnectId)
+                    put("target_date", record.targetDate.toString())
+                    put("start_at", record.startAt.toString())
+                    put("end_at", record.endAt.toString())
+                    put("distance_meters", record.distanceMeters)
+                    put("updated_at", updatedAt)
+                },
+            )
+        }
+    }
+
     private fun SQLiteDatabase.findStepRecordDate(recordId: String): LocalDate? {
         return rawQuery(
             "SELECT target_date FROM $TABLE_STEP_RECORDS WHERE health_connect_id = ?",
@@ -142,7 +174,17 @@ internal class HealthConnectRecordStore(
         }
     }
 
+    private fun SQLiteDatabase.findDistanceRecordDate(recordId: String): LocalDate? {
+        return rawQuery(
+            "SELECT target_date FROM $TABLE_DISTANCE_RECORDS WHERE health_connect_id = ?",
+            arrayOf(recordId),
+        ).use { cursor ->
+            cursor.takeIf { it.moveToFirst() }?.getString(0)?.let(LocalDate::parse)
+        }
+    }
+
     private fun SQLiteDatabase.rebuildAllStepDailyRecords(updatedAt: String) {
+        val manualStepsByDate = mutableMapOf<LocalDate, Long>()
         rawQuery(
             """
             SELECT measured_at, value_text
@@ -155,21 +197,41 @@ internal class HealthConnectRecordStore(
             while (cursor.moveToNext()) {
                 val measuredAt = LocalDateTime.parse(cursor.getString(0))
                 val steps = cursor.getString(1).removeSuffix("歩").toLongOrNull() ?: continue
-                replaceStepDailyRecord(measuredAt.toLocalDate(), steps, updatedAt)
+                manualStepsByDate[measuredAt.toLocalDate()] = steps
             }
         }
+        val healthConnectStepsByDate = mutableMapOf<LocalDate, Long>()
         rawQuery(
             "SELECT target_date, SUM(steps) FROM $TABLE_STEP_RECORDS GROUP BY target_date",
             null,
         ).use { cursor ->
             while (cursor.moveToNext()) {
-                replaceStepDailyRecord(LocalDate.parse(cursor.getString(0)), cursor.getLong(1), updatedAt)
+                healthConnectStepsByDate[LocalDate.parse(cursor.getString(0))] = cursor.getLong(1)
             }
         }
+        val distanceByDate = mutableMapOf<LocalDate, Double>()
+        rawQuery(
+            "SELECT target_date, SUM(distance_meters) FROM $TABLE_DISTANCE_RECORDS GROUP BY target_date",
+            null,
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                distanceByDate[LocalDate.parse(cursor.getString(0))] = cursor.getDouble(1)
+            }
+        }
+        (manualStepsByDate.keys + healthConnectStepsByDate.keys + distanceByDate.keys)
+            .forEach { targetDate ->
+                replaceStepDailyRecord(
+                    targetDate = targetDate,
+                    steps = healthConnectStepsByDate[targetDate] ?: manualStepsByDate[targetDate] ?: 0L,
+                    distanceMeters = distanceByDate[targetDate],
+                    updatedAt = updatedAt,
+                )
+            }
     }
 
     private fun SQLiteDatabase.rebuildStepDailyRecord(targetDate: LocalDate, updatedAt: String) {
         delete(TABLE_STEPS, "target_date = ?", arrayOf(targetDate.toString()))
+        var manualSteps: Long? = null
         rawQuery(
             """
             SELECT value_text
@@ -181,24 +243,39 @@ internal class HealthConnectRecordStore(
             arrayOf(ManualRecordType.Steps.name, targetDate.toString()),
         ).use { cursor ->
             if (cursor.moveToFirst()) {
-                cursor.getString(0).removeSuffix("歩").toLongOrNull()?.let { steps ->
-                    replaceStepDailyRecord(targetDate, steps, updatedAt)
-                }
+                manualSteps = cursor.getString(0).removeSuffix("歩").toLongOrNull()
             }
         }
+        var healthConnectSteps: Long? = null
         rawQuery(
             "SELECT SUM(steps) FROM $TABLE_STEP_RECORDS WHERE target_date = ?",
             arrayOf(targetDate.toString()),
         ).use { cursor ->
             if (cursor.moveToFirst() && !cursor.isNull(0)) {
-                replaceStepDailyRecord(targetDate, cursor.getLong(0), updatedAt)
+                healthConnectSteps = cursor.getLong(0)
             }
+        }
+        val distanceMeters = rawQuery(
+            "SELECT SUM(distance_meters) FROM $TABLE_DISTANCE_RECORDS WHERE target_date = ?",
+            arrayOf(targetDate.toString()),
+        ).use { cursor ->
+            if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getDouble(0) else null
+        }
+        val steps = healthConnectSteps ?: manualSteps
+        if (steps != null || distanceMeters != null) {
+            replaceStepDailyRecord(
+                targetDate = targetDate,
+                steps = steps ?: 0L,
+                distanceMeters = distanceMeters,
+                updatedAt = updatedAt,
+            )
         }
     }
 
     private fun SQLiteDatabase.replaceStepDailyRecord(
         targetDate: LocalDate,
         steps: Long,
+        distanceMeters: Double?,
         updatedAt: String,
     ) {
         replace(
@@ -207,6 +284,11 @@ internal class HealthConnectRecordStore(
             ContentValues().apply {
                 put("target_date", targetDate.toString())
                 put("steps", steps)
+                if (distanceMeters == null) {
+                    putNull("distance_meters")
+                } else {
+                    put("distance_meters", distanceMeters)
+                }
                 put("aggregation_start_at", targetDate.atStartOfDay().toString())
                 put("aggregation_end_at", targetDate.plusDays(1).atStartOfDay().toString())
                 put("updated_at", updatedAt)

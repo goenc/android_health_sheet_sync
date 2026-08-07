@@ -945,7 +945,19 @@ private fun SelectedDaySummary(
                     modifier = Modifier.weight(1f),
                 )
             }
-            SummaryInfoLine("歩数 ${day?.steps?.steps?.let { "${it}歩" } ?: "-"}")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SummaryInfoLine(
+                    text = "歩数 ${day?.steps?.steps?.let { "${it}歩" } ?: "-"}",
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryInfoLine(
+                    text = "距離 ${formatDistanceMeters(day?.steps?.distanceMeters)}",
+                    modifier = Modifier.weight(1f),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

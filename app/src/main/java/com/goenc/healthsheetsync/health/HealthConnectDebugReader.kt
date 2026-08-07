@@ -6,6 +6,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.BloodGlucoseRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
@@ -94,7 +95,8 @@ class HealthConnectDebugReader(private val context: Context) {
             localStore.finalizeHealthConnectDailyEnergySnapshotsAfterSync(basalMetabolicRate)
         }
         val storedData = localStore.load()
-        debugMessages += "保存済み件数: 体重${storedData.weightRecords.size}件、血糖${storedData.glucoseRecords.size}件、歩数${storedData.stepDailyRecords.size}日"
+        val distanceDayCount = storedData.stepDailyRecords.count { it.distanceMeters != null }
+        debugMessages += "保存済み件数: 体重${storedData.weightRecords.size}件、血糖${storedData.glucoseRecords.size}件、歩数${storedData.stepDailyRecords.size}日、距離${distanceDayCount}日"
         val yesterday = LocalDate.now(zoneId).minusDays(1)
         val yesterdaySteps = storedData.stepDailyRecords.firstOrNull { it.targetDate == yesterday }
 
@@ -174,6 +176,7 @@ class HealthConnectDebugReader(private val context: Context) {
             HealthPermission.getReadPermission(WeightRecord::class),
             HealthPermission.getReadPermission(BloodGlucoseRecord::class),
             HealthPermission.getReadPermission(StepsRecord::class),
+            HealthPermission.getReadPermission(DistanceRecord::class),
             HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
         )
 

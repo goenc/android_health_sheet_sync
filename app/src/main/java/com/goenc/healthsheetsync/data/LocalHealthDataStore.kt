@@ -8,6 +8,7 @@ import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugStepRecord
+import com.goenc.healthsheetsync.health.DebugDistanceRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.DailyBodySetting
@@ -54,6 +55,10 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         if (oldVersion < 8) {
             db.createDailyBodySettingsTable()
         }
+        if (oldVersion < 9) {
+            db.execSQL("ALTER TABLE $TABLE_STEPS ADD COLUMN distance_meters REAL")
+            db.createHealthConnectDistanceRecordsTable()
+        }
     }
 
     fun save(
@@ -73,6 +78,7 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
                     ContentValues().apply {
                         put("target_date", record.targetDate.toString())
                         put("steps", record.steps)
+                        put("distance_meters", record.distanceMeters)
                         put("aggregation_start_at", record.aggregationStartAt.toString())
                         put("aggregation_end_at", record.aggregationEndAt.toString())
                         put("updated_at", updatedAt)
@@ -86,11 +92,13 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         weightRecords: List<DebugWeightRecord>,
         glucoseRecords: List<DebugGlucoseRecord>,
         stepRecords: List<DebugStepRecord>,
+        distanceRecords: List<DebugDistanceRecord>,
     ) {
         HealthConnectRecordStore(writableDatabase).replaceSnapshot(
             weightRecords = weightRecords,
             glucoseRecords = glucoseRecords,
             stepRecords = stepRecords,
+            distanceRecords = distanceRecords,
         )
     }
 
@@ -98,12 +106,14 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
         weightRecords: List<DebugWeightRecord>,
         glucoseRecords: List<DebugGlucoseRecord>,
         stepRecords: List<DebugStepRecord>,
+        distanceRecords: List<DebugDistanceRecord>,
         deletedRecordIds: Set<String>,
     ) {
         HealthConnectRecordStore(writableDatabase).applyChanges(
             weightRecords = weightRecords,
             glucoseRecords = glucoseRecords,
             stepRecords = stepRecords,
+            distanceRecords = distanceRecords,
             deletedRecordIds = deletedRecordIds,
         )
     }

@@ -6,6 +6,7 @@ import androidx.health.connect.client.changes.Change
 import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.records.BloodGlucoseRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
@@ -46,11 +47,17 @@ internal class HealthConnectSynchronizer(
         val weightRecords = readWeightRecords(client, Instant.EPOCH, now)
         val glucoseRecords = readGlucoseRecords(client, Instant.EPOCH, now)
         val stepRecords = readStepRecords(client, Instant.EPOCH, now)
-        localStore.replaceHealthConnectSnapshot(weightRecords, glucoseRecords, stepRecords)
+        val distanceRecords = readDistanceRecords(client, Instant.EPOCH, now)
+        localStore.replaceHealthConnectSnapshot(
+            weightRecords = weightRecords,
+            glucoseRecords = glucoseRecords,
+            stepRecords = stepRecords,
+            distanceRecords = distanceRecords,
+        )
         saveChangesToken(nextChangesToken)
         return HealthConnectSyncResult(
             changed = true,
-            message = "$reason: 体重${weightRecords.size}件、血糖${glucoseRecords.size}件、歩数${stepRecords.size}件",
+            message = "$reason: 体重${weightRecords.size}件、血糖${glucoseRecords.size}件、歩数${stepRecords.size}件、距離${distanceRecords.size}件",
         )
     }
 
@@ -70,6 +77,7 @@ internal class HealthConnectSynchronizer(
                 weightRecords = page.weightRecords,
                 glucoseRecords = page.glucoseRecords,
                 stepRecords = page.stepRecords,
+                distanceRecords = page.distanceRecords,
                 deletedRecordIds = page.deletedRecordIds,
             )
             changedCount += page.changeCount
@@ -86,6 +94,7 @@ internal class HealthConnectSynchronizer(
         val weightRecords = linkedMapOf<String, DebugWeightRecord>()
         val glucoseRecords = linkedMapOf<String, DebugGlucoseRecord>()
         val stepRecords = linkedMapOf<String, DebugStepRecord>()
+        val distanceRecords = linkedMapOf<String, DebugDistanceRecord>()
         val deletedRecordIds = linkedSetOf<String>()
         forEach { change ->
             when (change) {
@@ -94,6 +103,7 @@ internal class HealthConnectSynchronizer(
                     weightRecords.remove(change.recordId)
                     glucoseRecords.remove(change.recordId)
                     stepRecords.remove(change.recordId)
+                    distanceRecords.remove(change.recordId)
                 }
                 is UpsertionChange -> {
                     val recordId = change.record.metadata.id
@@ -102,6 +112,7 @@ internal class HealthConnectSynchronizer(
                         is WeightRecord -> weightRecords[recordId] = record.toDebugRecord()
                         is BloodGlucoseRecord -> glucoseRecords[recordId] = record.toDebugRecord()
                         is StepsRecord -> stepRecords[recordId] = record.toDebugRecord()
+                        is DistanceRecord -> distanceRecords[recordId] = record.toDebugRecord()
                     }
                 }
             }
@@ -110,6 +121,7 @@ internal class HealthConnectSynchronizer(
             weightRecords = weightRecords.values.toList(),
             glucoseRecords = glucoseRecords.values.toList(),
             stepRecords = stepRecords.values.toList(),
+            distanceRecords = distanceRecords.values.toList(),
             deletedRecordIds = deletedRecordIds,
             changeCount = size,
         )
@@ -141,6 +153,15 @@ internal class HealthConnectSynchronizer(
         end: Instant,
     ): List<DebugStepRecord> {
         return client.readAllRecords(StepsRecord::class, start, end)
+            .map { record -> record.toDebugRecord() }
+    }
+
+    private suspend fun readDistanceRecords(
+        client: HealthConnectClient,
+        start: Instant,
+        end: Instant,
+    ): List<DebugDistanceRecord> {
+        return client.readAllRecords(DistanceRecord::class, start, end)
             .map { record -> record.toDebugRecord() }
     }
 
@@ -206,6 +227,17 @@ internal class HealthConnectSynchronizer(
         )
     }
 
+    private fun DistanceRecord.toDebugRecord(): DebugDistanceRecord {
+        val startAt = startTime.toLocalDateTime()
+        return DebugDistanceRecord(
+            healthConnectId = metadata.id.ifBlank { UNKNOWN },
+            targetDate = startAt.toLocalDate(),
+            startAt = startAt,
+            endAt = endTime.toLocalDateTime(),
+            distanceMeters = distance.inMeters,
+        )
+    }
+
     private fun saveChangesToken(changesToken: String) {
         check(syncPreferences.edit().putString(CHANGES_TOKEN_KEY, changesToken).commit()) {
             "変更トークンを保存できませんでした"
@@ -248,6 +280,7 @@ internal class HealthConnectSynchronizer(
         val weightRecords: List<DebugWeightRecord>,
         val glucoseRecords: List<DebugGlucoseRecord>,
         val stepRecords: List<DebugStepRecord>,
+        val distanceRecords: List<DebugDistanceRecord>,
         val deletedRecordIds: Set<String>,
         val changeCount: Int,
     )
@@ -256,12 +289,13 @@ internal class HealthConnectSynchronizer(
         private const val UNKNOWN = "不明"
         private const val PAGE_SIZE = 1_000
         private const val SYNC_PREFERENCES = "health_connect_sync"
-        private const val CHANGES_TOKEN_KEY = "changes_token_v1"
+        private const val CHANGES_TOKEN_KEY = "changes_token_v2"
 
         private val SYNCED_RECORD_TYPES: Set<KClass<out Record>> = setOf(
             WeightRecord::class,
             BloodGlucoseRecord::class,
             StepsRecord::class,
+            DistanceRecord::class,
         )
     }
 }

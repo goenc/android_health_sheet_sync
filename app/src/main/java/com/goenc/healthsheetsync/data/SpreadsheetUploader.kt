@@ -152,6 +152,7 @@ class SpreadsheetUploader {
                 headers = listOf(
                     "targetDate",
                     "steps",
+                    "distanceMeters",
                     "aggregationStartAt",
                     "aggregationEndAt",
                 ),
@@ -159,6 +160,7 @@ class SpreadsheetUploader {
                     listOf(
                         record.targetDate.toString(),
                         record.steps,
+                        record.distanceMeters ?: "",
                         record.aggregationStartAt.toString(),
                         record.aggregationEndAt.toString(),
                     )
@@ -243,15 +245,17 @@ class SpreadsheetUploader {
         }
         val header = loadHeader(accessToken, table.sheetName)
         if (header.isEmpty()) {
-            writeHeader(accessToken, table)
+            writeHeader(accessToken, table.sheetName, table.headers)
             return table.headers
         }
         val normalizedHeader = header.map(::normalizeHeader).toSet()
         val missingHeaders = table.headers.filterNot { headerName ->
             normalizeHeader(headerName) in normalizedHeader
         }
-        check(missingHeaders.isEmpty()) {
-            "シート ${table.sheetName} に必要な列がありません: ${missingHeaders.joinToString() }"
+        if (missingHeaders.isNotEmpty()) {
+            val updatedHeader = header + missingHeaders
+            writeHeader(accessToken, table.sheetName, updatedHeader)
+            return updatedHeader
         }
         return header
     }
@@ -300,15 +304,19 @@ class SpreadsheetUploader {
         requestJson(accessToken, url, method = "POST", payload = payload)
     }
 
-    private fun writeHeader(accessToken: String, table: SpreadsheetUploadTable) {
-        val range = encodePathSegment("'${table.sheetName}'!A1")
+    private fun writeHeader(
+        accessToken: String,
+        sheetName: String,
+        headers: List<String>,
+    ) {
+        val range = encodePathSegment("'$sheetName'!A1")
         val url = URL(
             "https://sheets.googleapis.com/v4/spreadsheets/" +
                 "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/$range?valueInputOption=RAW",
         )
         val payload = JSONObject()
             .put("majorDimension", "ROWS")
-            .put("values", JSONArray().put(JSONArray(table.headers)))
+            .put("values", JSONArray().put(JSONArray(headers)))
         requestJson(accessToken, url, method = "PUT", payload = payload)
     }
 
