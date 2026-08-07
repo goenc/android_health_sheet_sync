@@ -6,6 +6,7 @@ import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyBodySetting
+import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ class SpreadsheetUploader {
                 a1cDailyRecords = state.a1cDailyRecords,
                 manualRecords = state.manualRecords,
                 dailyBodySettings = state.dailyBodySettings,
+                dailyEnergySnapshots = state.dailyEnergySnapshots,
             ),
         )
     }
@@ -48,6 +50,7 @@ class SpreadsheetUploader {
                 a1cDailyRecords = data.a1cDailyRecords,
                 manualRecords = data.manualRecords,
                 dailyBodySettings = data.dailyBodySettings,
+                dailyEnergySnapshots = data.dailyEnergySnapshots,
             ),
         )
     }
@@ -76,14 +79,16 @@ class SpreadsheetUploader {
         }
     }
 
-    private fun uploadTables(
+    internal fun uploadTables(
         weightRecords: List<DebugWeightRecord>,
         glucoseRecords: List<DebugGlucoseRecord>,
         stepDailyRecords: List<DebugStepDaily>,
         a1cDailyRecords: List<DebugA1cDaily>,
         manualRecords: List<ManualHealthRecord>,
         dailyBodySettings: List<DailyBodySetting>,
+        dailyEnergySnapshots: List<DailyEnergySnapshot>,
     ): List<SpreadsheetUploadTable> {
+        val dailyEnergyByDate = dailyEnergySnapshots.associateBy { it.targetDate }
         return listOf(
             SpreadsheetUploadTable(
                 sheetName = "dailyBodySettings",
@@ -153,6 +158,7 @@ class SpreadsheetUploader {
                     "targetDate",
                     "steps",
                     "distanceMeters",
+                    "estimatedTotalKcal",
                     "aggregationStartAt",
                     "aggregationEndAt",
                 ),
@@ -161,6 +167,7 @@ class SpreadsheetUploader {
                         record.targetDate.toString(),
                         record.steps,
                         record.distanceMeters ?: "",
+                        dailyEnergyByDate[record.targetDate]?.estimatedTotalKcal ?: "",
                         record.aggregationStartAt.toString(),
                         record.aggregationEndAt.toString(),
                     )
@@ -392,7 +399,7 @@ class SpreadsheetUploader {
     }
 }
 
-private data class SpreadsheetUploadTable(
+internal data class SpreadsheetUploadTable(
     val sheetName: String,
     val headers: List<String>,
     val values: List<List<Any>>,
