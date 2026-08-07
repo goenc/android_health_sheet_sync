@@ -10,6 +10,7 @@ import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.data.StoredHealthData
 import com.goenc.healthsheetsync.widget.HealthGraphWidgetUpdater
 import java.time.LocalDate
 import java.time.ZoneId
@@ -25,15 +26,9 @@ class HealthConnectDebugReader(private val context: Context) {
         val availability = sdkStatusCheck.availability
         debugMessages += "HealthConnect SDK status: ${sdkStatusCheck.status.toSdkStatusLabel()} (${sdkStatusCheck.status})"
         if (availability !is HealthConnectAvailability.Available) {
-            val storedData = localStore.load()
-            return HealthDebugUiState(
+            return localStore.load().toUiState(
                 availability = availability,
                 permissions = PermissionState.Unknown,
-                isLoading = false,
-                manualRecords = storedData.manualRecords,
-                invalidatedGraphRecords = storedData.invalidatedGraphRecords,
-                dailyEnergySnapshots = storedData.dailyEnergySnapshots,
-                dailyBodySettings = storedData.dailyBodySettings,
                 debugMessages = debugMessages,
             )
         }
@@ -57,15 +52,9 @@ class HealthConnectDebugReader(private val context: Context) {
         }
 
         if (missingPermissions.isNotEmpty()) {
-            val storedData = localStore.load()
-            return HealthDebugUiState(
+            return localStore.load().toUiState(
                 availability = availability,
                 permissions = permissionState,
-                isLoading = false,
-                manualRecords = storedData.manualRecords,
-                invalidatedGraphRecords = storedData.invalidatedGraphRecords,
-                dailyEnergySnapshots = storedData.dailyEnergySnapshots,
-                dailyBodySettings = storedData.dailyBodySettings,
                 debugMessages = debugMessages,
             )
         }
@@ -97,23 +86,33 @@ class HealthConnectDebugReader(private val context: Context) {
         val storedData = localStore.load()
         val distanceDayCount = storedData.stepDailyRecords.count { it.distanceMeters != null }
         debugMessages += "保存済み件数: 体重${storedData.weightRecords.size}件、血糖${storedData.glucoseRecords.size}件、歩数${storedData.stepDailyRecords.size}日、距離${distanceDayCount}日"
-        val yesterday = LocalDate.now(zoneId).minusDays(1)
-        val yesterdaySteps = storedData.stepDailyRecords.firstOrNull { it.targetDate == yesterday }
-
-        return HealthDebugUiState(
+        return storedData.toUiState(
             availability = availability,
             permissions = permissionState,
+            debugMessages = debugMessages,
+        )
+    }
+
+    private fun StoredHealthData.toUiState(
+        availability: HealthConnectAvailability,
+        permissions: PermissionState,
+        debugMessages: List<String>,
+    ): HealthDebugUiState {
+        val yesterday = LocalDate.now(zoneId).minusDays(1)
+        return HealthDebugUiState(
+            availability = availability,
+            permissions = permissions,
             isLoading = false,
-            weightRecords = storedData.weightRecords,
-            glucoseRecords = storedData.glucoseRecords,
-            stepDailyRecords = storedData.stepDailyRecords,
-            a1cDailyRecords = storedData.a1cDailyRecords,
-            manualRecords = storedData.manualRecords,
-            invalidatedGraphRecords = storedData.invalidatedGraphRecords,
-            dailyEnergySnapshots = storedData.dailyEnergySnapshots,
-            dailyBodySettings = storedData.dailyBodySettings,
-            yesterdaySteps = yesterdaySteps,
-            sourceSummaries = buildSourceSummaries(storedData.weightRecords, storedData.glucoseRecords),
+            weightRecords = weightRecords,
+            glucoseRecords = glucoseRecords,
+            stepDailyRecords = stepDailyRecords,
+            a1cDailyRecords = a1cDailyRecords,
+            manualRecords = manualRecords,
+            invalidatedGraphRecords = invalidatedGraphRecords,
+            dailyEnergySnapshots = dailyEnergySnapshots,
+            dailyBodySettings = dailyBodySettings,
+            yesterdaySteps = stepDailyRecords.firstOrNull { it.targetDate == yesterday },
+            sourceSummaries = buildSourceSummaries(weightRecords, glucoseRecords),
             debugMessages = debugMessages,
         )
     }
