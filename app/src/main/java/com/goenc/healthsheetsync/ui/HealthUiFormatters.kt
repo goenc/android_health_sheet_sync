@@ -9,6 +9,8 @@ import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import com.goenc.healthsheetsync.health.PermissionState
+import com.goenc.healthsheetsync.health.healthRecordUniqueKey
+import com.goenc.healthsheetsync.health.toHealthTimeBand
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -173,7 +175,7 @@ internal fun ManualRecordType.toGraphDataItems(
             .map { record ->
                 GraphDataItem(
                     recordType = "weight",
-                    uniqueKey = record.weightUniqueKey(),
+                    uniqueKey = record.healthRecordUniqueKey(),
                     text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.weightKg)} kg / ${record.timeBand}",
                     measuredAt = record.measuredAt,
                     invalidatedAt = null,
@@ -195,7 +197,7 @@ internal fun ManualRecordType.toGraphDataItems(
             .map { record ->
                 GraphDataItem(
                     recordType = "glucose",
-                    uniqueKey = record.glucoseUniqueKey(),
+                    uniqueKey = record.healthRecordUniqueKey(),
                     text = "${record.measuredAt.formatDateTime()}  ${formatDecimal(record.bloodGlucoseMgDl)} mg/dL / ${record.mealRelation}",
                     measuredAt = record.measuredAt,
                     invalidatedAt = null,
@@ -299,21 +301,6 @@ internal data class GraphDataItem(
     val invalidatedAt: LocalDateTime?,
 )
 
-internal fun DebugWeightRecord.weightUniqueKey(): String {
-    return stableHealthRecordKey("weight", healthConnectId)
-        ?: "weight|$measuredAt|$sourcePackageName|$weightKg"
-}
-
-internal fun DebugGlucoseRecord.glucoseUniqueKey(): String {
-    return stableHealthRecordKey("glucose", healthConnectId)
-        ?: "glucose|$measuredAt|$sourcePackageName|$bloodGlucoseMgDl|$mealRelation"
-}
-
-internal fun stableHealthRecordKey(recordType: String, healthConnectId: String): String? {
-    if (healthConnectId.isBlank() || healthConnectId == UNKNOWN_HEALTH_VALUE) return null
-    return "$recordType|$healthConnectId"
-}
-
 internal fun formatDecimal(value: Double): String {
     val roundedOneDecimal = (value * 10.0).roundToInt() / 10.0
     return if (roundedOneDecimal % 1.0 == 0.0) {
@@ -353,7 +340,7 @@ internal fun List<ManualHealthRecord>.averageBloodPressureValue(): BloodPressure
 }
 
 internal fun List<ManualHealthRecord>.latestBloodPressureInTimeBand(timeBand: String): BloodPressureValue? {
-    return filter { it.measuredAt.toTimeBand() == timeBand }
+    return filter { it.measuredAt.toHealthTimeBand() == timeBand }
         .maxByOrNull { it.measuredAt }
         ?.valueText
         ?.toBloodPressureValue()
@@ -366,14 +353,6 @@ internal fun String.toBloodPressureValue(): BloodPressureValue? {
         systolic = values[0].trim().toIntOrNull() ?: return null,
         diastolic = values[1].trim().toIntOrNull() ?: return null,
     )
-}
-
-internal fun LocalDateTime.toTimeBand(): String {
-    return when (hour) {
-        in 4..11 -> "朝"
-        in 12..17 -> "昼"
-        else -> "夜"
-    }
 }
 
 internal data class BloodPressureValue(
@@ -402,7 +381,6 @@ internal const val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L
 internal const val GLUCOSE_WEIGHT_COUNT = 3
 internal const val GLUCOSE_CHART_VALUE_PADDING_MG_DL = 10.0
 internal const val ASSUMED_VALUE_SUFFIX = "（想定）"
-internal const val UNKNOWN_HEALTH_VALUE = "不明"
 internal const val MANUAL_RECORD_TYPE = "manual"
 internal const val MANUAL_LIST_RECENT_LIMIT = 10
 internal const val DELETE_PRESS_MILLIS = 5_000L

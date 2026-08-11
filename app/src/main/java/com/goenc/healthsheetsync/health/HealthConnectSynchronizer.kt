@@ -193,7 +193,7 @@ internal class HealthConnectSynchronizer(
         return DebugWeightRecord(
             measuredAt = measuredAt,
             targetDate = measuredAt.toLocalDate(),
-            timeBand = measuredAt.toTimeBand(),
+            timeBand = measuredAt.toHealthTimeBand(),
             weightKg = weight.inKilograms,
             healthConnectId = metadata.id.ifBlank { UNKNOWN },
             sourceAppName = sourcePackage.toAppLabel(),
@@ -207,7 +207,7 @@ internal class HealthConnectSynchronizer(
         return DebugGlucoseRecord(
             measuredAt = measuredAt,
             targetDate = measuredAt.toLocalDate(),
-            timeBand = measuredAt.toTimeBand(),
+            timeBand = measuredAt.toHealthTimeBand(),
             bloodGlucoseMgDl = level.inMilligramsPerDeciliter,
             mealRelation = relationToMeal.toMealRelation(),
             healthConnectId = metadata.id.ifBlank { UNKNOWN },
@@ -246,15 +246,6 @@ internal class HealthConnectSynchronizer(
 
     private fun Instant.toLocalDateTime(): LocalDateTime =
         LocalDateTime.ofInstant(this, zoneId)
-
-    private fun LocalDateTime.toTimeBand(): String {
-        val hour = hour
-        return when (hour) {
-            in 4..11 -> "朝"
-            in 12..17 -> "昼"
-            else -> "夜"
-        }
-    }
 
     private fun Int.toMealRelation(): String {
         return when (this) {

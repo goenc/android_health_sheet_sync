@@ -7,6 +7,7 @@ import com.goenc.healthsheetsync.health.DebugDistanceRecord
 import com.goenc.healthsheetsync.health.DebugStepRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.healthRecordUniqueKey
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -75,7 +76,7 @@ internal class HealthConnectRecordStore(
                 TABLE_WEIGHT,
                 null,
                 ContentValues().apply {
-                    put("unique_key", record.uniqueKey("weight", record.weightKg.toString()))
+                    put("unique_key", record.healthRecordUniqueKey())
                     put("health_connect_id", record.healthConnectId)
                     put("measured_at", record.measuredAt.toString())
                     put("target_date", record.targetDate.toString())
@@ -95,7 +96,7 @@ internal class HealthConnectRecordStore(
                 TABLE_GLUCOSE,
                 null,
                 ContentValues().apply {
-                    put("unique_key", record.uniqueKey("glucose", record.bloodGlucoseMgDl.toString()))
+                    put("unique_key", record.healthRecordUniqueKey())
                     put("health_connect_id", record.healthConnectId)
                     put("measured_at", record.measuredAt.toString())
                     put("target_date", record.targetDate.toString())
@@ -294,21 +295,6 @@ internal class HealthConnectRecordStore(
                 put("updated_at", updatedAt)
             },
         )
-    }
-
-    private fun DebugWeightRecord.uniqueKey(recordType: String, value: String): String {
-        return stableHealthConnectKey(recordType, healthConnectId)
-            ?: "$recordType|$measuredAt|$sourcePackageName|$value"
-    }
-
-    private fun DebugGlucoseRecord.uniqueKey(recordType: String, value: String): String {
-        return stableHealthConnectKey(recordType, healthConnectId)
-            ?: "$recordType|$measuredAt|$sourcePackageName|$value|$mealRelation"
-    }
-
-    private fun stableHealthConnectKey(recordType: String, healthConnectId: String): String? {
-        if (healthConnectId.isBlank() || healthConnectId == UNKNOWN) return null
-        return "$recordType|$healthConnectId"
     }
 
     private companion object {

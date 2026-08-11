@@ -1,6 +1,7 @@
 package com.goenc.healthsheetsync.data
 
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
+import com.goenc.healthsheetsync.health.toHealthTimeBand
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -28,7 +29,7 @@ object OneTouchRevealTextParser {
                 DebugGlucoseRecord(
                     measuredAt = measuredAt,
                     targetDate = measuredAt.toLocalDate(),
-                    timeBand = measuredAt.toTimeBand(),
+                    timeBand = measuredAt.toHealthTimeBand(),
                     bloodGlucoseMgDl = glucose,
                     mealRelation = mealRelation,
                     healthConnectId = oneTouchId(measuredAt, glucose, mealRelation),
@@ -54,7 +55,7 @@ object OneTouchRevealTextParser {
             DebugGlucoseRecord(
                 measuredAt = measuredAt,
                 targetDate = measuredAt.toLocalDate(),
-                timeBand = measuredAt.toTimeBand(),
+                timeBand = measuredAt.toHealthTimeBand(),
                 bloodGlucoseMgDl = glucose,
                 mealRelation = mealRelation,
                 healthConnectId = oneTouchId(measuredAt, glucose, mealRelation),
@@ -75,14 +76,6 @@ object OneTouchRevealTextParser {
             LocalDate.of(year.toInt(), month.toInt(), day.toInt())
                 .atTime(hour.toInt(), minute.toInt())
         }.getOrNull()
-    }
-
-    private fun LocalDateTime.toTimeBand(): String {
-        return when (hour) {
-            in 4..11 -> "朝"
-            in 12..17 -> "昼"
-            else -> "夜"
-        }
     }
 
     private fun String.trimJapaneseSeparators(): String =

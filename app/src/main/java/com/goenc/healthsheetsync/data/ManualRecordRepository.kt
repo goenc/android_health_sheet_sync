@@ -6,6 +6,8 @@ import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.healthRecordUniqueKey
+import com.goenc.healthsheetsync.health.toHealthTimeBand
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -35,7 +37,7 @@ internal class ManualRecordRepository(
                     val record = DebugWeightRecord(
                         measuredAt = draft.measuredAt,
                         targetDate = draft.measuredAt.toLocalDate(),
-                        timeBand = draft.measuredAt.toTimeBand(),
+                        timeBand = draft.measuredAt.toHealthTimeBand(),
                         weightKg = weightKg,
                         healthConnectId = manualId,
                         sourceAppName = MANUAL_SOURCE,
@@ -45,7 +47,7 @@ internal class ManualRecordRepository(
                         TABLE_WEIGHT,
                         null,
                         ContentValues().apply {
-                            put("unique_key", record.uniqueKey("weight", record.weightKg.toString()))
+                            put("unique_key", record.healthRecordUniqueKey())
                             put("health_connect_id", record.healthConnectId)
                             put("measured_at", record.measuredAt.toString())
                             put("target_date", record.targetDate.toString())
@@ -88,7 +90,7 @@ internal class ManualRecordRepository(
                     val record = DebugGlucoseRecord(
                         measuredAt = draft.measuredAt,
                         targetDate = draft.measuredAt.toLocalDate(),
-                        timeBand = draft.measuredAt.toTimeBand(),
+                        timeBand = draft.measuredAt.toHealthTimeBand(),
                         bloodGlucoseMgDl = glucose,
                         mealRelation = "空腹時",
                         healthConnectId = manualId,
@@ -99,7 +101,7 @@ internal class ManualRecordRepository(
                         TABLE_GLUCOSE,
                         null,
                         ContentValues().apply {
-                            put("unique_key", record.uniqueKey("glucose", record.bloodGlucoseMgDl.toString()))
+                            put("unique_key", record.healthRecordUniqueKey())
                             put("health_connect_id", record.healthConnectId)
                             put("measured_at", record.measuredAt.toString())
                             put("target_date", record.targetDate.toString())
@@ -129,30 +131,6 @@ internal class ManualRecordRepository(
                 ManualRecordType.BloodPressure,
                 ManualRecordType.Waist -> Unit
             }
-        }
-    }
-
-    private fun DebugWeightRecord.uniqueKey(recordType: String, value: String): String {
-        return stableHealthConnectKey(recordType, healthConnectId)
-            ?: "$recordType|$measuredAt|$sourcePackageName|$value"
-    }
-
-    private fun DebugGlucoseRecord.uniqueKey(recordType: String, value: String): String {
-        return stableHealthConnectKey(recordType, healthConnectId)
-            ?: "$recordType|$measuredAt|$sourcePackageName|$value|$mealRelation"
-    }
-
-    private fun stableHealthConnectKey(recordType: String, healthConnectId: String): String? {
-        if (healthConnectId.isBlank() || healthConnectId == UNKNOWN) return null
-        return "$recordType|$healthConnectId"
-    }
-
-    private fun LocalDateTime.toTimeBand(): String {
-        val hour = hour
-        return when (hour) {
-            in 4..11 -> "朝"
-            in 12..17 -> "昼"
-            else -> "夜"
         }
     }
 

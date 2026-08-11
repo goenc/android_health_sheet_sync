@@ -4,6 +4,7 @@ import android.content.Context
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.toHealthTimeBand
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -89,7 +90,7 @@ class HealthCsvShareExporter(
                     recordType = "bloodPressure",
                     targetDate = record.measuredAt.toLocalDate().toString(),
                     measuredAt = record.measuredAt.toString(),
-                    timeBand = record.measuredAt.toTimeBand(),
+                    timeBand = record.measuredAt.toHealthTimeBand(),
                     value1 = values[0].trim(),
                     value2 = values[1].trim(),
                     manualId = record.id,
@@ -147,14 +148,6 @@ class HealthCsvShareExporter(
             return this
         }
         return "\"${replace("\"", "\"\"")}\""
-    }
-
-    private fun LocalDateTime.toTimeBand(): String {
-        return when (hour) {
-            in 4..11 -> "朝"
-            in 12..17 -> "昼"
-            else -> "夜"
-        }
     }
 
     companion object {
