@@ -175,7 +175,7 @@ internal fun WeightTrendChart(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(465.dp),
+                .height(420.dp),
         ) {
             Canvas(
                 modifier = Modifier
@@ -904,7 +904,6 @@ private fun SelectedDaySummary(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(114.dp)
             .background(PopupBackground, RoundedCornerShape(8.dp))
             .padding(start = 20.dp, end = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -982,15 +981,15 @@ private fun SelectedDaySummary(
             ) {
                 SummaryInfoLine(
                     text = "腹囲 ${graphValues?.waistText ?: "-"}",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.9f),
                 )
                 SummaryInfoLine(
                     text = "BMI ${selectedDayBmiText(day, dailyBodySettings) ?: "-"}",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.9f),
                 )
                 SummaryInfoLine(
                     text = "体脂肪率 ${selectedDayBodyFatText(day, manualRecords, dailyBodySettings) ?: "-"}",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1.2f),
                 )
             }
         }
