@@ -164,6 +164,32 @@ class HealthChartCalculationsTest {
     }
 
     @Test
+    fun selectedDayBodyFatText_uses_measurements_on_or_before_selected_date() {
+        val date = LocalDate.of(2026, 1, 5)
+        val selectedDay = ChartDaySelection(
+            date = date,
+            morning = null,
+            night = null,
+            steps = null,
+            dailyEnergy = null,
+        )
+
+        assertEquals(
+            "41.6%",
+            selectedDayBodyFatText(
+                day = selectedDay,
+                manualRecords = listOf(
+                    manualRecord(ManualRecordType.Waist, 2026, 1, 3, 49.0 * 2.54),
+                    manualRecord(ManualRecordType.Neck, 2026, 1, 3, 16.0 * 2.54),
+                ),
+                dailyBodySettings = listOf(
+                    bodySetting(2026, 1, 3, 69.0 * 2.54),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun nearestA1cRecordOnOrBefore_returns_null_when_all_records_are_future() {
         assertNull(
             nearestA1cRecordOnOrBefore(
@@ -695,6 +721,38 @@ class HealthChartCalculationsTest {
             measuredAt = measuredAt,
             valueText = "$value cm",
             invalidatedAt = null,
+        )
+    }
+
+    private fun manualRecord(
+        type: ManualRecordType,
+        year: Int,
+        month: Int,
+        day: Int,
+        value: Double,
+    ): ManualHealthRecord {
+        val measuredAt = LocalDateTime.of(year, month, day, 7, 0)
+        return ManualHealthRecord(
+            id = "$type-$measuredAt",
+            type = type,
+            measuredAt = measuredAt,
+            valueText = "$value cm",
+            invalidatedAt = null,
+        )
+    }
+
+    private fun bodySetting(
+        year: Int,
+        month: Int,
+        day: Int,
+        heightCm: Double,
+    ): com.goenc.healthsheetsync.health.DailyBodySetting {
+        val date = LocalDate.of(year, month, day)
+        return com.goenc.healthsheetsync.health.DailyBodySetting(
+            targetDate = date,
+            heightCm = heightCm,
+            averageIntakeKcal = 2_000,
+            updatedAt = date.atTime(12, 0),
         )
     }
 

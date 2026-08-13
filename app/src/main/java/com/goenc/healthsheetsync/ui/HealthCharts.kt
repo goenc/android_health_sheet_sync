@@ -59,6 +59,8 @@ import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
+import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.navyMaleBodyFatPercent
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -884,6 +886,7 @@ internal fun WeightTrendChart(
         SelectedDaySummary(
             day = selectedDay,
             graphValues = selectedGraphValues,
+            manualRecords = manualRecords,
             dailyBodySettings = dailyBodySettings,
             onAddManualRecord = onAddManualRecord,
         )
@@ -894,6 +897,7 @@ internal fun WeightTrendChart(
 private fun SelectedDaySummary(
     day: ChartDaySelection?,
     graphValues: SelectedGraphValues?,
+    manualRecords: List<ManualHealthRecord>,
     dailyBodySettings: List<DailyBodySetting>,
     onAddManualRecord: () -> Unit,
 ) {
@@ -980,12 +984,14 @@ private fun SelectedDaySummary(
                     text = "腹囲 ${graphValues?.waistText ?: "-"}",
                     modifier = Modifier.weight(1f),
                 )
-                selectedDayBmiText(day, dailyBodySettings)?.let { bmiText ->
-                    SummaryInfoLine(
-                        text = "BMI $bmiText",
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                SummaryInfoLine(
+                    text = "BMI ${selectedDayBmiText(day, dailyBodySettings) ?: "-"}",
+                    modifier = Modifier.weight(1f),
+                )
+                SummaryInfoLine(
+                    text = "体脂肪率 ${selectedDayBodyFatText(day, manualRecords, dailyBodySettings) ?: "-"}",
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
         FloatingActionButton(
@@ -1019,6 +1025,46 @@ private fun selectedDayBmiText(
     return (morningWeightKg / (heightM * heightM))
         .takeIf { it.isFinite() && it > 0.0 }
         ?.let(::formatDecimal)
+}
+
+internal fun selectedDayBodyFatText(
+    day: ChartDaySelection?,
+    manualRecords: List<ManualHealthRecord>,
+    dailyBodySettings: List<DailyBodySetting>,
+): String? {
+    val date = day?.date ?: return null
+    val waistCm = manualRecords.latestManualMeasurementOnOrBefore(ManualRecordType.Waist, date)
+    val neckCm = manualRecords.latestManualMeasurementOnOrBefore(ManualRecordType.Neck, date)
+    val heightCm = dailyBodySettings
+        .filter { !it.targetDate.isAfter(date) }
+        .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
+        ?.heightCm
+    val bodyFat = if (waistCm != null && neckCm != null && heightCm != null) {
+        navyMaleBodyFatPercent(
+            heightCm = heightCm,
+            waistCm = waistCm,
+            neckCm = neckCm,
+        )
+    } else {
+        null
+    }
+    return bodyFat?.let { "${formatDecimal(it)}%" }
+}
+
+private fun List<ManualHealthRecord>.latestManualMeasurementOnOrBefore(
+    type: ManualRecordType,
+    date: LocalDate,
+): Double? {
+    return filter {
+        it.type == type &&
+            it.invalidatedAt == null &&
+            !it.measuredAt.toLocalDate().isAfter(date)
+    }
+        .maxByOrNull { it.measuredAt }
+        ?.valueText
+        ?.removeSuffix(" cm")
+        ?.trim()
+        ?.toDoubleOrNull()
 }
 
 @Composable
