@@ -94,6 +94,7 @@ internal fun ManualRecordType.inputLabels(): Pair<String, String?> {
         ManualRecordType.BloodGlucose -> "血糖値 mg/dL" to null
         ManualRecordType.BloodPressure -> "収縮期 mmHg" to "拡張期 mmHg"
         ManualRecordType.Waist -> "腹囲 cm" to null
+        ManualRecordType.Neck -> "首回り cm" to null
         ManualRecordType.A1c -> "A1c %" to null
     }
 }
@@ -115,6 +116,8 @@ internal fun ManualRecordType.formatManualValue(primaryValue: String, secondaryV
         }
         ManualRecordType.Waist ->
             primary.toDoubleOrNull()?.let { "${formatDecimal(it)} cm" }
+        ManualRecordType.Neck ->
+            primary.toDoubleOrNull()?.let { "${formatDecimal(it)} cm" }
         ManualRecordType.A1c ->
             primary.toDoubleOrNull()?.let { "${formatDecimal(it)} %" }
     }
@@ -125,6 +128,7 @@ internal fun ManualRecordType.manualInputTimeBandOptions(): List<String> {
         ManualRecordType.Steps,
         ManualRecordType.BloodGlucose,
         ManualRecordType.Waist,
+        ManualRecordType.Neck,
         ManualRecordType.A1c -> emptyList()
         ManualRecordType.Weight,
         ManualRecordType.BloodPressure -> listOf("朝", "夜")
@@ -153,6 +157,7 @@ internal fun ManualRecordType.manualInputTime(timeBand: String): LocalTime {
         ManualRecordType.Steps,
         ManualRecordType.BloodGlucose -> LocalTime.of(7, 0)
         ManualRecordType.Waist,
+        ManualRecordType.Neck,
         ManualRecordType.A1c -> LocalTime.NOON
         else -> when (timeBand) {
             "朝" -> LocalTime.of(7, 0)
@@ -205,6 +210,7 @@ internal fun ManualRecordType.toGraphDataItems(
             }
         ManualRecordType.BloodPressure,
         ManualRecordType.Waist,
+        ManualRecordType.Neck,
         ManualRecordType.A1c -> manualRecords
             .filter { it.type == this }
             .recentFirst(limit, compareByDescending<ManualHealthRecord> { it.measuredAt })

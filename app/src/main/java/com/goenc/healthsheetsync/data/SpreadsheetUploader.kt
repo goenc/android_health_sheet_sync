@@ -208,6 +208,15 @@ class SpreadsheetUploader {
                         listOf(record.measuredAt.toString(), record.valueText, record.id)
                     },
             ),
+            SpreadsheetUploadTable(
+                sheetName = "neckRecords",
+                headers = listOf("measuredAt", "valueText", "manualId"),
+                values = manualRecords
+                    .filter { it.type == ManualRecordType.Neck && it.invalidatedAt == null }
+                    .map { record ->
+                        listOf(record.measuredAt.toString(), record.valueText, record.id)
+                    },
+            ),
         )
     }
 

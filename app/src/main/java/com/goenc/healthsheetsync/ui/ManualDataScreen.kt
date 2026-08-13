@@ -52,6 +52,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 private val manualRecordTypeDisplayOrder = listOf(
     ManualRecordType.BloodPressure,
     ManualRecordType.Waist,
+    ManualRecordType.Neck,
     ManualRecordType.BloodGlucose,
     ManualRecordType.Weight,
     ManualRecordType.A1c,

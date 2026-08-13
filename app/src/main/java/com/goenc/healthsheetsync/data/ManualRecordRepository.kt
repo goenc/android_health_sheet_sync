@@ -129,7 +129,8 @@ internal class ManualRecordRepository(
                     )
                 }
                 ManualRecordType.BloodPressure,
-                ManualRecordType.Waist -> Unit
+                ManualRecordType.Waist,
+                ManualRecordType.Neck -> Unit
             }
         }
     }

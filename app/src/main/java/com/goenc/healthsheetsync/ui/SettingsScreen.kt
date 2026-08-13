@@ -286,6 +286,7 @@ internal fun SettingsScreen(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             DebugLineCell("腹囲記録の件数", state.manualRecords.count { it.type == ManualRecordType.Waist && it.invalidatedAt == null }.toString())
+            DebugLineCell("首回り記録の件数", state.manualRecords.count { it.type == ManualRecordType.Neck && it.invalidatedAt == null }.toString())
             DebugLineCell("A1c記録の件数", state.a1cDailyRecords.size.toString())
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -332,6 +333,16 @@ internal fun SettingsScreen(
                 },
             )
             RecordListButton(
+                label = "首回り",
+                selected = selectedRecordList == RecordListType.Neck,
+                onClick = {
+                    selectedRecordList =
+                        if (selectedRecordList == RecordListType.Neck) null else RecordListType.Neck
+                },
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            RecordListButton(
                 label = "A1c",
                 selected = selectedRecordList == RecordListType.A1c,
                 onClick = {
@@ -351,6 +362,7 @@ internal fun SettingsScreen(
             )
             RecordListType.BloodPressure -> BloodPressureRecordSummary(state.manualRecords)
             RecordListType.Waist -> WaistRecordSummary(state.manualRecords)
+            RecordListType.Neck -> NeckRecordSummary(state.manualRecords)
             RecordListType.A1c -> A1cRecordSummary(state.a1cDailyRecords)
             null -> Unit
         }
@@ -412,6 +424,7 @@ private enum class RecordListType {
     Steps,
     BloodPressure,
     Waist,
+    Neck,
     A1c,
 }
 
@@ -684,6 +697,23 @@ private fun WaistRecordSummary(records: List<ManualHealthRecord>) {
         .sortedByDescending { it.measuredAt }
     if (validRecords.isEmpty()) {
         Text("腹囲記録はありません", style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+    validRecords.forEach { record ->
+        Text(
+            text = "${record.measuredAt.formatDateTime()}  ${record.valueText}",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun NeckRecordSummary(records: List<ManualHealthRecord>) {
+    val validRecords = records
+        .filter { it.type == ManualRecordType.Neck && it.invalidatedAt == null }
+        .sortedByDescending { it.measuredAt }
+    if (validRecords.isEmpty()) {
+        Text("首回り記録はありません", style = MaterialTheme.typography.bodyMedium)
         return
     }
     validRecords.forEach { record ->

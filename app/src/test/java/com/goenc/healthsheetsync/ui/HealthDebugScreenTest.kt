@@ -3,6 +3,8 @@ package com.goenc.healthsheetsync.ui
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyBodySetting
+import com.goenc.healthsheetsync.health.ManualHealthRecord
+import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
@@ -127,6 +129,35 @@ class HealthDebugScreenTest {
         )
     }
 
+    @Test
+    fun navyBodyFatForSummary_usesLatestWaistNeckAndHeight() {
+        val date = LocalDate.of(2026, 8, 3)
+
+        assertEquals(
+            41.57,
+            requireNotNull(navyBodyFatForSummary(
+                manualRecords = listOf(
+                    manualRecord(ManualRecordType.Waist, date, 49.0 * 2.54),
+                    manualRecord(ManualRecordType.Neck, date, 16.0 * 2.54),
+                ),
+                dailyBodySettings = listOf(bodySetting(date, 69.0 * 2.54)),
+            )),
+            0.01,
+        )
+    }
+
+    @Test
+    fun navyBodyFatForSummary_returnsNullWhenNeckIsMissing() {
+        val date = LocalDate.of(2026, 8, 3)
+
+        assertNull(
+            navyBodyFatForSummary(
+                manualRecords = listOf(manualRecord(ManualRecordType.Waist, date, 90.0)),
+                dailyBodySettings = listOf(bodySetting(date, 170.0)),
+            ),
+        )
+    }
+
     private fun stepDaily(targetDate: LocalDate, steps: Long): DebugStepDaily {
         return DebugStepDaily(
             targetDate = targetDate,
@@ -159,6 +190,20 @@ class HealthDebugScreenTest {
             heightCm = heightCm,
             averageIntakeKcal = 2_000,
             updatedAt = targetDate.atTime(12, 0),
+        )
+    }
+
+    private fun manualRecord(
+        type: ManualRecordType,
+        targetDate: LocalDate,
+        valueCm: Double,
+    ): ManualHealthRecord {
+        return ManualHealthRecord(
+            id = "$type-$targetDate",
+            type = type,
+            measuredAt = targetDate.atTime(12, 0),
+            valueText = "$valueCm cm",
+            invalidatedAt = null,
         )
     }
 }

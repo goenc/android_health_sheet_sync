@@ -46,6 +46,7 @@ import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.navyMaleBodyFatPercent
 import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
@@ -274,6 +275,7 @@ private fun MainSummaryValues(
 ) {
     val latestRecord = records.maxByOrNull { it.measuredAt }
     val bmi = bmiForSummary(records, dailyBodySettings)
+    val bodyFat = navyBodyFatForSummary(manualRecords, dailyBodySettings)
     val todayStepRecord = dailySteps.firstOrNull { it.targetDate == targetDate }
     val todaySteps = todayStepRecord?.steps ?: 0L
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
@@ -316,6 +318,9 @@ private fun MainSummaryValues(
             bmi?.let { value ->
                 SummaryValue("BMI", formatDecimal(value), ChartSummary)
             }
+            bodyFat?.let { value ->
+                SummaryValue("体脂肪率", "${formatDecimal(value)}%", ChartSummary)
+            }
         }
     }
 }
@@ -343,6 +348,31 @@ internal fun bmiForSummary(
     }
     val heightM = heightCm / 100.0
     return (morningWeight / (heightM * heightM)).takeIf { it.isFinite() && it > 0.0 }
+}
+
+internal fun navyBodyFatForSummary(
+    manualRecords: List<ManualHealthRecord>,
+    dailyBodySettings: List<DailyBodySetting>,
+): Double? {
+    val waistCm = manualRecords.latestManualValue(ManualRecordType.Waist)
+        ?.removeSuffix(" cm")
+        ?.trim()
+        ?.toDoubleOrNull()
+        ?: return null
+    val neckCm = manualRecords.latestManualValue(ManualRecordType.Neck)
+        ?.removeSuffix(" cm")
+        ?.trim()
+        ?.toDoubleOrNull()
+        ?: return null
+    val heightCm = dailyBodySettings
+        .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
+        ?.heightCm
+        ?: return null
+    return navyMaleBodyFatPercent(
+        heightCm = heightCm,
+        waistCm = waistCm,
+        neckCm = neckCm,
+    )
 }
 
 @Composable

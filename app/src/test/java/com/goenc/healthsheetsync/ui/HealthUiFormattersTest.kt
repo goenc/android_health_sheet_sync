@@ -26,6 +26,12 @@ class HealthUiFormattersTest {
     }
 
     @Test
+    fun formatsNeckInputAsCentimeters() {
+        assertEquals("首回り cm", ManualRecordType.Neck.inputLabels().first)
+        assertEquals("40.6 cm", ManualRecordType.Neck.formatManualValue("40.64", ""))
+    }
+
+    @Test
     fun bloodPressureDefaultsToMorningBeforeFivePm() {
         assertEquals("朝", ManualRecordType.BloodPressure.defaultManualTimeBand(LocalTime.of(16, 59)))
     }

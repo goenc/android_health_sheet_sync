@@ -106,6 +106,16 @@ class HealthCsvShareExporter(
                     manualId = record.id,
                 )
             }
+            ManualRecordType.Neck -> {
+                val neck = record.valueText.removeSuffix(" cm").trim()
+                csvRow(
+                    recordType = "neck",
+                    targetDate = record.measuredAt.toLocalDate().toString(),
+                    measuredAt = record.measuredAt.toString(),
+                    value1 = neck,
+                    manualId = record.id,
+                )
+            }
             else -> null
         }
     }

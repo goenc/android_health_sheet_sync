@@ -115,6 +115,7 @@ enum class ManualRecordType(
     BloodGlucose("血糖値"),
     BloodPressure("血圧"),
     Waist("腹囲"),
+    Neck("首回り"),
     A1c("A1c"),
 }
 
