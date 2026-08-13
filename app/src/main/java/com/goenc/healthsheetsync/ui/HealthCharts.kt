@@ -47,6 +47,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -985,10 +986,12 @@ private fun SelectedDaySummary(
                 )
                 SummaryInfoLine(
                     text = "BMI ${selectedDayBmiText(day, dailyBodySettings) ?: "-"}",
+                    textAlign = TextAlign.End,
                     modifier = Modifier.weight(0.9f),
                 )
                 SummaryInfoLine(
                     text = "体脂肪率 ${selectedDayBodyFatText(day, manualRecords, dailyBodySettings) ?: "-"}",
+                    textAlign = TextAlign.End,
                     modifier = Modifier.weight(1.2f),
                 )
             }
@@ -1071,6 +1074,7 @@ private fun SummaryInfoLine(
     text: String,
     color: Color = AppText,
     bold: Boolean = false,
+    textAlign: TextAlign = TextAlign.Start,
     modifier: Modifier = Modifier,
 ) {
     val displayText = buildAnnotatedString {
@@ -1089,6 +1093,7 @@ private fun SummaryInfoLine(
         style = MaterialTheme.typography.bodySmall,
         fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
         color = color,
+        textAlign = textAlign,
         maxLines = 1,
     )
 }
