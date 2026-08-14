@@ -164,19 +164,25 @@ class HealthChartCalculationsTest {
     }
 
     @Test
-    fun selectedDayBodyFatText_uses_measurements_on_or_before_selected_date() {
+    fun selectedDayFfmiText_uses_measurements_on_or_before_selected_date() {
         val date = LocalDate.of(2026, 1, 5)
         val selectedDay = ChartDaySelection(
             date = date,
-            morning = null,
+            morning = ChartWeightPoint(
+                measuredAt = date.atTime(7, 0),
+                targetDate = date,
+                timeBand = "朝",
+                weightKg = 70.0,
+                sourceCount = 1,
+            ),
             night = null,
             steps = null,
             dailyEnergy = null,
         )
 
         assertEquals(
-            "41.6%",
-            selectedDayBodyFatText(
+            "13.3 (41.6%)",
+            selectedDayFfmiText(
                 day = selectedDay,
                 manualRecords = listOf(
                     manualRecord(ManualRecordType.Waist, 2026, 1, 3, 49.0 * 2.54),

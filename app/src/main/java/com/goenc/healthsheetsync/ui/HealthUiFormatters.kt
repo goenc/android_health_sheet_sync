@@ -316,6 +316,10 @@ internal fun formatDecimal(value: Double): String {
     }
 }
 
+internal fun formatFfmiValue(ffmi: Double, bodyFatPercent: Double): String {
+    return "${formatDecimal(ffmi)} (${formatDecimal(bodyFatPercent)}%)"
+}
+
 internal fun List<ManualHealthRecord>.latestManualValue(type: ManualRecordType): String? {
     return filter { it.type == type && it.invalidatedAt == null }
         .maxByOrNull { it.measuredAt }

@@ -158,6 +158,26 @@ class HealthDebugScreenTest {
         )
     }
 
+    @Test
+    fun ffmiForSummary_usesLatestWeightWithBodyFatAndHeight() {
+        val date = LocalDate.of(2026, 8, 3)
+
+        assertEquals(
+            13.32,
+            requireNotNull(
+                ffmiForSummary(
+                    weightRecords = listOf(weightRecord(date, 70.0)),
+                    manualRecords = listOf(
+                        manualRecord(ManualRecordType.Waist, date, 49.0 * 2.54),
+                        manualRecord(ManualRecordType.Neck, date, 16.0 * 2.54),
+                    ),
+                    dailyBodySettings = listOf(bodySetting(date, 69.0 * 2.54)),
+                ),
+            ),
+            0.01,
+        )
+    }
+
     private fun stepDaily(targetDate: LocalDate, steps: Long): DebugStepDaily {
         return DebugStepDaily(
             targetDate = targetDate,

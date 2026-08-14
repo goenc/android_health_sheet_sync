@@ -46,6 +46,7 @@ import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.ffmi
 import com.goenc.healthsheetsync.health.navyMaleBodyFatPercent
 import java.time.Duration
 import java.time.LocalDate
@@ -276,6 +277,7 @@ private fun MainSummaryValues(
     val latestRecord = records.maxByOrNull { it.measuredAt }
     val bmi = bmiForSummary(records, dailyBodySettings)
     val bodyFat = navyBodyFatForSummary(manualRecords, dailyBodySettings)
+    val ffmiValue = ffmiForSummary(records, manualRecords, dailyBodySettings)
     val todayStepRecord = dailySteps.firstOrNull { it.targetDate == targetDate }
     val todaySteps = todayStepRecord?.steps ?: 0L
     val latestFastingGlucose = glucoseRecords.fastingGlucoseRecords().firstOrNull()
@@ -318,8 +320,8 @@ private fun MainSummaryValues(
             bmi?.let { value ->
                 SummaryValue("BMI", formatDecimal(value), ChartSummary)
             }
-            bodyFat?.let { value ->
-                SummaryValue("体脂肪率", "${formatDecimal(value)}%", ChartSummary)
+            if (bodyFat != null && ffmiValue != null) {
+                SummaryValue("FFMI", formatFfmiValue(ffmiValue, bodyFat), ChartSummary)
             }
         }
     }
@@ -372,6 +374,24 @@ internal fun navyBodyFatForSummary(
         heightCm = heightCm,
         waistCm = waistCm,
         neckCm = neckCm,
+    )
+}
+
+internal fun ffmiForSummary(
+    weightRecords: List<DebugWeightRecord>,
+    manualRecords: List<ManualHealthRecord>,
+    dailyBodySettings: List<DailyBodySetting>,
+): Double? {
+    val weightKg = weightRecords.maxByOrNull { it.measuredAt }?.weightKg ?: return null
+    val bodyFatPercent = navyBodyFatForSummary(manualRecords, dailyBodySettings) ?: return null
+    val heightCm = dailyBodySettings
+        .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
+        ?.heightCm
+        ?: return null
+    return ffmi(
+        weightKg = weightKg,
+        heightCm = heightCm,
+        bodyFatPercent = bodyFatPercent,
     )
 }
 

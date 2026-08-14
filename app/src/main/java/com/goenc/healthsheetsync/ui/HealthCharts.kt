@@ -61,6 +61,7 @@ import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.ffmi
 import com.goenc.healthsheetsync.health.navyMaleBodyFatPercent
 import java.time.DayOfWeek
 import java.time.Duration
@@ -982,17 +983,17 @@ private fun SelectedDaySummary(
             ) {
                 SummaryInfoLine(
                     text = "腹囲 ${graphValues?.waistText ?: "-"}",
-                    modifier = Modifier.weight(0.9f),
+                    modifier = Modifier.weight(0.85f),
                 )
                 SummaryInfoLine(
                     text = "BMI ${selectedDayBmiText(day, dailyBodySettings) ?: "-"}",
                     textAlign = TextAlign.End,
-                    modifier = Modifier.weight(0.9f),
+                    modifier = Modifier.weight(0.75f),
                 )
                 SummaryInfoLine(
-                    text = "体脂肪率 ${selectedDayBodyFatText(day, manualRecords, dailyBodySettings) ?: "-"}",
+                    text = "FFMI ${selectedDayFfmiText(day, manualRecords, dailyBodySettings) ?: "-"}",
                     textAlign = TextAlign.End,
-                    modifier = Modifier.weight(1.2f),
+                    modifier = Modifier.weight(1.4f),
                 )
             }
         }
@@ -1029,12 +1030,13 @@ private fun selectedDayBmiText(
         ?.let(::formatDecimal)
 }
 
-internal fun selectedDayBodyFatText(
+internal fun selectedDayFfmiText(
     day: ChartDaySelection?,
     manualRecords: List<ManualHealthRecord>,
     dailyBodySettings: List<DailyBodySetting>,
 ): String? {
     val date = day?.date ?: return null
+    val weightKg = day.morning?.weightKg ?: return null
     val waistCm = manualRecords.latestManualMeasurementOnOrBefore(ManualRecordType.Waist, date)
     val neckCm = manualRecords.latestManualMeasurementOnOrBefore(ManualRecordType.Neck, date)
     val heightCm = dailyBodySettings
@@ -1050,7 +1052,20 @@ internal fun selectedDayBodyFatText(
     } else {
         null
     }
-    return bodyFat?.let { "${formatDecimal(it)}%" }
+    val ffmiValue = if (bodyFat != null && heightCm != null) {
+        ffmi(
+            weightKg = weightKg,
+            heightCm = heightCm,
+            bodyFatPercent = bodyFat,
+        )
+    } else {
+        null
+    }
+    return if (bodyFat != null && ffmiValue != null) {
+        formatFfmiValue(ffmiValue, bodyFat)
+    } else {
+        null
+    }
 }
 
 private fun List<ManualHealthRecord>.latestManualMeasurementOnOrBefore(
