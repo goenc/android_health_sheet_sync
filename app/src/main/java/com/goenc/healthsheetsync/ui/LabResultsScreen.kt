@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -44,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
+import com.goenc.healthsheetsync.data.LabDisplaySettingsStore
 
 @Composable
 fun LabResultsScreen(
@@ -52,6 +57,13 @@ fun LabResultsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val displaySettings = remember(context) { LabDisplaySettingsStore(context.applicationContext) }
+    var excludedItems by remember { mutableStateOf(displaySettings.excludedItems()) }
+    var showTargetOnly by remember { mutableStateOf(displaySettings.showTargetOnly()) }
+    val itemNames = remember(state.records) {
+        state.records.sortedBy { it.targetDate }.map { it.itemName }.distinct()
+    }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var selectedItem by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
@@ -76,11 +88,16 @@ fun LabResultsScreen(
     val units = visible.map { it.unit }.distinct()
     val effectiveUnit = selectedUnit?.takeIf { it in units } ?: units.firstOrNull()
     val detailRecords = if (selectedItem != null) visible.filter { it.unit == effectiveUnit } else visible
+    val comparisonIndices = visible.indices.filter { !showTargetOnly || visible[it].itemName !in excludedItems }
     BackHandler(enabled = showSettings || selectedItem != null) {
         if (showSettings) showSettings = false else selectedItem = null
     }
     if (showSettings) {
-        LabResultsSettingsScreen(state = state, onRefresh = onRefresh, onBack = { showSettings = false }, modifier = modifier)
+        LabResultsSettingsScreen(state = state, itemNames = itemNames, excludedItems = excludedItems,
+            onItemChecked = { name, checked ->
+                excludedItems = if (checked) excludedItems - name else excludedItems + name
+                displaySettings.saveExcludedItems(excludedItems)
+            }, onRefresh = onRefresh, onBack = { showSettings = false }, modifier = modifier)
         return
     }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -124,8 +141,17 @@ fun LabResultsScreen(
                     }
                     TextButton(onClick = { selectedDate = dates[dateIndex + 2].toString() }, enabled = dateIndex + 2 < dates.size) { Text("次へ") }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("", modifier = Modifier.weight(2.8f))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(2.8f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(selected = !showTargetOnly, onClick = {
+                            showTargetOnly = false
+                            displaySettings.saveShowTargetOnly(false)
+                        }, label = { Text("全項目", fontSize = 12.sp) })
+                        FilterChip(selected = showTargetOnly, onClick = {
+                            showTargetOnly = true
+                            displaySettings.saveShowTargetOnly(true)
+                        }, label = { Text("対象項目", fontSize = 12.sp) })
+                    }
                     comparisonDates.forEach { date ->
                         Text("${date.monthValue}月", modifier = Modifier.weight(0.8f), textAlign = TextAlign.End,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -155,7 +181,8 @@ fun LabResultsScreen(
             }) {
                 if (detailRecords.isEmpty()) item { Text("該当する項目はありません") }
                 if (selectedItem == null) {
-                    items(visible.size) { index ->
+                    if (comparisonIndices.isEmpty()) item { Text("対象項目がありません。設定で表示する項目を選択してください。") }
+                    items(comparisonIndices) { index ->
                         LabComparisonRow(comparisonRows.map { it[index] }, onClick = { selectedItem = visible[index].itemName })
                     }
                 } else items(detailRecords) { result ->
@@ -191,7 +218,15 @@ private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
 }
 
 @Composable
-private fun LabResultsSettingsScreen(state: LabResultsUiState, onRefresh: () -> Unit, onBack: () -> Unit, modifier: Modifier) {
+private fun LabResultsSettingsScreen(
+    state: LabResultsUiState,
+    itemNames: List<String>,
+    excludedItems: Set<String>,
+    onItemChecked: (String, Boolean) -> Unit,
+    onRefresh: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier,
+) {
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("戻る") }
@@ -199,6 +234,20 @@ private fun LabResultsSettingsScreen(state: LabResultsUiState, onRefresh: () -> 
         }
         OutlinedButton(onClick = onRefresh, enabled = !state.isLoading, modifier = Modifier.fillMaxWidth()) {
             Text(if (state.isLoading) "更新中" else "更新")
+        }
+        Text("対象項目", fontWeight = FontWeight.Bold)
+        Text("チェックした項目を「対象項目」で表示する。", style = MaterialTheme.typography.bodySmall)
+        LazyColumn(Modifier.weight(1f)) {
+            if (itemNames.isEmpty()) item { Text("更新すると検査項目が表示されます。") }
+            items(itemNames, key = { it }) { name ->
+                val checked = name !in excludedItems
+                Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Checkbox,
+                    onValueChange = { onItemChecked(name, it) }), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = checked, onCheckedChange = null)
+                    Text(name, modifier = Modifier.weight(1f), fontSize = 13.sp)
+                }
+                HorizontalDivider(color = DividerColor)
+            }
         }
     }
 }
