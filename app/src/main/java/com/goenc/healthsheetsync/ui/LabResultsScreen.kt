@@ -222,7 +222,7 @@ private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
                     modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
+                    color = when (result.flag) { "L" -> LabLowValueBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
             repeat(LabComparisonCount - results.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
         }
@@ -286,7 +286,7 @@ private fun LabResultRow(result: LabResult, showDate: Boolean, selected: Boolean
                     append(" ${result.unit}")
                 }
             },
-                color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText },
+                color = when (result.flag) { "L" -> LabLowValueBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText },
                 fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.End,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1.1f))
         }
