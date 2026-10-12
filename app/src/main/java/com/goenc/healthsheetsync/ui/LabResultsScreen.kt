@@ -1,6 +1,10 @@
 package com.goenc.healthsheetsync.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,6 +49,8 @@ fun LabResultsScreen(
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var selectedItem by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedUnit by rememberSaveable(selectedItem) { mutableStateOf<String?>(null) }
+    var selectedPlotRecord by remember(selectedItem) { mutableStateOf<LabResult?>(null) }
     val dates = remember(state.records, newestFirst) {
         state.records.map { it.targetDate }.distinct().let { if (newestFirst) it.sortedDescending() else it.sorted() }
     }
@@ -55,9 +61,13 @@ fun LabResultsScreen(
                 (selectedItem != null || it.targetDate == effectiveDate)
         }.let { records -> if (newestFirst) records.sortedByDescending { it.targetDate } else records.sortedBy { it.targetDate } }
     }
+    val units = visible.map { it.unit }.distinct()
+    val effectiveUnit = selectedUnit?.takeIf { it in units } ?: units.firstOrNull()
+    val detailRecords = if (selectedItem != null) visible.filter { it.unit == effectiveUnit } else visible
+    BackHandler(enabled = selectedItem != null) { selectedItem = null }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onBack) { Text("戻る") }
+            TextButton(onClick = { if (selectedItem != null) selectedItem = null else onBack() }) { Text("戻る") }
             Text("検査結果", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             OutlinedButton(onClick = onRefresh, enabled = !state.isLoading) { Text("更新") }
         }
@@ -78,6 +88,17 @@ fun LabResultsScreen(
                     Text("$selectedItem の履歴", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
                     TextButton(onClick = { selectedItem = null }) { Text("日付別へ") }
                 }
+                if (units.size > 1) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        units.forEach { unit ->
+                            FilterChip(selected = unit == effectiveUnit, onClick = { selectedUnit = unit; selectedPlotRecord = null },
+                                label = { Text(unit.ifBlank { "単位なし" }) })
+                        }
+                    }
+                } else if (!effectiveUnit.isNullOrBlank()) {
+                    Text(effectiveUnit, style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+                }
+                LabResultChart(records = detailRecords, selectedRecord = selectedPlotRecord, onSelectRecord = { selectedPlotRecord = it })
             } else {
                 val dateIndex = dates.indexOf(effectiveDate)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -90,9 +111,10 @@ fun LabResultsScreen(
                 }
             }
             LazyColumn(modifier = Modifier.weight(1f)) {
-                if (visible.isEmpty()) item { Text("該当する項目はありません") }
-                items(visible) { result ->
-                    LabResultRow(result, showDate = selectedItem != null, onClick = { selectedItem = result.itemName })
+                if (detailRecords.isEmpty()) item { Text("該当する項目はありません") }
+                items(detailRecords) { result ->
+                    LabResultRow(result, showDate = selectedItem != null, selected = result == selectedPlotRecord,
+                        onClick = { if (selectedItem == null) selectedItem = result.itemName else selectedPlotRecord = result })
                 }
             }
         }
@@ -100,8 +122,8 @@ fun LabResultsScreen(
 }
 
 @Composable
-private fun LabResultRow(result: LabResult, showDate: Boolean, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+private fun LabResultRow(result: LabResult, showDate: Boolean, selected: Boolean, onClick: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(if (selected) AppPrimary.copy(alpha = 0.08f) else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (showDate) result.targetDate.toString() else result.itemName,
                 modifier = Modifier.weight(1.35f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
