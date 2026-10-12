@@ -132,7 +132,6 @@ fun LabResultsScreen(
                 } else if (!effectiveUnit.isNullOrBlank()) {
                     Text(effectiveUnit, style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
                 }
-                LabResultChart(records = detailRecords, selectedRecord = selectedPlotRecord, onSelectRecord = { selectedPlotRecord = it })
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { selectedDate = dates[(dateIndex - 2).coerceAtLeast(0)].toString() }, enabled = dateIndex > 0) { Text("前へ") }
@@ -185,9 +184,15 @@ fun LabResultsScreen(
                     items(comparisonIndices) { index ->
                         LabComparisonRow(comparisonRows.map { it[index] }, onClick = { selectedItem = visible[index].itemName })
                     }
-                } else items(detailRecords) { result ->
-                    LabResultRow(result, showDate = true, selected = result == selectedPlotRecord,
-                        onClick = { selectedPlotRecord = result })
+                } else {
+                    item {
+                        selectedItem?.let { LabItemGuidancePanel(it, effectiveUnit.orEmpty()) }
+                        LabResultChart(records = detailRecords, selectedRecord = selectedPlotRecord, onSelectRecord = { selectedPlotRecord = it })
+                    }
+                    items(detailRecords) { result ->
+                        LabResultRow(result, showDate = true, selected = result == selectedPlotRecord,
+                            onClick = { selectedPlotRecord = result })
+                    }
                 }
             }
         }
