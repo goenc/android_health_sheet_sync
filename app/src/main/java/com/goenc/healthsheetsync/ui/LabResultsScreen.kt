@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -123,15 +122,14 @@ fun LabResultsScreen(
             if (selectedItem != null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("$selectedItem の履歴", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                    if (units.size > 1) {
-                        Row(Modifier.widthIn(max = 180.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            units.forEach { unit ->
-                                FilterChip(selected = unit == effectiveUnit, onClick = { selectedUnit = unit; selectedPlotRecord = null },
-                                    label = { Text(unit.ifBlank { "単位なし" }) })
-                            }
+                    selectedItem?.let { LabItemGuidancePanel(it, effectiveUnit.orEmpty()) }
+                }
+                if (units.size > 1) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        units.forEach { unit ->
+                            FilterChip(selected = unit == effectiveUnit, onClick = { selectedUnit = unit; selectedPlotRecord = null },
+                                label = { Text(unit.ifBlank { "単位なし" }) })
                         }
-                    } else if (!effectiveUnit.isNullOrBlank()) {
-                        Text(effectiveUnit, style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
                     }
                 }
             } else {
@@ -143,21 +141,21 @@ fun LabResultsScreen(
                     TextButton(onClick = { selectedDate = dates[dateIndex + LabComparisonCount].toString() }, enabled = dateIndex + LabComparisonCount < dates.size) { Text("次へ") }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(2.8f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.weight(2.4f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(selected = !showTargetOnly, onClick = {
                             showTargetOnly = false
                             displaySettings.saveShowTargetOnly(false)
-                        }, label = { Text("全項目", fontSize = 12.sp) })
+                        }, label = { Text("全項目", fontSize = 10.sp, maxLines = 1) })
                         FilterChip(selected = showTargetOnly, onClick = {
                             showTargetOnly = true
                             displaySettings.saveShowTargetOnly(true)
-                        }, label = { Text("対象項目", fontSize = 12.sp) })
+                        }, label = { Text("対象項目", fontSize = 10.sp, maxLines = 1) })
                     }
                     comparisonDates.forEach { date ->
-                        Text("${date.monthValue}月", modifier = Modifier.weight(0.8f).padding(end = 8.dp), textAlign = TextAlign.End,
+                        Text("${date.monthValue}月", modifier = Modifier.weight(1f).padding(end = 4.dp), textAlign = TextAlign.End,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    repeat(LabComparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(0.8f)) }
+                    repeat(LabComparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(1f)) }
                 }
             }
             LazyColumn(modifier = Modifier.weight(1f).let { listModifier ->
@@ -188,7 +186,6 @@ fun LabResultsScreen(
                     }
                 } else {
                     item {
-                        selectedItem?.let { LabItemGuidancePanel(it, effectiveUnit.orEmpty()) }
                         LabResultChart(records = detailRecords, selectedRecord = selectedPlotRecord, onSelectRecord = { selectedPlotRecord = it })
                     }
                     items(detailRecords) { result ->
@@ -206,14 +203,14 @@ private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
     val item = results.first()
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(item.itemName, modifier = Modifier.weight(2.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.itemName, modifier = Modifier.weight(2.4f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             results.forEach { result ->
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
-                    modifier = Modifier.weight(0.8f).padding(end = 8.dp), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f).padding(end = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
-            repeat(LabComparisonCount - results.size) { Text("", modifier = Modifier.weight(0.8f)) }
+            repeat(LabComparisonCount - results.size) { Text("", modifier = Modifier.weight(1f)) }
         }
         HorizontalDivider(color = DividerColor)
     }
