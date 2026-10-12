@@ -61,6 +61,11 @@ fun LabResultsScreen(
         state.records.map { it.targetDate }.distinct().sortedDescending()
     }
     val effectiveDate = selectedDate?.let { date -> dates.firstOrNull { it.toString() == date } } ?: dates.firstOrNull()
+    val dateIndex = dates.indexOf(effectiveDate).coerceAtLeast(0)
+    val comparisonDates = dates.drop(dateIndex).take(2)
+    val comparisonRows = remember(state.records, comparisonDates) {
+        comparisonDates.map { dailyLabResultRows(state.records, it) }
+    }
     val visible = remember(state.records, selectedItem, effectiveDate) {
         if (selectedItem == null) {
             effectiveDate?.let { dailyLabResultRows(state.records, it) }.orEmpty()
@@ -112,14 +117,20 @@ fun LabResultsScreen(
                 }
                 LabResultChart(records = detailRecords, selectedRecord = selectedPlotRecord, onSelectRecord = { selectedPlotRecord = it })
             } else {
-                val dateIndex = dates.indexOf(effectiveDate)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { selectedDate = dates[dateIndex - 1].toString() }, enabled = dateIndex > 0) { Text("前へ") }
+                    TextButton(onClick = { selectedDate = dates[(dateIndex - 2).coerceAtLeast(0)].toString() }, enabled = dateIndex > 0) { Text("前へ") }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(effectiveDate.toString(), fontWeight = FontWeight.Bold)
-                        Text("${dateIndex + 1} / ${dates.size}", style = MaterialTheme.typography.bodySmall)
+                        Text("${comparisonDates.first().year}年", fontWeight = FontWeight.Bold)
                     }
-                    TextButton(onClick = { selectedDate = dates[dateIndex + 1].toString() }, enabled = dateIndex < dates.lastIndex) { Text("次へ") }
+                    TextButton(onClick = { selectedDate = dates[dateIndex + 2].toString() }, enabled = dateIndex + 2 < dates.size) { Text("次へ") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("", modifier = Modifier.weight(2.8f))
+                    comparisonDates.forEach { date ->
+                        Text("${date.monthValue}月", modifier = Modifier.weight(0.8f), textAlign = TextAlign.End,
+                            fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                    if (comparisonDates.size == 1) Text("", modifier = Modifier.weight(0.8f))
                 }
             }
             LazyColumn(modifier = Modifier.weight(1f).let { listModifier ->
@@ -132,8 +143,8 @@ fun LabResultsScreen(
                         onDragEnd = {
                             val dateIndex = dates.indexOf(effectiveDate)
                             val nextIndex = when {
-                                dragDistance <= -threshold -> dateIndex + 1
-                                dragDistance >= threshold -> dateIndex - 1
+                                dragDistance <= -threshold -> dateIndex + 2
+                                dragDistance >= threshold -> (dateIndex - 2).coerceAtLeast(0)
                                 else -> dateIndex
                             }
                             if (nextIndex in dates.indices) selectedDate = dates[nextIndex].toString()
@@ -143,12 +154,39 @@ fun LabResultsScreen(
                 }
             }) {
                 if (detailRecords.isEmpty()) item { Text("該当する項目はありません") }
-                items(detailRecords) { result ->
-                    LabResultRow(result, showDate = selectedItem != null, selected = result == selectedPlotRecord,
-                        onClick = { if (selectedItem == null) selectedItem = result.itemName else selectedPlotRecord = result })
+                if (selectedItem == null) {
+                    items(visible.size) { index ->
+                        LabComparisonRow(comparisonRows.map { it[index] }, onClick = { selectedItem = visible[index].itemName })
+                    }
+                } else items(detailRecords) { result ->
+                    LabResultRow(result, showDate = true, selected = result == selectedPlotRecord,
+                        onClick = { selectedPlotRecord = result })
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
+    val item = results.first()
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(buildAnnotatedString {
+                append(item.itemName)
+                if (item.unit.isNotBlank()) withStyle(SpanStyle(fontSize = 10.sp, fontWeight = FontWeight.Normal)) {
+                    append(" (${item.unit})")
+                }
+            }, modifier = Modifier.weight(2.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            results.forEach { result ->
+                Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
+                    modifier = Modifier.weight(0.8f), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = if (result.flag.isNotEmpty()) MaterialTheme.colorScheme.error else AppText)
+            }
+            if (results.size == 1) Text("", modifier = Modifier.weight(0.8f))
+        }
+        HorizontalDivider(color = DividerColor)
     }
 }
 
