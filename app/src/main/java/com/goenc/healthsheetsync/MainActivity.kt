@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
                         start = innerPadding.calculateLeftPadding(layoutDirection),
                         top = innerPadding.calculateTopPadding(),
                         end = innerPadding.calculateRightPadding(layoutDirection),
-                        bottom = (innerPadding.calculateBottomPadding() - 20.dp).coerceAtLeast(0.dp),
+                        bottom = innerPadding.calculateBottomPadding(),
                     )
                     HealthDebugScreen(
                         state = healthState,

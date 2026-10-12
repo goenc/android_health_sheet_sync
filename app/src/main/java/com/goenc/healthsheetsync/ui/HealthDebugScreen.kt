@@ -5,10 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -201,14 +204,11 @@ fun HealthDebugScreen(
                     return@Column
                 }
 
-                OutlinedButton(
-                    onClick = { showLabResults = true },
-                    modifier = Modifier.padding(horizontal = 22.dp),
-                ) { Text("検査結果") }
-
                 Box(
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 11.dp),
                 ) {
                     IconButton(
@@ -276,6 +276,12 @@ fun HealthDebugScreen(
                         }
                     }
                 }
+                OutlinedButton(
+                    onClick = { showLabResults = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RectangleShape,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                ) { Text("検査結果") }
             }
         }
     }
