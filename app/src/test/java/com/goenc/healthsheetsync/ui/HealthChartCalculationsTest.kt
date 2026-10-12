@@ -18,6 +18,29 @@ import java.time.LocalDateTime
 
 class HealthChartCalculationsTest {
     @Test
+    fun longRanges_cycleThroughMonthsAndAll() {
+        val expected = listOf(WeightChartRange.TwoMonths, WeightChartRange.ThreeMonths,
+            WeightChartRange.FourMonths, WeightChartRange.FiveMonths, WeightChartRange.SixMonths, WeightChartRange.All)
+        var range = WeightChartRange.TwoMonths
+        expected.forEach { current ->
+            assertEquals(current, range)
+            range = range.nextLongRange()
+        }
+        assertEquals(WeightChartRange.TwoMonths, range)
+    }
+
+    @Test
+    fun longRanges_useCalendarMonthsIncludingLeapYear() {
+        val end = LocalDateTime.of(2024, 8, 31, 7, 0)
+        WeightChartRange.longRanges.dropLast(1).forEachIndexed { index, range ->
+            val months = (index + 2).toLong()
+            val window = range.window(emptyList(), end)!!
+            assertEquals(end.minusMonths(months).minusDays(CHART_EMPTY_EDGE_PADDING_DAYS), window.startAt)
+            assertEquals(end.plusDays(CHART_EMPTY_EDGE_PADDING_DAYS), window.endAt)
+        }
+    }
+
+    @Test
     fun averageEstimatedTotalKcal_uses_saved_values_for_past_days() {
         val today = LocalDate.of(2026, 1, 10)
         val result = calculateAverageEstimatedTotalKcal(

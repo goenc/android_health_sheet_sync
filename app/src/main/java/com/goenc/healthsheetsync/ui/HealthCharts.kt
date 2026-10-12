@@ -93,6 +93,7 @@ internal fun WeightTrendChart(
     onSelectedDateChange: (LocalDate?) -> Unit,
     onAddManualRecord: () -> Unit,
 ) {
+    var longRange by remember { mutableStateOf(selectedRange.takeIf { it.isLongRange } ?: WeightChartRange.TwoMonths) }
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var chartEndAt by remember(sortedRecords, selectedRange) {
         mutableStateOf(sortedRecords.lastOrNull()?.measuredAt)
@@ -152,7 +153,7 @@ internal fun WeightTrendChart(
         }
     }
     val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
-    val trendDuration = if (selectedRange == WeightChartRange.SixMonths) {
+    val trendDuration = if (selectedRange == WeightChartRange.All) {
         chartRecords.firstOrNull()?.measuredAt?.let { firstAt ->
             chartRecords.lastOrNull()?.measuredAt?.let { lastAt ->
                 Duration.between(firstAt, lastAt)
@@ -446,7 +447,7 @@ internal fun WeightTrendChart(
                 monthLabelPaint.textAlign = Paint.Align.LEFT
                 val visibleStartDate = visibleWindow.startAt.toLocalDate()
                 val visibleStartMonthText = "${visibleStartDate.monthValue}月"
-                val isDotOnlyRange = selectedRange == WeightChartRange.SixMonths
+                val isDotOnlyRange = selectedRange.isLongRange
                 drawText(
                     visibleStartMonthText,
                     chartLeft,
@@ -890,7 +891,15 @@ internal fun WeightTrendChart(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
             ) {
-                WeightChartRange.entries.forEach { range ->
+                WeightChartRangeButton(
+                    range = selectedRange.takeIf { it.isLongRange } ?: longRange,
+                    selected = selectedRange.isLongRange,
+                    onClick = {
+                        longRange = if (selectedRange.isLongRange) selectedRange.nextLongRange() else longRange
+                        onSelectedRangeChange(longRange)
+                    },
+                )
+                listOf(WeightChartRange.OneMonth, WeightChartRange.TwoWeeks, WeightChartRange.OneWeek).forEach { range ->
                     WeightChartRangeButton(
                         range = range,
                         selected = range == selectedRange,

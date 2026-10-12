@@ -27,13 +27,18 @@ internal enum class WeightChartRange(
     private val startAt: (LocalDateTime) -> LocalDateTime,
     private val endAt: (LocalDateTime) -> LocalDateTime,
 ) {
-    SixMonths("ALL", { latestAt -> latestAt.minusMonths(6) }, { startAt -> startAt.plusMonths(6) }),
+    TwoMonths("2か月", { latestAt -> latestAt.minusMonths(2) }, { startAt -> startAt.plusMonths(2) }),
+    ThreeMonths("3か月", { latestAt -> latestAt.minusMonths(3) }, { startAt -> startAt.plusMonths(3) }),
+    FourMonths("4か月", { latestAt -> latestAt.minusMonths(4) }, { startAt -> startAt.plusMonths(4) }),
+    FiveMonths("5か月", { latestAt -> latestAt.minusMonths(5) }, { startAt -> startAt.plusMonths(5) }),
+    SixMonths("6か月", { latestAt -> latestAt.minusMonths(6) }, { startAt -> startAt.plusMonths(6) }),
+    All("ALL", { latestAt -> latestAt }, { startAt -> startAt }),
     OneMonth("1か月", { latestAt -> latestAt.minusMonths(1) }, { startAt -> startAt.plusMonths(1) }),
     TwoWeeks("2週間", { latestAt -> latestAt.minusWeeks(2) }, { startAt -> startAt.plusWeeks(2) }),
     OneWeek("1週間", { latestAt -> latestAt.minusWeeks(1) }, { startAt -> startAt.plusWeeks(1) });
 
     fun window(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): ChartTimeWindow? {
-        if (this == SixMonths) {
+        if (this == All) {
             val firstAt = records.firstOrNull()?.measuredAt ?: return null
             val latestAt = records.lastOrNull()?.measuredAt ?: return null
             return ChartTimeWindow(
@@ -55,13 +60,21 @@ internal enum class WeightChartRange(
     }
 
     fun minimumEndAt(records: List<DebugWeightRecord>): LocalDateTime? {
-        if (this == SixMonths) {
+        if (this == All) {
             return records.lastOrNull()?.measuredAt
         }
         val firstAt = records.firstOrNull()?.measuredAt ?: return null
         val latestAt = records.lastOrNull()?.measuredAt ?: return null
         val endForFirstRecord = endAt(firstAt)
         return if (endForFirstRecord.isAfter(latestAt)) latestAt else endForFirstRecord
+    }
+
+    val isLongRange: Boolean get() = this in longRanges
+
+    fun nextLongRange(): WeightChartRange = longRanges[(longRanges.indexOf(this) + 1) % longRanges.size]
+
+    companion object {
+        val longRanges = listOf(TwoMonths, ThreeMonths, FourMonths, FiveMonths, SixMonths, All)
     }
 }
 
