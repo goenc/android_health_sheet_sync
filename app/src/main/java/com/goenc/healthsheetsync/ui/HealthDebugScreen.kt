@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
+import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -81,10 +83,14 @@ fun HealthDebugScreen(
     onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
     dailyBodySettings: List<DailyBodySetting>,
     onSaveDailyBodySetting: (Double, Int, (String?) -> Unit) -> Unit,
+    labResultsState: LabResultsUiState = LabResultsUiState(),
+    onRefreshLabResults: () -> Unit = {},
+    onLoadLabResults: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
+    var showLabResults by remember { mutableStateOf(false) }
     var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
     var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var selectedChartDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -101,8 +107,10 @@ fun HealthDebugScreen(
         }
     }
 
-    BackHandler(enabled = showSettings || showManualInput) {
-        if (showManualInput) {
+    BackHandler(enabled = showSettings || showManualInput || showLabResults) {
+        if (showLabResults) {
+            showLabResults = false
+        } else if (showManualInput) {
             showManualInput = false
             onRefresh()
         } else {
@@ -110,7 +118,7 @@ fun HealthDebugScreen(
         }
     }
 
-    if (state.isLoading && state.availability == HealthConnectAvailability.Checking) {
+    if (!showLabResults && state.isLoading && state.availability == HealthConnectAvailability.Checking) {
         LoadingScreen(modifier = modifier)
         return
     }
@@ -121,6 +129,11 @@ fun HealthDebugScreen(
             .background(AppBackground),
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
+            if (showLabResults) {
+                LaunchedEffect(Unit) { onLoadLabResults() }
+                LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults, onBack = { showLabResults = false })
+                return@CompositionLocalProvider
+            }
             Column(
                 modifier = Modifier.fillMaxSize().let { rootModifier ->
                     if (shouldScrollRoot) {
@@ -187,6 +200,11 @@ fun HealthDebugScreen(
                     }
                     return@Column
                 }
+
+                OutlinedButton(
+                    onClick = { showLabResults = true },
+                    modifier = Modifier.padding(horizontal = 22.dp),
+                ) { Text("検査結果") }
 
                 Box(
                     modifier = Modifier

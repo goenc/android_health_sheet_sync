@@ -11,6 +11,8 @@ import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.data.LabResultsReader
+import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +27,7 @@ internal data class SpreadsheetSyncUiState(
     val isGoogleDriveAuthorizing: Boolean = false,
     val spreadsheetUploadStatus: String? = null,
     val isSpreadsheetUploading: Boolean = false,
+    val labResults: LabResultsUiState = LabResultsUiState(),
 )
 
 internal class SpreadsheetSyncCoordinator(
@@ -34,11 +37,16 @@ internal class SpreadsheetSyncCoordinator(
     private val spreadsheetUploader: SpreadsheetUploader = SpreadsheetUploader(),
     private val onStateChanged: (SpreadsheetSyncUiState) -> Unit,
 ) {
-    private var state = SpreadsheetSyncUiState()
+    private val labResultsReader = LabResultsReader(activity.applicationContext)
+    private var state = SpreadsheetSyncUiState(labResults = labResultsReader.loadCached())
     private var pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ConnectDrive
     private var automaticSpreadsheetSyncJob: Job? = null
     private var isAutomaticSpreadsheetSyncing = false
     private var automaticSpreadsheetSyncPending = false
+
+    init {
+        onStateChanged(state)
+    }
 
     private val startGoogleAuthorization = activity.registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
@@ -63,6 +71,7 @@ internal class SpreadsheetSyncCoordinator(
                 GoogleAuthorizationAction.UploadSpreadsheet -> {
                     continueSpreadsheetUpload(authorizationResult.accessToken)
                 }
+                GoogleAuthorizationAction.LoadLabResults -> continueLabResultsRead(authorizationResult.accessToken)
             }
         } catch (error: ApiException) {
             Log.e(TAG, "Google Drive authorization failed.", error)
@@ -85,12 +94,13 @@ internal class SpreadsheetSyncCoordinator(
                         )
                     }
                 }
+                GoogleAuthorizationAction.LoadLabResults -> labResultsFailure("Google認証を完了できませんでした")
             }
         }
     }
 
     fun authorizeGoogleDrive() {
-        if (state.isGoogleDriveAuthorizing) return
+        if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading || state.labResults.isLoading) return
 
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ConnectDrive
         updateState {
@@ -147,7 +157,7 @@ internal class SpreadsheetSyncCoordinator(
     }
 
     fun uploadSpreadsheetData(isHealthLoading: Boolean) {
-        if (state.isSpreadsheetUploading || isHealthLoading) return
+        if (state.isSpreadsheetUploading || state.isGoogleDriveAuthorizing || state.labResults.isLoading || isHealthLoading) return
 
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.UploadSpreadsheet
         updateState {
@@ -198,6 +208,54 @@ internal class SpreadsheetSyncCoordinator(
         automaticSpreadsheetSyncJob?.cancel()
         automaticSpreadsheetSyncJob = null
         startAutomaticSpreadsheetSync()
+    }
+
+    fun refreshLabResults(allowAuthorizationResolution: Boolean = true) {
+        if (state.labResults.isLoading) return
+        if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) {
+            labResultsFailure("Google認証・同期が完了してから更新してください")
+            return
+        }
+        pendingGoogleAuthorizationAction = GoogleAuthorizationAction.LoadLabResults
+        updateState { copy(labResults = labResults.copy(isLoading = true, status = "検査結果を取得中")) }
+        // 既存の同期で許可された同じSheetsスコープを使う。取得処理はGETのみ。
+        val request = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(SHEETS_SCOPE))).build()
+        Identity.getAuthorizationClient(activity).authorize(request)
+            .addOnSuccessListener { result ->
+                if (!result.hasResolution()) {
+                    continueLabResultsRead(result.accessToken)
+                } else if (!allowAuthorizationResolution) {
+                    labResultsFailure("Google認証が必要です。「更新」を押してください")
+                } else {
+                    val pendingIntent = result.pendingIntent
+                    if (pendingIntent == null) {
+                        labResultsFailure("Google認証画面を開けませんでした")
+                    } else {
+                        startGoogleAuthorization.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
+                    }
+                }
+            }
+            .addOnFailureListener { labResultsFailure("Google認証に失敗しました。再度更新してください") }
+    }
+
+    private fun continueLabResultsRead(accessToken: String?) {
+        if (accessToken.isNullOrBlank()) {
+            labResultsFailure("Google認証トークンを取得できませんでした。再度更新してください")
+            return
+        }
+        scope.launch {
+            try {
+                val loaded = labResultsReader.read(accessToken)
+                updateState { copy(labResults = loaded) }
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                labResultsFailure(error.message ?: "検査結果の取得に失敗しました")
+            }
+        }
+    }
+
+    private fun labResultsFailure(message: String) {
+        updateState { copy(labResults = labResults.copy(isLoading = false, status = message)) }
     }
 
     fun scheduleAutomaticSync() {
@@ -359,6 +417,7 @@ internal class SpreadsheetSyncCoordinator(
     private enum class GoogleAuthorizationAction {
         ConnectDrive,
         UploadSpreadsheet,
+        LoadLabResults,
     }
 
     private companion object {

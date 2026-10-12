@@ -150,6 +150,9 @@ class MainActivity : ComponentActivity() {
                             saveWeightMovingAverageMode(mode, onResult)
                         },
                         dailyBodySettings = healthState.dailyBodySettings,
+                        labResultsState = spreadsheetSyncState.labResults,
+                        onRefreshLabResults = { spreadsheetSyncCoordinator.refreshLabResults() },
+                        onLoadLabResults = { spreadsheetSyncCoordinator.refreshLabResults(false) },
                         onSaveDailyBodySetting = { heightCm, averageIntakeKcal, onResult ->
                             saveDailyBodySetting(heightCm, averageIntakeKcal, onResult)
                         },
