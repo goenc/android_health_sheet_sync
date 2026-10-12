@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
+import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -44,6 +45,7 @@ import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 internal fun SettingsScreen(
@@ -66,6 +68,7 @@ internal fun SettingsScreen(
     onSaveDailyBodySetting: (Double, Int, (String?) -> Unit) -> Unit,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
     onBack: () -> Unit,
+    labResultsState: LabResultsUiState = LabResultsUiState(),
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
     var weightMovingAverageError by remember { mutableStateOf<String?>(null) }
@@ -164,6 +167,11 @@ internal fun SettingsScreen(
             )
         }
         HorizontalDivider(color = DividerColor)
+    }
+    DebugSection(title = "検査結果の取得状況") {
+        Text("取得件数: ${labResultsState.records.size}件（${labResultsState.records.map { it.targetDate }.distinct().size}日分）")
+        Text("取得日時: ${labResultsState.lastUpdatedAt?.atZone(ZoneId.systemDefault())?.format(DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")) ?: "未取得"}")
+        labResultsState.status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AppMutedBlue) }
     }
     DebugSection(title = "身体設定") {
         latestDailyBodySetting?.let { setting ->

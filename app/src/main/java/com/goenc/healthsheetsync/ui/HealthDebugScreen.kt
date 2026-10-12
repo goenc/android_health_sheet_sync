@@ -199,6 +199,7 @@ fun HealthDebugScreen(
                             onSaveDailyBodySetting = onSaveDailyBodySetting,
                             onBack = { showSettings = false },
                             dailyEnergySnapshots = state.dailyEnergySnapshots,
+                            labResultsState = labResultsState,
                         )
                     }
                     return@Column
