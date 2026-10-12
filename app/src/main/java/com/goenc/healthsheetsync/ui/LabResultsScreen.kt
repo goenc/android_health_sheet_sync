@@ -154,7 +154,7 @@ fun LabResultsScreen(
                         }, label = { Text("対象項目", fontSize = 12.sp) })
                     }
                     comparisonDates.forEach { date ->
-                        Text("${date.monthValue}月", modifier = Modifier.weight(0.8f), textAlign = TextAlign.End,
+                        Text("${date.monthValue}月", modifier = Modifier.weight(0.8f).padding(end = 8.dp), textAlign = TextAlign.End,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                     repeat(LabComparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(0.8f)) }
@@ -209,7 +209,7 @@ private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
             Text(item.itemName, modifier = Modifier.weight(2.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             results.forEach { result ->
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
-                    modifier = Modifier.weight(0.8f), fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(0.8f).padding(end = 8.dp), fontSize = 14.sp, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
@@ -271,6 +271,9 @@ private fun LabResultRow(result: LabResult, showDate: Boolean, selected: Boolean
             Text(buildAnnotatedString {
                 append(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" })
                 append(result.value)
+                if (result.unit.isNotBlank()) withStyle(SpanStyle(fontSize = 10.sp, fontWeight = FontWeight.Normal)) {
+                    append(" ${result.unit}")
+                }
             },
                 color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText },
                 fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.End,
