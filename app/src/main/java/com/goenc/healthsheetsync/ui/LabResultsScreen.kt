@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -30,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -38,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 
@@ -48,6 +52,7 @@ fun LabResultsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     var selectedItem by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedUnit by rememberSaveable(selectedItem) { mutableStateOf<String?>(null) }
@@ -66,12 +71,20 @@ fun LabResultsScreen(
     val units = visible.map { it.unit }.distinct()
     val effectiveUnit = selectedUnit?.takeIf { it in units } ?: units.firstOrNull()
     val detailRecords = if (selectedItem != null) visible.filter { it.unit == effectiveUnit } else visible
-    BackHandler(enabled = selectedItem != null) { selectedItem = null }
+    BackHandler(enabled = showSettings || selectedItem != null) {
+        if (showSettings) showSettings = false else selectedItem = null
+    }
+    if (showSettings) {
+        LabResultsSettingsScreen(state = state, onRefresh = onRefresh, onBack = { showSettings = false }, modifier = modifier)
+        return
+    }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { if (selectedItem != null) selectedItem = null else onBack() }) { Text("戻る") }
             Text("検査結果", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = onRefresh, enabled = !state.isLoading) { Text("更新") }
+            IconButton(onClick = { showSettings = true }) {
+                Icon(painterResource(R.drawable.ic_settings_24), contentDescription = "検査結果の設定")
+            }
         }
         if (state.isLoading) CircularProgressIndicator()
         // 通常の取得状況は設定へ移し、対処が必要なエラーだけをここに残す。
@@ -79,7 +92,7 @@ fun LabResultsScreen(
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         if (state.records.isEmpty()) {
-            Text("検査結果はまだありません。更新でGoogle Sheetsから取得する。")
+            Text("検査結果はまだありません。設定の「更新」でGoogle Sheetsから取得する。")
             Text("ChatGPTで過去の検査結果を追加すると、ここで日付・項目名・値を確認できる。", style = MaterialTheme.typography.bodyMedium)
         } else {
             if (selectedItem != null) {
@@ -135,6 +148,19 @@ fun LabResultsScreen(
                         onClick = { if (selectedItem == null) selectedItem = result.itemName else selectedPlotRecord = result })
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LabResultsSettingsScreen(state: LabResultsUiState, onRefresh: () -> Unit, onBack: () -> Unit, modifier: Modifier) {
+    Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("戻る") }
+            Text("検査結果の設定", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
+        OutlinedButton(onClick = onRefresh, enabled = !state.isLoading, modifier = Modifier.fillMaxWidth()) {
+            Text(if (state.isLoading) "更新中" else "更新")
         }
     }
 }
