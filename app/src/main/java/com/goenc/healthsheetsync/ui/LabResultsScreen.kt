@@ -88,8 +88,9 @@ fun LabResultsScreen(
     val dates = remember(state.records) {
         state.records.map { it.targetDate }.distinct().sortedDescending()
     }
-    val effectiveDate = selectedDate?.let { date -> dates.firstOrNull { it.toString() == date } } ?: dates.firstOrNull()
-    val dateIndex = dates.indexOf(effectiveDate).coerceAtLeast(0)
+    val maxDateIndex = (dates.size - LabComparisonCount).coerceAtLeast(0)
+    val dateIndex = dates.indexOfFirst { it.toString() == selectedDate }.coerceIn(0, maxDateIndex)
+    val effectiveDate = dates.getOrNull(dateIndex)
     val comparisonDates = dates.drop(dateIndex).take(LabComparisonCount)
     val comparisonRows = remember(state.records, comparisonDates) {
         comparisonDates.map { dailyLabResultRows(state.records, it) }
@@ -148,11 +149,11 @@ fun LabResultsScreen(
                 }
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { selectedDate = dates[(dateIndex - LabComparisonCount).coerceAtLeast(0)].toString() }, enabled = dateIndex > 0) { Text("前へ") }
+                    TextButton(onClick = { selectedDate = dates[dateIndex - 1].toString() }, enabled = dateIndex > 0) { Text("前へ") }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("${comparisonDates.first().year}年", fontWeight = FontWeight.Bold)
                     }
-                    TextButton(onClick = { selectedDate = dates[dateIndex + LabComparisonCount].toString() }, enabled = dateIndex + LabComparisonCount < dates.size) { Text("次へ") }
+                    TextButton(onClick = { selectedDate = dates[dateIndex + 1].toString() }, enabled = dateIndex < maxDateIndex) { Text("次へ") }
                 }
                 Row(Modifier.fillMaxWidth().labMonthDividers(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(LabItemColumnWeight), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -180,10 +181,9 @@ fun LabResultsScreen(
                         onDragStart = { dragDistance = 0f },
                         onDragCancel = { dragDistance = 0f },
                         onDragEnd = {
-                            val dateIndex = dates.indexOf(effectiveDate)
                             val nextIndex = when {
-                                dragDistance <= -threshold -> dateIndex + LabComparisonCount
-                                dragDistance >= threshold -> (dateIndex - LabComparisonCount).coerceAtLeast(0)
+                                dragDistance <= -threshold -> (dateIndex + 1).coerceAtMost(maxDateIndex)
+                                dragDistance >= threshold -> (dateIndex - 1).coerceAtLeast(0)
                                 else -> dateIndex
                             }
                             if (nextIndex in dates.indices) selectedDate = dates[nextIndex].toString()
