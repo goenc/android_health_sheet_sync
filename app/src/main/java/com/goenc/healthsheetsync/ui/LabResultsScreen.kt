@@ -169,17 +169,19 @@ private fun LabResultsSettingsScreen(state: LabResultsUiState, onRefresh: () -> 
 private fun LabResultRow(result: LabResult, showDate: Boolean, selected: Boolean, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().background(if (selected) AppPrimary.copy(alpha = 0.08f) else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (showDate) result.targetDate.toString() else result.itemName,
+            Text(buildAnnotatedString {
+                append(if (showDate) result.targetDate.toString() else result.itemName)
+                if (!showDate && result.unit.isNotBlank()) withStyle(SpanStyle(fontSize = 10.sp, fontWeight = FontWeight.Normal)) {
+                    append(" (${result.unit})")
+                }
+            },
                 modifier = Modifier.weight(1.35f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(result.referenceRange, modifier = Modifier.weight(0.9f), fontSize = 10.sp,
+            if (showDate) Text(result.referenceRange, modifier = Modifier.weight(0.9f), fontSize = 10.sp,
                 color = AppMutedBlue, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(buildAnnotatedString {
                 append(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" })
                 append(result.value)
-                if (result.unit.isNotBlank()) withStyle(SpanStyle(fontSize = 10.sp, fontWeight = FontWeight.Normal)) {
-                    append(" ${result.unit}")
-                }
             },
                 color = if (result.flag.isNotEmpty()) MaterialTheme.colorScheme.error else AppText,
                 fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.End,

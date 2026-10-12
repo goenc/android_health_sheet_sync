@@ -12,6 +12,7 @@ internal fun dailyLabResultRows(records: List<LabResult>, date: LocalDate): List
             targetDate = date,
             itemName = template.itemName,
             value = "—",
+            unit = template.unit,
         )
     }
 }

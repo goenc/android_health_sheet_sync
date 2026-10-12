@@ -22,7 +22,7 @@ class LabResultRowsTest {
         assertEquals(listOf("項目A", "項目B", "項目C"), oldRows.map { it.itemName })
         assertEquals(oldRows.map { it.itemName }, newRows.map { it.itemName })
         assertEquals(listOf("—", "0", "2"), newRows.map { it.value })
-        assertEquals(LabResult(newDate, "項目A", "—"), newRows.first())
+        assertEquals(LabResult(newDate, "項目A", "—", "単位"), newRows.first())
         assertEquals("L", newRows[1].flag)
         assertEquals("—", oldRows.last().value)
         assertEquals(4, records.size)
