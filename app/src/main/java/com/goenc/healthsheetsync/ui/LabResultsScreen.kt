@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +51,8 @@ import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabDisplaySettingsStore
 
+private const val LabComparisonCount = 3
+
 @Composable
 fun LabResultsScreen(
     state: LabResultsUiState,
@@ -74,7 +77,7 @@ fun LabResultsScreen(
     }
     val effectiveDate = selectedDate?.let { date -> dates.firstOrNull { it.toString() == date } } ?: dates.firstOrNull()
     val dateIndex = dates.indexOf(effectiveDate).coerceAtLeast(0)
-    val comparisonDates = dates.drop(dateIndex).take(2)
+    val comparisonDates = dates.drop(dateIndex).take(LabComparisonCount)
     val comparisonRows = remember(state.records, comparisonDates) {
         comparisonDates.map { dailyLabResultRows(state.records, it) }
     }
@@ -120,25 +123,24 @@ fun LabResultsScreen(
             if (selectedItem != null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("$selectedItem の履歴", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { selectedItem = null }) { Text("日付別へ") }
-                }
-                if (units.size > 1) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        units.forEach { unit ->
-                            FilterChip(selected = unit == effectiveUnit, onClick = { selectedUnit = unit; selectedPlotRecord = null },
-                                label = { Text(unit.ifBlank { "単位なし" }) })
+                    if (units.size > 1) {
+                        Row(Modifier.widthIn(max = 180.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            units.forEach { unit ->
+                                FilterChip(selected = unit == effectiveUnit, onClick = { selectedUnit = unit; selectedPlotRecord = null },
+                                    label = { Text(unit.ifBlank { "単位なし" }) })
+                            }
                         }
+                    } else if (!effectiveUnit.isNullOrBlank()) {
+                        Text(effectiveUnit, style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
                     }
-                } else if (!effectiveUnit.isNullOrBlank()) {
-                    Text(effectiveUnit, style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
                 }
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { selectedDate = dates[(dateIndex - 2).coerceAtLeast(0)].toString() }, enabled = dateIndex > 0) { Text("前へ") }
+                    TextButton(onClick = { selectedDate = dates[(dateIndex - LabComparisonCount).coerceAtLeast(0)].toString() }, enabled = dateIndex > 0) { Text("前へ") }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("${comparisonDates.first().year}年", fontWeight = FontWeight.Bold)
                     }
-                    TextButton(onClick = { selectedDate = dates[dateIndex + 2].toString() }, enabled = dateIndex + 2 < dates.size) { Text("次へ") }
+                    TextButton(onClick = { selectedDate = dates[dateIndex + LabComparisonCount].toString() }, enabled = dateIndex + LabComparisonCount < dates.size) { Text("次へ") }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(2.8f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -155,7 +157,7 @@ fun LabResultsScreen(
                         Text("${date.monthValue}月", modifier = Modifier.weight(0.8f), textAlign = TextAlign.End,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    if (comparisonDates.size == 1) Text("", modifier = Modifier.weight(0.8f))
+                    repeat(LabComparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(0.8f)) }
                 }
             }
             LazyColumn(modifier = Modifier.weight(1f).let { listModifier ->
@@ -168,8 +170,8 @@ fun LabResultsScreen(
                         onDragEnd = {
                             val dateIndex = dates.indexOf(effectiveDate)
                             val nextIndex = when {
-                                dragDistance <= -threshold -> dateIndex + 2
-                                dragDistance >= threshold -> (dateIndex - 2).coerceAtLeast(0)
+                                dragDistance <= -threshold -> dateIndex + LabComparisonCount
+                                dragDistance >= threshold -> (dateIndex - LabComparisonCount).coerceAtLeast(0)
                                 else -> dateIndex
                             }
                             if (nextIndex in dates.indices) selectedDate = dates[nextIndex].toString()
@@ -204,19 +206,14 @@ private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
     val item = results.first()
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(buildAnnotatedString {
-                append(item.itemName)
-                if (item.unit.isNotBlank()) withStyle(SpanStyle(fontSize = 10.sp, fontWeight = FontWeight.Normal)) {
-                    append(" (${item.unit})")
-                }
-            }, modifier = Modifier.weight(2.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.itemName, modifier = Modifier.weight(2.8f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             results.forEach { result ->
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
                     modifier = Modifier.weight(0.8f), fontSize = 14.sp, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
-            if (results.size == 1) Text("", modifier = Modifier.weight(0.8f))
+            repeat(LabComparisonCount - results.size) { Text("", modifier = Modifier.weight(0.8f)) }
         }
         HorizontalDivider(color = DividerColor)
     }
