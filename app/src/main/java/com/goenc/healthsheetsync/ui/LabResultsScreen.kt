@@ -57,10 +57,11 @@ fun LabResultsScreen(
     }
     val effectiveDate = selectedDate?.let { date -> dates.firstOrNull { it.toString() == date } } ?: dates.firstOrNull()
     val visible = remember(state.records, selectedItem, effectiveDate) {
-        state.records.filter {
-            (selectedItem == null || it.itemName == selectedItem) &&
-                (selectedItem != null || it.targetDate == effectiveDate)
-        }.sortedByDescending { it.targetDate }
+        if (selectedItem == null) {
+            effectiveDate?.let { dailyLabResultRows(state.records, it) }.orEmpty()
+        } else {
+            state.records.filter { it.itemName == selectedItem }.sortedByDescending { it.targetDate }
+        }
     }
     val units = visible.map { it.unit }.distinct()
     val effectiveUnit = selectedUnit?.takeIf { it in units } ?: units.firstOrNull()
