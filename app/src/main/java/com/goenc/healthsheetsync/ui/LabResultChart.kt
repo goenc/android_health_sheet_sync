@@ -108,7 +108,7 @@ internal fun LabResultChart(
         }
         points.forEachIndexed { index, point ->
             if (point.record == selectedRecord) drawCircle(AppPrimary.copy(alpha = 0.25f), 9.dp.toPx(), offsets[index])
-            drawCircle(if (point.record.flag.isNotBlank()) errorColor else ChartBlue, 4.dp.toPx(), offsets[index])
+            drawCircle(if (point.record.flag == "H") errorColor else ChartBlue, 4.dp.toPx(), offsets[index])
         }
         labelPaint.textAlign = if (firstDay == lastDay) Paint.Align.CENTER else Paint.Align.LEFT
         drawContext.canvas.nativeCanvas.drawText(points.first().record.targetDate.format(dateFormat),

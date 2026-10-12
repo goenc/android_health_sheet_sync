@@ -209,7 +209,7 @@ private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
                     modifier = Modifier.weight(0.8f), fontSize = 14.sp, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    color = if (result.flag.isNotEmpty()) MaterialTheme.colorScheme.error else AppText)
+                    color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
             if (results.size == 1) Text("", modifier = Modifier.weight(0.8f))
         }
@@ -270,7 +270,7 @@ private fun LabResultRow(result: LabResult, showDate: Boolean, selected: Boolean
                 append(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" })
                 append(result.value)
             },
-                color = if (result.flag.isNotEmpty()) MaterialTheme.colorScheme.error else AppText,
+                color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText },
                 fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.End,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1.1f))
         }
