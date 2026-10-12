@@ -2,8 +2,9 @@ package com.goenc.healthsheetsync.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -157,24 +158,41 @@ internal fun labGuidanceFor(itemName: String, unit: String): LabItemGuidance {
 internal fun LabItemGuidancePanel(itemName: String, unit: String) {
     val guidance = labGuidanceFor(itemName, unit)
     val uriHandler = LocalUriHandler.current
+    var showExplanation by rememberSaveable(itemName, unit) { mutableStateOf(false) }
     var showSources by rememberSaveable(itemName, unit) { mutableStateOf(false) }
     var sourceError by rememberSaveable(itemName, unit) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(guidance.meaning, style = MaterialTheme.typography.bodySmall)
-        Text("見る目的：${guidance.purpose}", style = MaterialTheme.typography.bodySmall)
-        Text("臨床判断の目安", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = AppPrimary)
-        Text(guidance.clinicalGuide, style = MaterialTheme.typography.bodySmall)
-        if (guidance.sources.isNotEmpty()) {
-            TextButton(onClick = { showSources = !showSources }) { Text(if (showSources) "根拠を閉じる" else "根拠・確認日", style = MaterialTheme.typography.labelSmall) }
-            if (showSources) {
-                Text("資料確認：2026/10/12。診断基準・治療目標・救急の目安は意味が異なる。個別の治療目標は主治医と確認する。", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
-                guidance.sources.forEach { source ->
-                    TextButton(onClick = { sourceError = runCatching { uriHandler.openUri(source.url) }.isFailure }) {
-                        Text(source.title, style = MaterialTheme.typography.labelSmall)
+    TextButton(onClick = {
+        showSources = false
+        sourceError = false
+        showExplanation = true
+    }) { Text("説明") }
+    if (showExplanation) {
+        AlertDialog(
+            onDismissRequest = { showExplanation = false },
+            title = { Text("$itemName の説明") },
+            confirmButton = {
+                TextButton(onClick = { showExplanation = false }) { Text("閉じる") }
+            },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(guidance.meaning, style = MaterialTheme.typography.bodySmall)
+                    Text("見る目的：${guidance.purpose}", style = MaterialTheme.typography.bodySmall)
+                    Text("臨床判断の目安", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = AppPrimary)
+                    Text(guidance.clinicalGuide, style = MaterialTheme.typography.bodySmall)
+                    if (guidance.sources.isNotEmpty()) {
+                        TextButton(onClick = { showSources = !showSources }) { Text(if (showSources) "根拠を閉じる" else "根拠・確認日", style = MaterialTheme.typography.labelSmall) }
+                        if (showSources) {
+                            Text("資料確認：2026/10/12。診断基準・治療目標・救急の目安は意味が異なる。個別の治療目標は主治医と確認する。", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+                            guidance.sources.forEach { source ->
+                                TextButton(onClick = { sourceError = runCatching { uriHandler.openUri(source.url) }.isFailure }) {
+                                    Text(source.title, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                            if (sourceError) Text("出典を開けなかった。ブラウザの設定を確認する。", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
-                if (sourceError) Text("出典を開けなかった。ブラウザの設定を確認する。", style = MaterialTheme.typography.bodySmall)
             }
-        }
+        )
     }
 }
