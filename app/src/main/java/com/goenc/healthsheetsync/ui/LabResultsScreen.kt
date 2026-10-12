@@ -33,6 +33,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +53,18 @@ import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabDisplaySettingsStore
 
 private const val LabComparisonCount = 3
+private const val LabItemColumnWeight = 2.4f
+private const val LabValueColumnWeight = 1f
+
+private fun Modifier.labMonthDividers(): Modifier = drawBehind {
+    val gap = 4.dp.toPx()
+    val weightWidth = (size.width - gap * LabComparisonCount) /
+        (LabItemColumnWeight + LabValueColumnWeight * LabComparisonCount)
+    repeat(LabComparisonCount) { index ->
+        val x = weightWidth * (LabItemColumnWeight + LabValueColumnWeight * index) + gap * (index + 0.5f)
+        drawLine(DividerColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
+    }
+}
 
 @Composable
 fun LabResultsScreen(
@@ -140,8 +154,8 @@ fun LabResultsScreen(
                     }
                     TextButton(onClick = { selectedDate = dates[dateIndex + LabComparisonCount].toString() }, enabled = dateIndex + LabComparisonCount < dates.size) { Text("次へ") }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(2.4f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth().labMonthDividers(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(LabItemColumnWeight), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(selected = !showTargetOnly, onClick = {
                             showTargetOnly = false
                             displaySettings.saveShowTargetOnly(false)
@@ -152,10 +166,10 @@ fun LabResultsScreen(
                         }, label = { Text("対象項目", fontSize = 10.sp, maxLines = 1) })
                     }
                     comparisonDates.forEach { date ->
-                        Text("${date.monthValue}月", modifier = Modifier.weight(1f).padding(end = 4.dp), textAlign = TextAlign.End,
+                        Text("${date.monthValue}月", modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), textAlign = TextAlign.End,
                             fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                    repeat(LabComparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(1f)) }
+                    repeat(LabComparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
                 }
             }
             LazyColumn(modifier = Modifier.weight(1f).let { listModifier ->
@@ -202,15 +216,15 @@ fun LabResultsScreen(
 private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
     val item = results.first()
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(item.itemName, modifier = Modifier.weight(2.4f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth().labMonthDividers().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(item.itemName, modifier = Modifier.weight(LabItemColumnWeight), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             results.forEach { result ->
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
-                    modifier = Modifier.weight(1f).padding(end = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = when (result.flag) { "L" -> ChartBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
-            repeat(LabComparisonCount - results.size) { Text("", modifier = Modifier.weight(1f)) }
+            repeat(LabComparisonCount - results.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
         }
         HorizontalDivider(color = DividerColor)
     }
