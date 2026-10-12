@@ -3,6 +3,7 @@ package com.goenc.healthsheetsync.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,20 +48,19 @@ fun LabResultsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var newestFirst by rememberSaveable { mutableStateOf(true) }
     var selectedItem by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedUnit by rememberSaveable(selectedItem) { mutableStateOf<String?>(null) }
     var selectedPlotRecord by remember(selectedItem) { mutableStateOf<LabResult?>(null) }
-    val dates = remember(state.records, newestFirst) {
-        state.records.map { it.targetDate }.distinct().let { if (newestFirst) it.sortedDescending() else it.sorted() }
+    val dates = remember(state.records) {
+        state.records.map { it.targetDate }.distinct().sortedDescending()
     }
     val effectiveDate = selectedDate?.let { date -> dates.firstOrNull { it.toString() == date } } ?: dates.firstOrNull()
-    val visible = remember(state.records, selectedItem, effectiveDate, newestFirst) {
+    val visible = remember(state.records, selectedItem, effectiveDate) {
         state.records.filter {
             (selectedItem == null || it.itemName == selectedItem) &&
                 (selectedItem != null || it.targetDate == effectiveDate)
-        }.let { records -> if (newestFirst) records.sortedByDescending { it.targetDate } else records.sortedBy { it.targetDate } }
+        }.sortedByDescending { it.targetDate }
     }
     val units = visible.map { it.unit }.distinct()
     val effectiveUnit = selectedUnit?.takeIf { it in units } ?: units.firstOrNull()
@@ -80,9 +81,6 @@ fun LabResultsScreen(
             Text("検査結果はまだありません。更新でGoogle Sheetsから取得する。")
             Text("ChatGPTで過去の検査結果を追加すると、ここで日付・項目名・値を確認できる。", style = MaterialTheme.typography.bodyMedium)
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(selected = newestFirst, onClick = { newestFirst = !newestFirst }, label = { Text(if (newestFirst) "新しい日順" else "古い日順") })
-            }
             if (selectedItem != null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("$selectedItem の履歴", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
@@ -110,7 +108,26 @@ fun LabResultsScreen(
                     TextButton(onClick = { selectedDate = dates[dateIndex + 1].toString() }, enabled = dateIndex < dates.lastIndex) { Text("次へ") }
                 }
             }
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            LazyColumn(modifier = Modifier.weight(1f).let { listModifier ->
+                if (selectedItem != null) listModifier else listModifier.pointerInput(dates, effectiveDate) {
+                    var dragDistance = 0f
+                    val threshold = 48.dp.toPx()
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragDistance = 0f },
+                        onDragCancel = { dragDistance = 0f },
+                        onDragEnd = {
+                            val dateIndex = dates.indexOf(effectiveDate)
+                            val nextIndex = when {
+                                dragDistance <= -threshold -> dateIndex + 1
+                                dragDistance >= threshold -> dateIndex - 1
+                                else -> dateIndex
+                            }
+                            if (nextIndex in dates.indices) selectedDate = dates[nextIndex].toString()
+                        },
+                        onHorizontalDrag = { _, amount -> dragDistance += amount },
+                    )
+                }
+            }) {
                 if (detailRecords.isEmpty()) item { Text("該当する項目はありません") }
                 items(detailRecords) { result ->
                     LabResultRow(result, showDate = selectedItem != null, selected = result == selectedPlotRecord,
