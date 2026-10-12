@@ -33,6 +33,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.data.LabResultsUiState
+import com.goenc.healthsheetsync.data.ChartAxisRange
+import com.goenc.healthsheetsync.data.ChartMetric
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -69,6 +71,8 @@ internal fun SettingsScreen(
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
     onBack: () -> Unit,
     labResultsState: LabResultsUiState = LabResultsUiState(),
+    chartAxisRanges: Map<ChartMetric, ChartAxisRange> = emptyMap(),
+    onSaveChartAxisRange: (ChartMetric, ChartAxisRange?) -> Boolean = { _, _ -> false },
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
     var weightMovingAverageError by remember { mutableStateOf<String?>(null) }
@@ -97,6 +101,7 @@ internal fun SettingsScreen(
             Text("メインに戻る")
         }
     }
+    ChartAxisSettingsSection(chartAxisRanges, onSaveChartAxisRange)
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth(),

@@ -34,12 +34,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
+import com.goenc.healthsheetsync.data.ChartAxisSettingsStore
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
@@ -91,6 +93,9 @@ fun HealthDebugScreen(
     onLoadLabResults: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val chartAxisStore = remember(context) { ChartAxisSettingsStore(context.applicationContext) }
+    var chartAxisRanges by remember { mutableStateOf(chartAxisStore.load()) }
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
     var showLabResults by remember { mutableStateOf(false) }
@@ -200,6 +205,12 @@ fun HealthDebugScreen(
                             onBack = { showSettings = false },
                             dailyEnergySnapshots = state.dailyEnergySnapshots,
                             labResultsState = labResultsState,
+                            chartAxisRanges = chartAxisRanges,
+                            onSaveChartAxisRange = { metric, range ->
+                                val saved = chartAxisStore.save(metric, range)
+                                if (saved) chartAxisRanges = if (range == null) chartAxisRanges - metric else chartAxisRanges + (metric to range)
+                                saved
+                            },
                         )
                     }
                     return@Column
@@ -242,6 +253,7 @@ fun HealthDebugScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             WeightTrendChart(
+                                axisRanges = chartAxisRanges,
                                 records = state.weightRecords,
                                 dailySteps = state.stepDailyRecords,
                                 dailyEnergySnapshots = state.dailyEnergySnapshots,

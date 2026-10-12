@@ -52,6 +52,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
+import com.goenc.healthsheetsync.data.ChartAxisRange
+import com.goenc.healthsheetsync.data.ChartMetric
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -75,6 +77,7 @@ import kotlin.math.roundToInt
 
 @Composable
 internal fun WeightTrendChart(
+    axisRanges: Map<ChartMetric, ChartAxisRange> = emptyMap(),
     records: List<DebugWeightRecord>,
     dailySteps: List<DebugStepDaily>,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
@@ -230,9 +233,10 @@ internal fun WeightTrendChart(
                 val chartHeight = max(1f, chartBottom - chartTop)
                 val weightValues = chartPoints.map { it.weightKg } +
                     visibleMovingAveragePoints.map { it.weightKg }
-                val minWeight = floor(weightValues.minOrNull()!! - CHART_WEIGHT_LOWER_PADDING_KG)
-                val maxWeight = ceil(weightValues.maxOrNull()!! + CHART_WEIGHT_UPPER_PADDING_KG)
-                val weightRange = max(1.0, maxWeight - minWeight)
+                val customWeight = axisRanges[ChartMetric.Weight]
+                val minWeight = customWeight?.minimum ?: floor(weightValues.minOrNull()!! - CHART_WEIGHT_LOWER_PADDING_KG)
+                val maxWeight = customWeight?.maximum ?: ceil(weightValues.maxOrNull()!! + CHART_WEIGHT_UPPER_PADDING_KG)
+                val weightRange = customWeight?.span ?: max(1.0, maxWeight - minWeight)
                 val trendLine = calculateTrendLine(chartPoints)
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
                 val averageEstimatedTotalKcal = calculateAverageEstimatedTotalKcal(
@@ -246,10 +250,11 @@ internal fun WeightTrendChart(
                 val a1cChart = calculateA1cChart(a1cDailyRecords, visibleWindow)
                 val waistChart = calculateWaistChart(manualRecords, visibleWindow)
                 val bloodPressureChart = calculateBloodPressureChart(manualRecords, visibleWindow)
-                val solidWeightLines = generateSequence(maxWeight) { it - 1.0 }
+                val solidWeightLines = if (customWeight != null) (0..5).map { minWeight + weightRange * (it / 5.0) }
+                    else generateSequence(maxWeight) { it - 1.0 }
                     .takeWhile { it >= minWeight }
                     .toList()
-                val halfWeightLines = generateSequence(maxWeight - 0.5) { it - 1.0 }
+                val halfWeightLines = if (customWeight != null) emptyList() else generateSequence(maxWeight - 0.5) { it - 1.0 }
                     .takeWhile { it > minWeight }
                     .toList()
                 val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -290,6 +295,14 @@ internal fun WeightTrendChart(
                 }
                 val dashedGrid = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx()))
                 val waistTop = chartTop + chartHeight * WAIST_CHART_TOP_RATIO
+                val customA1c = axisRanges[ChartMetric.A1c]
+                val customWaist = axisRanges[ChartMetric.Waist]
+                val customSteps = axisRanges[ChartMetric.Steps]
+                val customBloodPressure = axisRanges[ChartMetric.BloodPressure]
+                val waistLines = customWaist?.let { listOf(it.minimum, it.maximum) } ?: WAIST_CHART_LINES_CM
+                val bloodPressureLines = customBloodPressure?.let { range ->
+                    (0..3).map { range.minimum + range.span * (it / 3.0) }
+                } ?: BLOOD_PRESSURE_CHART_LINES
 
             fun xAtTime(measuredAt: LocalDateTime): Float {
                 val totalMillis = max(1L, Duration.between(visibleWindow.startAt, visibleWindow.endAt).toMillis())
@@ -305,18 +318,20 @@ internal fun WeightTrendChart(
             }
 
             fun yAt(weightKg: Double): Float {
-                val ratio = ((weightKg - minWeight) / weightRange).toFloat()
+                val rawRatio = ((weightKg - minWeight) / weightRange).toFloat()
+                val ratio = if (customWeight != null) rawRatio.coerceIn(0f, 1f) else rawRatio
                 return chartBottom - chartHeight * ratio
             }
 
             fun a1cYAt(value: Double): Float {
-                val ratio = ((value - A1C_CHART_MIN) / (A1C_CHART_MAX - A1C_CHART_MIN)).toFloat()
+                val ratio = (customA1c?.ratio(value) ?: ((value - A1C_CHART_MIN) / (A1C_CHART_MAX - A1C_CHART_MIN))).toFloat()
                     .coerceIn(0f, 1f)
                 return chartBottom - chartHeight * ratio
             }
 
             fun waistYAt(value: Double): Float {
                 val waistHeight = max(1f, chartBottom - waistTop)
+                if (customWaist != null) return chartBottom - waistHeight * customWaist.ratio(value).toFloat().coerceIn(0f, 1f)
                 val ratio = ((value - WAIST_CHART_MIN_CM) /
                     (WAIST_CHART_GUIDE_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
                     .coerceIn(
@@ -336,15 +351,15 @@ internal fun WeightTrendChart(
             val stepChartMaxSteps = max(STEP_REFERENCE_STEPS, STEP_REFERENCE_STEPS / stepReferenceRatio)
 
             fun stepYAt(steps: Float): Float {
-                val ratio = (steps / stepChartMaxSteps).coerceIn(0f, 1f)
+                val ratio = (customSteps?.ratio(steps.toDouble())?.toFloat() ?: (steps / stepChartMaxSteps)).coerceIn(0f, 1f)
                 return chartBottom - chartHeight * ratio
             }
 
             fun bloodPressureYAt(value: Double): Float {
                 val bloodPressureBottom = chartTop + chartHeight * BLOOD_PRESSURE_CHART_HEIGHT_RATIO
                 val bloodPressureHeight = max(1f, bloodPressureBottom - chartTop)
-                val ratio = ((value - BLOOD_PRESSURE_CHART_MIN) /
-                    (BLOOD_PRESSURE_CHART_MAX - BLOOD_PRESSURE_CHART_MIN)).toFloat()
+                val ratio = (customBloodPressure?.ratio(value) ?: ((value - BLOOD_PRESSURE_CHART_MIN) /
+                    (BLOOD_PRESSURE_CHART_MAX - BLOOD_PRESSURE_CHART_MIN))).toFloat()
                     .coerceIn(0f, 1f)
                 return bloodPressureBottom - bloodPressureHeight * ratio
             }
@@ -368,7 +383,7 @@ internal fun WeightTrendChart(
                     strokeWidth = 1.dp.toPx(),
                 )
             }
-            WAIST_CHART_LINES_CM.forEach { waistCm ->
+            waistLines.forEach { waistCm ->
                 val y = waistYAt(waistCm)
                 drawLine(
                     color = ChartWaist.copy(alpha = 0.28f),
@@ -378,7 +393,7 @@ internal fun WeightTrendChart(
                     pathEffect = dashedGrid,
                 )
             }
-            BLOOD_PRESSURE_CHART_LINES.forEach { bloodPressure ->
+            bloodPressureLines.forEach { bloodPressure ->
                 val y = bloodPressureYAt(bloodPressure)
                 drawLine(
                     color = ChartBloodPressureSystolic.copy(alpha = 0.22f),
@@ -412,15 +427,16 @@ internal fun WeightTrendChart(
                 stepLabelPaint.textAlign = Paint.Align.LEFT
                 val stepLabelBaseline =
                     stepYAt(STEP_REFERENCE_STEPS) - (stepLabelPaint.fontMetrics.ascent + stepLabelPaint.fontMetrics.descent) / 2f
-                drawText("1万", chartRight + 8.dp.toPx(), stepLabelBaseline, stepLabelPaint)
+                if (customSteps == null || STEP_REFERENCE_STEPS.toDouble() in customSteps.minimum..customSteps.maximum)
+                    drawText("1万", chartRight + 8.dp.toPx(), stepLabelBaseline, stepLabelPaint)
                 waistPaint.textAlign = Paint.Align.LEFT
-                WAIST_CHART_LINES_CM.forEach { waistCm ->
-                    drawText("${waistCm.toInt()}", chartRight + 8.dp.toPx(), waistYAt(waistCm) + 4.dp.toPx(), waistPaint)
+                waistLines.forEach { waistCm ->
+                    drawText(formatDecimal(waistCm), chartRight + 8.dp.toPx(), waistYAt(waistCm) + 4.dp.toPx(), waistPaint)
                 }
                 bloodPressurePaint.textAlign = Paint.Align.LEFT
-                BLOOD_PRESSURE_CHART_LINES.forEach { bloodPressure ->
+                bloodPressureLines.forEach { bloodPressure ->
                     drawText(
-                        bloodPressure.toInt().toString(),
+                        formatDecimal(bloodPressure),
                         chartRight + 8.dp.toPx(),
                         bloodPressureYAt(bloodPressure) + 4.dp.toPx(),
                         bloodPressurePaint,
@@ -524,8 +540,7 @@ internal fun WeightTrendChart(
             }
 
             calculateStepBars(dailySteps, visibleWindow).forEach { stepBar ->
-                val stepRatio = (stepBar.steps.toFloat() / stepChartMaxSteps).coerceIn(0f, 1f)
-                val barHeight = chartHeight * stepRatio
+                val barHeight = chartBottom - stepYAt(stepBar.steps.toFloat())
                 val barWidth = 12.dp.toPx()
                 drawRect(
                     color = stepBarColor,
@@ -534,7 +549,7 @@ internal fun WeightTrendChart(
                 )
             }
             val stepReferenceY = stepYAt(STEP_REFERENCE_STEPS)
-            drawLine(
+            if (customSteps == null || STEP_REFERENCE_STEPS.toDouble() in customSteps.minimum..customSteps.maximum) drawLine(
                 color = ChartStepText.copy(alpha = 0.6f),
                 start = Offset(chartLeft, stepReferenceY),
                 end = Offset(chartRight, stepReferenceY),
@@ -544,7 +559,7 @@ internal fun WeightTrendChart(
 
             glucoseChart?.let { chart ->
                 fun glucoseYAt(value: Double): Float {
-                    val ratio = ((value - chart.minValueMgDl) / (chart.maxValueMgDl - chart.minValueMgDl))
+                    val ratio = (axisRanges[ChartMetric.Glucose]?.ratio(value) ?: ((value - chart.minValueMgDl) / (chart.maxValueMgDl - chart.minValueMgDl)))
                         .toFloat()
                         .coerceIn(0f, 1f)
                     return chartBottom - chartHeight * ratio
