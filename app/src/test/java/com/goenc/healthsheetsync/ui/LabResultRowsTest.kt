@@ -29,6 +29,32 @@ class LabResultRowsTest {
     }
 
     @Test
+    fun importedRowsWithoutUnitsShareTheExistingComparisonRow() {
+        val old = LabResult(oldDate, "項目A", "10", "単位", "1～9", "H")
+        val imported = LabResult(newDate, "項目A", "11")
+        val records = listOf(old, imported)
+        val oldRows = dailyLabResultRows(records, oldDate)
+        val newRows = dailyLabResultRows(records, newDate)
+        assertEquals(listOf("項目A"), oldRows.map { it.itemName })
+        assertEquals(oldRows.map { it.itemName }, newRows.map { it.itemName })
+        assertEquals(listOf("10"), oldRows.map { it.value })
+        assertEquals(listOf("11"), newRows.map { it.value })
+        assertEquals("単位", newRows.single().unit)
+        assertEquals("", newRows.single().referenceRange)
+        assertEquals("", newRows.single().flag)
+        assertEquals("", imported.unit)
+        assertEquals("H", old.flag)
+    }
+
+    @Test
+    fun unitlessTemplateCanComeBeforeTheKnownUnitWithoutAddingRows() {
+        val records = listOf(LabResult(oldDate, "項目A", "10"), LabResult(newDate, "項目A", "11", "単位"))
+        assertEquals(1, dailyLabResultRows(records, oldDate).size)
+        assertEquals(1, dailyLabResultRows(records, newDate).size)
+        assertEquals("単位", dailyLabResultRows(records, oldDate).single().unit)
+    }
+
+    @Test
     fun unitChangesDoNotReuseMeasurementsFromAnotherUnitOrDate() {
         val records = listOf(LabResult(oldDate, "項目A", "10", "単位1"), LabResult(newDate, "項目A", "1", "単位2"))
         val rows = dailyLabResultRows(records, newDate)

@@ -5,14 +5,22 @@ import java.time.LocalDate
 
 /** 全検査日の項目を共通順で並べる。未検査の表示行は保存・グラフには使わない。 */
 internal fun dailyLabResultRows(records: List<LabResult>, date: LocalDate): List<LabResult> {
-    val templates = records.sortedBy { it.targetDate }.distinctBy { it.itemName to it.unit }
-    val measured = records.filter { it.targetDate == date }.associateBy { it.itemName to it.unit }
+    val knownUnits = records.groupBy { it.itemName }.mapValues { (_, items) ->
+        items.map { it.unit }.filter { it.isNotBlank() }.distinct()
+    }
+    fun key(record: LabResult): Pair<String, String> = record.itemName to
+        (record.unit.ifBlank { knownUnits[record.itemName]?.singleOrNull().orEmpty() })
+    val templates = records.sortedBy { it.targetDate }.distinctBy(::key)
+    val measured = records.filter { it.targetDate == date }.associateBy(::key)
     return templates.map { template ->
-        measured[template.itemName to template.unit] ?: LabResult(
+        val itemKey = key(template)
+        measured[itemKey]?.let { result ->
+            result.copy(unit = itemKey.second)
+        } ?: LabResult(
             targetDate = date,
             itemName = template.itemName,
             value = "—",
-            unit = template.unit,
+            unit = itemKey.second,
         )
     }
 }
