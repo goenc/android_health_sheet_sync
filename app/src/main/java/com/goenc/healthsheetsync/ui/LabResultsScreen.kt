@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,8 @@ import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabDisplaySettingsStore
+import com.goenc.healthsheetsync.data.LabReferenceSettingsStore
+import com.goenc.healthsheetsync.data.applyLabReferenceRanges
 
 private const val LabItemColumnWeight = 2.4f
 private const val LabValueColumnWeight = 1f
@@ -75,6 +78,18 @@ fun LabResultsScreen(
 ) {
     val context = LocalContext.current
     val displaySettings = remember(context) { LabDisplaySettingsStore(context.applicationContext) }
+    val referenceStore = remember(context) { LabReferenceSettingsStore(context.applicationContext) }
+    var referenceSettings by remember { mutableStateOf(referenceStore.load()) }
+    var referenceError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.records) {
+        runCatching { referenceStore.initializeMissing(state.records) }
+            .onSuccess { referenceSettings = it; referenceError = null }
+            .onFailure { referenceError = it.message }
+    }
+    val displayRecords = remember(state.records, referenceSettings) {
+        applyLabReferenceRanges(state.records, referenceSettings,
+            referenceSettings.filterValues { it == null }.keys)
+    }
     var excludedItems by remember { mutableStateOf(displaySettings.excludedItems()) }
     var showTargetOnly by remember { mutableStateOf(displaySettings.showTargetOnly()) }
     var comparisonCount by remember { mutableStateOf(displaySettings.comparisonCount()) }
@@ -87,6 +102,7 @@ fun LabResultsScreen(
     var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedUnit by rememberSaveable(selectedItem) { mutableStateOf<String?>(null) }
     var selectedPlotRecord by remember(selectedItem) { mutableStateOf<LabResult?>(null) }
+    var showReferenceRange by remember { mutableStateOf(false) }
     val dates = remember(state.records) {
         state.records.map { it.targetDate }.distinct().sortedDescending()
     }
@@ -94,14 +110,14 @@ fun LabResultsScreen(
     val dateIndex = dates.indexOfFirst { it.toString() == selectedDate }.coerceIn(0, maxDateIndex)
     val effectiveDate = dates.getOrNull(dateIndex)
     val comparisonDates = dates.drop(dateIndex).take(comparisonCount)
-    val comparisonRows = remember(state.records, comparisonDates) {
-        comparisonDates.map { dailyLabResultRows(state.records, it) }
+    val comparisonRows = remember(displayRecords, comparisonDates) {
+        comparisonDates.map { dailyLabResultRows(displayRecords, it) }
     }
-    val visible = remember(state.records, selectedItem, effectiveDate) {
+    val visible = remember(displayRecords, selectedItem, effectiveDate) {
         if (selectedItem == null) {
-            effectiveDate?.let { dailyLabResultRows(state.records, it) }.orEmpty()
+            effectiveDate?.let { dailyLabResultRows(displayRecords, it) }.orEmpty()
         } else {
-            state.records.filter { it.itemName == selectedItem }.sortedByDescending { it.targetDate }
+            displayRecords.filter { it.itemName == selectedItem }.sortedByDescending { it.targetDate }
         }
     }
     val knownUnits = visible.map { it.unit }.filter { it.isNotBlank() }.distinct()
@@ -126,6 +142,15 @@ fun LabResultsScreen(
             }, onRefresh = onRefresh, onImport = onImport, onBack = { showSettings = false }, modifier = modifier)
         return
     }
+    if (showReferenceRange) selectedItem?.let { name ->
+        LabReferenceRangeDialog(name, referenceSettings[name], { showReferenceRange = false }) { range ->
+            runCatching {
+                referenceSettings = referenceStore.save(name, range)
+                referenceError = null
+                selectedPlotRecord = null
+            }.exceptionOrNull()?.let { it.message ?: "基準範囲を保存できませんでした" }
+        }
+    }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = { if (selectedItem != null) selectedItem = null else onBack() }) { Text("戻る") }
@@ -148,6 +173,13 @@ fun LabResultsScreen(
                     Text("$selectedItem の履歴", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
                     selectedItem?.let { LabItemGuidancePanel(it, effectiveUnit.orEmpty()) }
                 }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(referenceSettings[selectedItem]?.let { "共通基準: ${it.displayText}" }
+                        ?: if (selectedItem in referenceSettings) "高低判定なし" else "共通基準は未設定",
+                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { showReferenceRange = true }) { Text("基準範囲") }
+                }
+                referenceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (units.size > 1) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         units.forEach { unit ->
