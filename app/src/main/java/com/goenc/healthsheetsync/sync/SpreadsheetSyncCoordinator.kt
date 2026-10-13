@@ -13,6 +13,8 @@ import com.google.android.gms.common.api.Scope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
 import com.goenc.healthsheetsync.data.LabResultsReader
 import com.goenc.healthsheetsync.data.LabResultsUiState
+import com.goenc.healthsheetsync.data.LabResult
+import com.goenc.healthsheetsync.data.LabResultsWriter
 import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +40,9 @@ internal class SpreadsheetSyncCoordinator(
     private val onStateChanged: (SpreadsheetSyncUiState) -> Unit,
 ) {
     private val labResultsReader = LabResultsReader(activity.applicationContext)
+    private val labResultsWriter = LabResultsWriter(labResultsReader)
+    private var pendingLabImport: List<LabResult>? = null
+    private var labImportResult: ((String?) -> Unit)? = null
     private var state = SpreadsheetSyncUiState(labResults = labResultsReader.loadCached())
     private var pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ConnectDrive
     private var automaticSpreadsheetSyncJob: Job? = null
@@ -72,6 +77,7 @@ internal class SpreadsheetSyncCoordinator(
                     continueSpreadsheetUpload(authorizationResult.accessToken)
                 }
                 GoogleAuthorizationAction.LoadLabResults -> continueLabResultsRead(authorizationResult.accessToken)
+                GoogleAuthorizationAction.ImportLabResults -> continueLabResultsImport(authorizationResult.accessToken)
             }
         } catch (error: ApiException) {
             Log.e(TAG, "Google Drive authorization failed.", error)
@@ -95,6 +101,7 @@ internal class SpreadsheetSyncCoordinator(
                     }
                 }
                 GoogleAuthorizationAction.LoadLabResults -> labResultsFailure("Google認証を完了できませんでした")
+                GoogleAuthorizationAction.ImportLabResults -> labResultsFailure("Google認証を完了できませんでした")
             }
         }
     }
@@ -218,12 +225,34 @@ internal class SpreadsheetSyncCoordinator(
         }
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.LoadLabResults
         updateState { copy(labResults = labResults.copy(isLoading = true, status = "検査結果を取得中")) }
-        // 既存の同期で許可された同じSheetsスコープを使う。取得処理はGETのみ。
+        authorizeLabResults(allowAuthorizationResolution)
+    }
+
+    fun importLabResults(records: List<LabResult>, onResult: (String?) -> Unit) {
+        if (state.labResults.isLoading || state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) {
+            onResult("取得・認証・同期が完了してから保存してください")
+            return
+        }
+        if (records.isEmpty()) {
+            onResult("取り込む検査結果がありません")
+            return
+        }
+        pendingLabImport = records.toList()
+        labImportResult = onResult
+        pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ImportLabResults
+        updateState { copy(labResults = labResults.copy(isLoading = true, status = "検査結果の保存権限を確認中")) }
+        authorizeLabResults(true)
+    }
+
+    private fun authorizeLabResults(allowAuthorizationResolution: Boolean) {
+        // 取得・利用者が確定した追記とも、既存同期と同じSheetsスコープを使う。
         val request = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(SHEETS_SCOPE))).build()
         Identity.getAuthorizationClient(activity).authorize(request)
             .addOnSuccessListener { result ->
                 if (!result.hasResolution()) {
-                    continueLabResultsRead(result.accessToken)
+                    if (pendingGoogleAuthorizationAction == GoogleAuthorizationAction.ImportLabResults) {
+                        continueLabResultsImport(result.accessToken)
+                    } else continueLabResultsRead(result.accessToken)
                 } else if (!allowAuthorizationResolution) {
                     labResultsFailure("Google認証が必要です。「更新」を押してください")
                 } else {
@@ -256,6 +285,42 @@ internal class SpreadsheetSyncCoordinator(
 
     private fun labResultsFailure(message: String) {
         updateState { copy(labResults = labResults.copy(isLoading = false, status = message)) }
+        finishLabImport(message)
+    }
+
+    private fun finishLabImport(error: String?) {
+        val callback = labImportResult
+        labImportResult = null
+        pendingLabImport = null
+        callback?.invoke(error)
+    }
+
+    private fun continueLabResultsImport(accessToken: String?) {
+        val records = pendingLabImport ?: return
+        if (accessToken.isNullOrBlank()) {
+            labResultsFailure("Google認証トークンを取得できませんでした")
+            return
+        }
+        scope.launch {
+            try {
+                updateState { copy(labResults = labResults.copy(status = "検査結果を保存中")) }
+                val saved = labResultsWriter.append(accessToken, records)
+                // 追記後の再取得失敗を保存失敗とは扱わない。
+                try {
+                    val loaded = labResultsReader.read(accessToken)
+                    updateState { copy(labResults = loaded.copy(status =
+                        "${saved.addedCount}件を保存、同一結果${saved.duplicateCount}件を除外")) }
+                } catch (error: Exception) {
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    updateState { copy(labResults = labResults.copy(isLoading = false,
+                        status = "${saved.addedCount}件を保存済み。表示の再取得に失敗しました。「更新」を押してください")) }
+                }
+                finishLabImport(null)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                labResultsFailure(error.message ?: "検査結果の保存に失敗しました")
+            }
+        }
     }
 
     fun scheduleAutomaticSync() {
@@ -418,6 +483,7 @@ internal class SpreadsheetSyncCoordinator(
         ConnectDrive,
         UploadSpreadsheet,
         LoadLabResults,
+        ImportLabResults,
     }
 
     private companion object {

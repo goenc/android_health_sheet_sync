@@ -153,6 +153,7 @@ class MainActivity : ComponentActivity() {
                         labResultsState = spreadsheetSyncState.labResults,
                         onRefreshLabResults = { spreadsheetSyncCoordinator.refreshLabResults() },
                         onLoadLabResults = { spreadsheetSyncCoordinator.refreshLabResults(false) },
+                        onImportLabResults = { records, onResult -> spreadsheetSyncCoordinator.importLabResults(records, onResult) },
                         onSaveDailyBodySetting = { heightCm, averageIntakeKcal, onResult ->
                             saveDailyBodySetting(heightCm, averageIntakeKcal, onResult)
                         },

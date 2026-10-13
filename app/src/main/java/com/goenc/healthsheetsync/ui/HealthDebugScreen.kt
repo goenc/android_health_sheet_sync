@@ -43,6 +43,7 @@ import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.data.ChartAxisSettingsStore
 import com.goenc.healthsheetsync.data.LabResultsUiState
+import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -91,6 +92,7 @@ fun HealthDebugScreen(
     labResultsState: LabResultsUiState = LabResultsUiState(),
     onRefreshLabResults: () -> Unit = {},
     onLoadLabResults: () -> Unit = {},
+    onImportLabResults: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -141,7 +143,8 @@ fun HealthDebugScreen(
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
             if (showLabResults) {
-                LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults, onBack = { showLabResults = false })
+                LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults,
+                    onImport = onImportLabResults, onBack = { showLabResults = false })
                 return@CompositionLocalProvider
             }
             Column(

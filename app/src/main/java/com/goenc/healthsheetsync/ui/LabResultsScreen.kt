@@ -69,6 +69,7 @@ private fun Modifier.labMonthDividers(comparisonCount: Int): Modifier = drawBehi
 fun LabResultsScreen(
     state: LabResultsUiState,
     onRefresh: () -> Unit,
+    onImport: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -119,7 +120,7 @@ fun LabResultsScreen(
             onItemChecked = { name, checked ->
                 excludedItems = if (checked) excludedItems - name else excludedItems + name
                 displaySettings.saveExcludedItems(excludedItems)
-            }, onRefresh = onRefresh, onBack = { showSettings = false }, modifier = modifier)
+            }, onRefresh = onRefresh, onImport = onImport, onBack = { showSettings = false }, modifier = modifier)
         return
     }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -247,9 +248,15 @@ private fun LabResultsSettingsScreen(
     onComparisonCountChanged: (Int) -> Unit,
     onItemChecked: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
+    onImport: (List<LabResult>, (String?) -> Unit) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier,
 ) {
+    var showImport by rememberSaveable { mutableStateOf(false) }
+    if (showImport) {
+        LabResultsImportScreen(state, onImport, { showImport = false }, modifier)
+        return
+    }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("戻る") }
@@ -258,6 +265,7 @@ private fun LabResultsSettingsScreen(
         OutlinedButton(onClick = onRefresh, enabled = !state.isLoading, modifier = Modifier.fillMaxWidth()) {
             Text(if (state.isLoading) "更新中" else "更新")
         }
+        state.status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         Text("表示する月数", fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             (1..3).forEach { count ->
@@ -278,6 +286,10 @@ private fun LabResultsSettingsScreen(
                 }
                 HorizontalDivider(color = DividerColor)
             }
+        }
+        LabResultsPhotoShareButton(itemNames, enabled = !state.isLoading)
+        OutlinedButton(onClick = { showImport = true }, enabled = !state.isLoading, modifier = Modifier.fillMaxWidth()) {
+            Text("検査結果を取り込む")
         }
     }
 }
