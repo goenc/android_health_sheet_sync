@@ -172,7 +172,7 @@ fun LabResultsScreen(
                         }, label = { Text("対象項目", fontSize = 10.sp, maxLines = 1) })
                     }
                     comparisonDates.forEach { date ->
-                        Text("${date.monthValue}月", modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), textAlign = TextAlign.End,
+                        Text("${date.monthValue}月", modifier = Modifier.weight(LabValueColumnWeight), textAlign = TextAlign.Center,
                             fontWeight = FontWeight.Bold, fontSize = comparisonFontSize)
                     }
                     repeat(comparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
@@ -228,8 +228,8 @@ private fun LabComparisonRow(results: List<LabResult>, comparisonCount: Int, onC
                 maxLines = if (comparisonCount == 3) 1 else 2, overflow = TextOverflow.Ellipsis)
             results.forEach { result ->
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
-                    modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), fontSize = fontSize, fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(LabValueColumnWeight), fontSize = fontSize, fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = when (result.flag) { "L" -> LabLowValueBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
             repeat(comparisonCount - results.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }

@@ -105,6 +105,9 @@ fun HealthDebugScreen(
     val chartSelectionDate = selectedChartDate ?: latestChartTargetDate(state.weightRecords)
     val shouldScrollRoot = showManualInput || showSettings
 
+    // 検査結果を開く前に取得を始め、保存済みの結果はそのまま表示に使う。
+    LaunchedEffect(Unit) { onLoadLabResults() }
+
     LaunchedEffect(Unit) {
         while (true) {
             val zoneId = ZoneId.systemDefault()
@@ -138,7 +141,6 @@ fun HealthDebugScreen(
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
             if (showLabResults) {
-                LaunchedEffect(Unit) { onLoadLabResults() }
                 LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults, onBack = { showLabResults = false })
                 return@CompositionLocalProvider
             }
