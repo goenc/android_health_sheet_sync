@@ -67,12 +67,11 @@ internal fun LabResultsImportScreen(
                 itemsIndexed(records) { index, record ->
                     Column(Modifier.fillMaxWidth().clickable(enabled = !busy) { editingIndex = index }.padding(vertical = 8.dp)) {
                         Text("${record.targetDate}  ${record.itemName}")
-                        Text("${record.value} ${record.unit}  ${record.flag}")
-                        if (record.referenceRange.isNotBlank()) Text("基準範囲 ${record.referenceRange}")
+                        Text(record.value)
                         plan?.conflicts?.firstOrNull { it.incoming == record }?.let { conflict ->
                             Text(conflict.reason + "。修正または除外が必要。", color = MaterialTheme.colorScheme.error)
                             conflict.existing.forEach { current ->
-                                Text("保存済み: ${current.value} ${current.unit} ${current.flag} ／ 基準範囲 ${current.referenceRange}",
+                                Text("保存済み: ${current.value}",
                                     style = MaterialTheme.typography.bodySmall)
                             }
                         }
@@ -108,10 +107,9 @@ internal fun LabResultsImportScreen(
 
 @Composable
 private fun EditImportedLabResult(record: LabResult, onDismiss: () -> Unit, onRemove: () -> Unit, onSave: (LabResult) -> Unit) {
-    var fields by remember(record) { mutableStateOf(listOf(record.targetDate.toString(), record.itemName,
-        record.value, record.unit, record.referenceRange, record.flag)) }
+    var fields by remember(record) { mutableStateOf(listOf(record.targetDate.toString(), record.itemName, record.value)) }
     var error by remember { mutableStateOf<String?>(null) }
-    val labels = listOf("検査日（YYYY-MM-DD）", "項目名", "値", "単位", "基準範囲", "高低表示（H・L・空欄）")
+    val labels = listOf("検査日（YYYY-MM-DD）", "項目名", "値")
     AlertDialog(onDismissRequest = onDismiss, title = { Text("検査結果を修正") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             fields.forEachIndexed { index, value ->
@@ -123,7 +121,7 @@ private fun EditImportedLabResult(record: LabResult, onDismiss: () -> Unit, onRe
         }
     }, confirmButton = {
         TextButton(onClick = {
-            runCatching { parseLabResults(listOf(listOf("targetDate", "itemName", "value", "unit", "referenceRange", "flag"), fields)).single() }
+            runCatching { parseLabResults(listOf(listOf("targetDate", "itemName", "value"), fields)).single() }
                 .onSuccess(onSave).onFailure { error = it.message }
         }) { Text("修正を反映") }
     }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })

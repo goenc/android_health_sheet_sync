@@ -104,9 +104,12 @@ fun LabResultsScreen(
             state.records.filter { it.itemName == selectedItem }.sortedByDescending { it.targetDate }
         }
     }
-    val units = visible.map { it.unit }.distinct()
+    val knownUnits = visible.map { it.unit }.filter { it.isNotBlank() }.distinct()
+    val units = if (knownUnits.size == 1) knownUnits else visible.map { it.unit }.distinct()
     val effectiveUnit = selectedUnit?.takeIf { it in units } ?: units.firstOrNull()
-    val detailRecords = if (selectedItem != null) visible.filter { it.unit == effectiveUnit } else visible
+    val detailRecords = if (selectedItem != null) visible.filter {
+        it.unit == effectiveUnit || (knownUnits.size == 1 && it.unit.isBlank())
+    } else visible
     val comparisonIndices = visible.indices.filter { !showTargetOnly || visible[it].itemName !in excludedItems }
     BackHandler(enabled = showSettings || selectedItem != null) {
         if (showSettings) showSettings = false else selectedItem = null

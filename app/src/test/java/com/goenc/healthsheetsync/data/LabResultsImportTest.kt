@@ -8,6 +8,21 @@ import org.junit.Test
 
 class LabResultsImportTest {
     @Test
+    fun readsOnlyDateItemAndValueAndExcludesStoredRecordWithoutComparingMetadata() {
+        val simple = """[{"targetDate":"2026-10-01","itemName":"試験項目","value":"1.20"}]"""
+        val incoming = parseLabResultsImport(simple).single()
+        val existing = incoming.copy(unit = "mg/dL", referenceRange = "0～2", flag = "H")
+        val plan = planLabResultsImport(listOf(incoming), listOf(existing))
+        assertEquals(listOf(incoming), plan.duplicates)
+        assertTrue(plan.conflicts.isEmpty())
+        assertEquals("mg/dL", existing.unit)
+        val legacy = simple.replace("\"value\":\"1.20\"", "\"value\":\"1.20\",\"unit\":null,\"referenceRange\":\"other\",\"flag\":\"X\"")
+        assertEquals(incoming, parseLabResultsImport(legacy).single())
+        val changed = incoming.copy(value = "1.30")
+        assertEquals(1, planLabResultsImport(listOf(changed), listOf(existing)).conflicts.size)
+    }
+
+    @Test
     fun parsesArrayAndJsonCodeFenceWithoutChangingMeasurementText() {
         val json = """
             ```json
@@ -23,12 +38,14 @@ class LabResultsImportTest {
         assertEquals(2, records.size)
         assertEquals("<= 5.00", records.first().value)
         assertEquals("(-)", records.last().value)
-        assertEquals("H", records.first().flag)
+        assertEquals("", records.first().flag)
+        assertEquals("", records.first().unit)
+        assertEquals("", records.first().referenceRange)
     }
 
     @Test
     fun rejectsEmptyMalformedNonStringMissingAndInvalidRows() {
-        val valid = jsonRecord()
+        val valid = "[${jsonRecord()}]"
         val invalidInputs = listOf(
             "",
             "[]",
@@ -37,8 +54,7 @@ class LabResultsImportTest {
             valid.replace("\"value\":\"1.20\"", "\"value\":1.20"),
             valid.replace("\"value\":\"1.20\"", "\"value\":\"\""),
             valid.replace("\"targetDate\":\"2026-10-01\"", "\"targetDate\":\"2026-02-30\""),
-            valid.replace("\"flag\":\"\"", "\"flag\":\"X\""),
-            valid.replace(",\"unit\":\"mg/dL\"", ""),
+            valid.replace("\"value\":\"1.20\"", "\"missing\":\"1.20\""),
         )
 
         invalidInputs.forEach { input ->
@@ -103,7 +119,9 @@ class LabResultsImportTest {
         assertTrue(prompt.contains("末尾0"))
         assertTrue(prompt.contains("未読"))
         assertTrue(prompt.contains("JSON配列から除外"))
-        assertTrue(prompt.contains("同じtargetDate・itemName・unit"))
+        assertTrue(prompt.contains("同じtargetDate・itemNameの行"))
+        assertTrue(prompt.contains("次の3キーだけ"))
+        assertTrue(prompt.contains("JSONに含めない"))
         assertTrue(prompt.contains("別の検査を統合しない"))
         assertTrue(prompt.contains("患者名"))
         assertTrue(prompt.contains("カルテ番号"))

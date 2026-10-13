@@ -78,7 +78,7 @@ class LabResultsWriterTest {
 
         writer.append("token", listOf(record))
 
-        assertEquals(listOf(listOf("0.00", "試験項目", "2026-10-01", "L", "0～1", "mg/dL")), posted.single())
+        assertEquals(listOf(listOf("0.00", "試験項目", "2026-10-01", "", "", "")), posted.single())
     }
 
     @Test
@@ -96,7 +96,7 @@ class LabResultsWriterTest {
     }
 
     @Test
-    fun rejectsInvalidEditedFlagBeforeFetchingOrPosting() = runBlocking {
+    fun rejectsEmptyEditedValueBeforeFetchingOrPosting() = runBlocking {
         var fetchCount = 0
         var postCount = 0
         val writer = testWriter(
@@ -105,7 +105,7 @@ class LabResultsWriterTest {
             onPost = { _, _ -> postCount++ },
         )
 
-        val error = runCatching { writer.append("token", listOf(record.copy(flag = "X"))) }.exceptionOrNull()
+        val error = runCatching { writer.append("token", listOf(record.copy(value = ""))) }.exceptionOrNull()
 
         assertTrue(error is IllegalArgumentException)
         assertEquals(0, fetchCount)

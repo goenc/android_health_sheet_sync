@@ -8,10 +8,8 @@ private val LAB_RESULT_IMPORT_FIELDS = setOf(
     "targetDate",
     "itemName",
     "value",
-    "unit",
-    "referenceRange",
-    "flag",
 )
+private val LEGACY_LAB_RESULT_IMPORT_FIELDS = setOf("unit", "referenceRange", "flag")
 
 /** JSONの行単位で利用者へ返せる検査結果取り込みエラー。 */
 internal class LabResultsImportException(
@@ -39,7 +37,7 @@ internal data class LabResultsImportConflict(
 /**
  * ChatGPTから返された検査結果JSONを検証して、保存可能な検査結果へ変換する。
  *
- * トップレベルは配列だけを許可する。各要素は6項目をすべて持つJSONオブジェクトで、
+ * トップレベルは配列だけを許可する。各要素は日付・項目名・値を持つJSONオブジェクトで、
  * すべての値は文字列でなければならない。値は数値化せず、外側の空白だけを除去する。
  */
 internal fun parseLabResultsImport(text: String): List<LabResult> {
@@ -79,8 +77,8 @@ internal fun parseLabResultsImport(text: String): List<LabResult> {
         val record = first.value
         val rows = duplicate.joinToString(", ") { (index, _) -> (index + 1).toString() }
         throw LabResultsImportException(
-            "同じ日付・項目名・単位の検査結果が重複しています（${rows}件目: " +
-                "${record.targetDate}, ${record.itemName}, ${record.unit.ifBlank { "単位なし" }}）",
+            "同じ日付・項目名の検査結果が重複しています（${rows}件目: " +
+                "${record.targetDate}, ${record.itemName}）",
             rowNumber = first.index + 1,
             itemName = record.itemName,
         )
@@ -109,7 +107,7 @@ internal fun planLabResultsImport(
             conflicts += LabResultsImportConflict(
                 incoming = record,
                 existing = emptyList(),
-                reason = "取り込みデータ内で同じ日付・項目名・単位が重複しています",
+                reason = "取り込みデータ内で同じ日付・項目名が重複しています",
             )
             return@forEach
         }
@@ -125,16 +123,11 @@ internal fun planLabResultsImport(
             else -> {
                 val current = sameDateAndItem.single()
                 when {
-                    current.importKey() != record.importKey() -> conflicts += LabResultsImportConflict(
-                        incoming = record,
-                        existing = sameDateAndItem,
-                        reason = "同日・同項目に既存と異なる単位があります",
-                    )
-                    current == record -> duplicates += record
+                    current.value == record.value -> duplicates += record
                     else -> conflicts += LabResultsImportConflict(
                         incoming = record,
                         existing = sameDateAndItem,
-                        reason = "同日・同項目・同単位の値が既存結果と異なります",
+                        reason = "同日・同項目の値が保存済みの結果と異なります",
                     )
                 }
             }
@@ -165,24 +158,22 @@ internal fun buildLabResultsPrompt(existingItemNames: Collection<String>): Strin
     }
 
     return """
-        検査票から検査結果を読み取り、出力はJSONのみ、次の6項目を持つJSON配列だけを返してください。
+        検査票から検査結果を読み取り、次の3項目だけを持つJSON配列を返してください。出力はJSONのみにしてください。
         説明文、患者名、カルテ番号、画像の内容、Markdown、コードフェンスは出力しないでください。
 
         既存項目名（同じ意味だと確実に判断できる検査だけ表記を合わせる。別の検査を統合しない）:
         $itemNameSection
 
-        各要素は次の6キーを必ず持ち、すべて文字列にしてください。
+        各要素は次の3キーだけを持ち、すべて文字列にしてください。
         targetDate: 検査日をYYYY-MM-DDで記載
         itemName: 検査項目名
         value: 検査票の値を原文のまま記載
-        unit: 単位。記載がなければ空文字列
-        referenceRange: 検査票に記載された基準値。記載がなければ空文字列
-        flag: 検査票の↑はH、↓はL、それ以外は空文字列
+        単位、基準範囲、高低表示（unit、referenceRange、flag）はJSONに含めないでください。
 
         定性値、(-)などの記号、不等号付きの値、小数点以下の末尾0を含む値は文字列のまま転記してください。
         読み取れる全項目を抽出してください。読めない値または検査日が不明な項目は、推測せずJSON配列から除外してください。
-        未読項目はitemNameごとに把握し、値を作らないでください。同じtargetDate・itemName・unitの行を二つ以上出力しないでください。
-        flagは検査票の矢印だけを転記し、医学的な判定を追加しないでください。
+        未読項目はitemNameごとに把握し、値を作らないでください。同じtargetDate・itemNameの行を二つ以上出力しないでください。
+        医学的な判定を追加しないでください。
         JSON配列以外の文字列は出力しないでください。JSONのみで返してください。
     """.trimIndent()
 }
@@ -193,7 +184,7 @@ private fun parseImportObject(json: JSONObject, rowNumber: Int): LabResult {
     if (missing.isNotEmpty()) {
         throw importError(rowNumber, null, "必須キーがありません: ${missing.sorted().joinToString(", ")}")
     }
-    val extra = keys - LAB_RESULT_IMPORT_FIELDS
+    val extra = keys - LAB_RESULT_IMPORT_FIELDS - LEGACY_LAB_RESULT_IMPORT_FIELDS
     if (extra.isNotEmpty()) {
         throw importError(rowNumber, null, "未対応のキーがあります: ${extra.sorted().joinToString(", ")}")
     }
@@ -224,18 +215,10 @@ private fun parseImportObject(json: JSONObject, rowNumber: Int): LabResult {
         throw importError(rowNumber, itemName, "valueは必須です。読めない値を推測して補わないでください")
     }
 
-    val flag = fields.getValue("flag").uppercase()
-    if (flag !in setOf("", "H", "L")) {
-        throw importError(rowNumber, itemName, "flagはH、L、または空文字列にしてください")
-    }
-
     return LabResult(
         targetDate = targetDate,
         itemName = itemName,
         value = value,
-        unit = fields.getValue("unit"),
-        referenceRange = fields.getValue("referenceRange"),
-        flag = flag,
     )
 }
 
@@ -257,14 +240,13 @@ private fun importError(rowNumber: Int, itemName: String?, detail: String): LabR
     return LabResultsImportException("検査結果JSONの${rowNumber}件目$item: $detail", rowNumber, itemName)
 }
 
-private fun LabResult.importKey(): LabResultImportKey = LabResultImportKey(targetDate, itemName, unit)
+private fun LabResult.importKey(): LabResultImportKey = LabResultImportKey(targetDate, itemName)
 
 private fun LabResult.dateAndItemKey(): LabResultDateAndItemKey = LabResultDateAndItemKey(targetDate, itemName)
 
 private data class LabResultImportKey(
     val targetDate: LocalDate,
     val itemName: String,
-    val unit: String,
 )
 
 private data class LabResultDateAndItemKey(

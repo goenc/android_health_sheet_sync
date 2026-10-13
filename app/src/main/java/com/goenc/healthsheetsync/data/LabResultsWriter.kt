@@ -74,26 +74,23 @@ private suspend fun postLabResultsRows(accessToken: String, values: List<List<St
 
 private fun validateLabResultsForWrite(records: List<LabResult>): List<LabResult> {
     if (records.isEmpty()) return emptyList()
-    val rows = listOf(listOf("targetDate", "itemName", "value", "unit", "referenceRange", "flag")) +
+    val rows = listOf(listOf("targetDate", "itemName", "value")) +
         records.map { record ->
             listOf(
                 record.targetDate.toString(),
                 record.itemName,
                 record.value,
-                record.unit,
-                record.referenceRange,
-                record.flag,
             )
         }
-    // UI編集後の値も、JSON取り込み直後と同じ必須値・flag検証を通す。
+    // 取り込みの保存対象は日付・項目名・値のみ。既存行の付加情報は変更しない。
     parseLabResults(rows)
     return records.map { record ->
         record.copy(
             itemName = record.itemName.trim(),
             value = record.value.trim(),
-            unit = record.unit.trim(),
-            referenceRange = record.referenceRange.trim(),
-            flag = record.flag.trim().uppercase(),
+            unit = "",
+            referenceRange = "",
+            flag = "",
         )
     }
 }
