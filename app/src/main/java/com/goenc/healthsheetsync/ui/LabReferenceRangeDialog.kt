@@ -27,21 +27,24 @@ import com.goenc.healthsheetsync.data.LabReferenceRange
 internal fun LabReferenceRangeDialog(
     itemName: String,
     range: LabReferenceRange?,
+    unit: String,
     onDismiss: () -> Unit,
-    onSave: (LabReferenceRange?) -> String?,
+    onSave: (LabReferenceRange?, String) -> String?,
 ) {
     var minimum by remember(itemName) { mutableStateOf(range?.minimum?.toPlainString().orEmpty()) }
     var maximum by remember(itemName) { mutableStateOf(range?.maximum?.toPlainString().orEmpty()) }
     var minimumInclusive by remember(itemName) { mutableStateOf(range?.minimumInclusive ?: true) }
     var maximumInclusive by remember(itemName) { mutableStateOf(range?.maximumInclusive ?: true) }
     var error by remember { mutableStateOf<String?>(null) }
+    var unitText by remember(itemName) { mutableStateOf(unit) }
     fun save(value: LabReferenceRange?) {
-        val failure = onSave(value)
+        val failure = onSave(value, unitText)
         if (failure == null) onDismiss() else error = failure
     }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("$itemName の基準範囲") }, text = {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("$itemName の項目設定") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("この項目の全日付に共通で適用する。今後の取り込みにも使用する。")
+            OutlinedTextField(unitText, { unitText = it }, label = { Text("単位（なしは空欄）") }, singleLine = true)
             OutlinedTextField(minimum, { minimum = it }, label = { Text("下限（空欄可）") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
             Row(verticalAlignment = Alignment.CenterVertically) {

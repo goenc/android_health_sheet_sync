@@ -123,7 +123,7 @@ internal fun planLabResultsImport(
             else -> {
                 val current = sameDateAndItem.single()
                 when {
-                    current.value == record.value -> duplicates += record
+                    labResultValuesEqual(current.value, record.value) -> duplicates += record
                     else -> conflicts += LabResultsImportConflict(
                         incoming = record,
                         existing = sameDateAndItem,

@@ -80,14 +80,15 @@ fun LabResultsScreen(
     val displaySettings = remember(context) { LabDisplaySettingsStore(context.applicationContext) }
     val referenceStore = remember(context) { LabReferenceSettingsStore(context.applicationContext) }
     var referenceSettings by remember { mutableStateOf(referenceStore.load()) }
+    var itemUnits by remember { mutableStateOf(referenceStore.units()) }
     var referenceError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(state.records) {
         runCatching { referenceStore.initializeMissing(state.records) }
-            .onSuccess { referenceSettings = it; referenceError = null }
+            .onSuccess { referenceSettings = it; itemUnits = referenceStore.units(); referenceError = null }
             .onFailure { referenceError = it.message }
     }
-    val displayRecords = remember(state.records, referenceSettings) {
-        applyLabReferenceRanges(state.records, referenceSettings,
+    val displayRecords = remember(state.records, referenceSettings, itemUnits) {
+        applyLabReferenceRanges(state.records.map { it.copy(unit = itemUnits[it.itemName] ?: it.unit) }, referenceSettings,
             referenceSettings.filterValues { it == null }.keys)
     }
     var excludedItems by remember { mutableStateOf(displaySettings.excludedItems()) }
@@ -143,9 +144,10 @@ fun LabResultsScreen(
         return
     }
     if (showReferenceRange) selectedItem?.let { name ->
-        LabReferenceRangeDialog(name, referenceSettings[name], { showReferenceRange = false }) { range ->
+        LabReferenceRangeDialog(name, referenceSettings[name], itemUnits[name].orEmpty(), { showReferenceRange = false }) { range, unit ->
             runCatching {
-                referenceSettings = referenceStore.save(name, range)
+                referenceSettings = referenceStore.save(name, range, unit)
+                itemUnits = referenceStore.units()
                 referenceError = null
                 selectedPlotRecord = null
             }.exceptionOrNull()?.let { it.message ?: "基準範囲を保存できませんでした" }
@@ -177,7 +179,7 @@ fun LabResultsScreen(
                     Text(referenceSettings[selectedItem]?.let { "共通基準: ${it.displayText}" }
                         ?: if (selectedItem in referenceSettings) "高低判定なし" else "共通基準は未設定",
                         modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = { showReferenceRange = true }) { Text("基準範囲") }
+                    TextButton(onClick = { showReferenceRange = true }) { Text("項目設定") }
                 }
                 referenceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (units.size > 1) {

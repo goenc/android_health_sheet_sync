@@ -11,61 +11,68 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 
-/** 検査結果を取得する。携帯側のミラー同期には含めない。 */
+/** Sheetsの正規化テーブルを読み、SQLiteへトランザクション保存する。 */
 internal class LabResultsReader(context: Context) {
-    private val cache = AtomicFile(File(context.noBackupFilesDir, "lab_results_cache.json"))
+    private val database = LabDatabase.get(context)
+    private val referenceSettings = LabReferenceSettingsStore(context)
+    private val legacyCache = AtomicFile(File(context.noBackupFilesDir, "lab_results_cache.json"))
 
     fun loadCached(): LabResultsUiState = runCatching {
-        val json = cache.openRead().bufferedReader().use { JSONObject(it.readText()) }
-        LabResultsUiState(
-            records = parseLabResults(json.getJSONArray("values").toRows()),
-            lastUpdatedAt = Instant.parse(json.getString("updatedAt")),
-        )
-    }.getOrDefault(LabResultsUiState())
+        if (database.metadata("legacy_cache_migrated") == null) {
+            if (legacyCache.baseFile.exists()) {
+                val json = legacyCache.openRead().bufferedReader().use { JSONObject(it.readText()) }
+                val records = parseLabResults(json.getJSONArray("values").toRows())
+                referenceSettings.initializeMissing(records)
+                database.replace(normalizeLabTables(records), Instant.parse(json.getString("updatedAt")))
+            }
+            database.mark("legacy_cache_migrated")
+        }
+        referenceSettings.load()
+        database.load()
+    }.getOrElse { LabResultsUiState(status = "検査データの読み込みに失敗: ${it.message}") }
 
     suspend fun read(accessToken: String): LabResultsUiState = withContext(Dispatchers.IO) {
-        val values = fetchRows(accessToken)
-        val records = parseLabResults(values.toRows())
-        val updatedAt = Instant.now()
-        val json = JSONObject().put("values", values).put("updatedAt", updatedAt.toString())
-        val output = cache.startWrite()
-        try {
-            output.write(json.toString().toByteArray(Charsets.UTF_8))
-            cache.finishWrite(output)
-        } catch (error: Exception) {
-            cache.failWrite(output)
-            throw error
-        }
-        LabResultsUiState(records = records, lastUpdatedAt = updatedAt, status = "${records.size}件を取得")
+        val tables = fetchTables(accessToken)
+        referenceSettings.initializeMissing(tables.results)
+        database.replace(tables, Instant.now())
+        database.load().copy(status = "${tables.results.size}件を取得")
     }
 
-    internal suspend fun fetchRows(accessToken: String): JSONArray = withContext(Dispatchers.IO) {
-        require(accessToken.isNotBlank()) { "Google認証トークンを取得できませんでした" }
-        val url = URL("https://sheets.googleapis.com/v4/spreadsheets/" +
-            "${SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID}/values/labResults!A:F" +
-            "?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING")
-        val connection = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 15_000
-            readTimeout = 30_000
-            setRequestProperty("Authorization", "Bearer $accessToken")
-            setRequestProperty("Accept", "application/json")
-        }
-        val values = try {
-            val code = connection.responseCode
-            check(code == 200) {
-                when (code) {
-                    401, 403 -> "検査結果を取得できません。保存先にアクセスできるGoogleアカウントで再認証してください（HTTP $code）"
-                    400 -> "保存先のlabResultsタブと列設定を確認してください（HTTP 400）"
-                    else -> "検査結果の取得に失敗しました（HTTP $code）"
-                }
-            }
-            connection.inputStream.bufferedReader().use { JSONObject(it.readText()) }
-                .optJSONArray("values") ?: JSONArray()
-        } finally {
-            connection.disconnect()
-        }
-        values
+    internal suspend fun fetchTables(accessToken: String): LabTables = withContext(Dispatchers.IO) {
+        val response = labSheetsRequest(accessToken,
+            "/values:batchGet?ranges=labItems!A:D&ranges=labResults!A:D&valueRenderOption=UNFORMATTED_VALUE")
+        val ranges = response.getJSONArray("valueRanges")
+        parseLabRelationalTables(
+            ranges.getJSONObject(0).optJSONArray("values")?.toRows().orEmpty(),
+            ranges.getJSONObject(1).optJSONArray("values")?.toRows().orEmpty(),
+        )
     }
+
+    internal fun localUnits(): Map<String, String> = database.units()
+}
+
+/** 共通HTTP処理。トークンや検査値をログへ出力しない。 */
+internal fun labSheetsRequest(accessToken: String, suffix: String, body: JSONObject? = null): JSONObject {
+    require(accessToken.isNotBlank()) { "Google認証トークンを取得できませんでした" }
+    val connection = (URL("https://sheets.googleapis.com/v4/spreadsheets/" +
+        SpreadsheetUploadSettings.TARGET_SPREADSHEET_ID + suffix).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 15_000; readTimeout = 30_000
+        setRequestProperty("Authorization", "Bearer $accessToken")
+        setRequestProperty("Accept", "application/json")
+        if (body != null) {
+            requestMethod = "POST"; doOutput = true
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        }
+    }
+    try {
+        body?.let { payload -> connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) } }
+        val code = connection.responseCode
+        check(code in 200..299) {
+            if (code == 401 || code == 403) "検査データにアクセスできません。Googleアカウントを再認証してください（HTTP $code）"
+            else "検査データの取得・保存に失敗しました（HTTP $code）。labItemsとlabResultsを確認してください"
+        }
+        return connection.inputStream.bufferedReader().use { JSONObject(it.readText()) }
+    } finally { connection.disconnect() }
 }
 
 internal fun JSONArray.toRows(): List<List<String>> = (0 until length()).map { rowIndex ->

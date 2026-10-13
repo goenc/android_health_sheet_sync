@@ -6,10 +6,12 @@ import org.json.JSONObject
 /** 項目共通の基準範囲を端末内へ保存。検査結果とSheetsの原本は変更しない。 */
 internal class LabReferenceSettingsStore(context: Context) {
     private val preferences = context.getSharedPreferences("lab_reference_ranges", Context.MODE_PRIVATE)
+    private val database = LabDatabase.get(context)
 
-    fun load(): Map<String, LabReferenceRange?> = runCatching {
+    private fun legacySettings(): Map<String, LabReferenceRange?> {
+        if (!preferences.contains("ranges")) return emptyMap()
         val json = JSONObject(preferences.getString("ranges", "{}").orEmpty())
-        json.keys().asSequence().associateWith { name ->
+        return json.keys().asSequence().associateWith { name ->
             if (json.isNull(name)) null else json.getJSONObject(name).let { value ->
                 LabReferenceRange(
                     minimum = value.optString("minimum").takeIf { it.isNotBlank() }?.toBigDecimal(),
@@ -19,37 +21,32 @@ internal class LabReferenceSettingsStore(context: Context) {
                 )
             }
         }
-    }.getOrDefault(emptyMap())
+    }
+
+    fun load(): Map<String, LabReferenceRange?> {
+        if (database.metadata("references_migrated") == null) {
+            legacySettings().forEach { (name, range) -> database.saveReference(name, range) }
+            database.mark("references_migrated")
+        }
+        return database.references()
+    }
+
+    fun units(): Map<String, String> = database.units()
 
     fun initializeMissing(records: List<LabResult>): Map<String, LabReferenceRange?> {
         val settings = load().toMutableMap()
-        var changed = false
+        database.ensureItems(records)
         records.map { it.itemName }.distinct().filter { it !in settings }.forEach { name ->
             findInitialLabReferenceRange(name, records)?.let { candidate ->
                 settings[name] = candidate
-                changed = true
+                database.saveReference(name, candidate)
             }
         }
-        if (changed) persist(settings)
         return settings
     }
 
-    fun save(itemName: String, range: LabReferenceRange?): Map<String, LabReferenceRange?> {
-        val settings = load() + (itemName to range)
-        persist(settings)
-        return settings
-    }
-
-    private fun persist(settings: Map<String, LabReferenceRange?>) {
-        val json = JSONObject()
-        settings.forEach { (name, range) ->
-            json.put(name, range?.let {
-                JSONObject().put("minimum", it.minimum?.toPlainString().orEmpty())
-                    .put("maximum", it.maximum?.toPlainString().orEmpty())
-                    .put("minimumInclusive", it.minimumInclusive)
-                    .put("maximumInclusive", it.maximumInclusive)
-            } ?: JSONObject.NULL)
-        }
-        check(preferences.edit().putString("ranges", json.toString()).commit()) { "基準範囲を保存できませんでした" }
+    fun save(itemName: String, range: LabReferenceRange?, unit: String? = null): Map<String, LabReferenceRange?> {
+        database.saveReference(itemName, range, unit)
+        return database.references()
     }
 }

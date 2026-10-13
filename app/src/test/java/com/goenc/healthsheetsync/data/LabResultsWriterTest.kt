@@ -1,139 +1,63 @@
 package com.goenc.healthsheetsync.data
 
 import kotlinx.coroutines.runBlocking
-import org.json.JSONArray
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 import java.time.LocalDate
 
 class LabResultsWriterTest {
-    private val record = LabResult(LocalDate.of(2026, 10, 1), "試験項目", "0.00", "mg/dL", "0～1", "L")
+    private val record = LabResult(LocalDate.of(2026, 10, 1), "試験項目", "0.00", "mg/dL")
 
-    @Test
-    fun createsHeadersForEmptyTableAndKeepsValuesAsStrings() {
-        val rows = labResultsAppendRows(null, listOf(record))
-        assertEquals(listOf("targetDate", "itemName", "value", "unit", "referenceRange", "flag"), rows.first())
-        assertEquals(listOf("2026-10-01", "試験項目", "0.00", "mg/dL", "0～1", "L"), rows.last())
-    }
-
-    @Test
-    fun honorsExistingColumnOrderInsteadOfOverwritingHeaders() {
-        val headers = listOf("value", "itemName", "targetDate", "flag", "referenceRange", "unit")
-        assertEquals(listOf(listOf("0.00", "試験項目", "2026-10-01", "L", "0～1", "mg/dL")),
-            labResultsAppendRows(headers, listOf(record)))
-    }
-
-    @Test
-    fun refusesToDropOptionalValuesOrWriteUnknownColumns() {
-        assertTrue(runCatching { labResultsAppendRows(listOf("targetDate", "itemName", "value"), listOf(record)) }.isFailure)
-        assertTrue(runCatching { labResultsAppendRows(listOf("targetDate", "itemName", "value", "unknown"), listOf(record)) }.isFailure)
-        assertEquals(listOf(listOf("2026-10-01", "試験項目", "(-)")), labResultsAppendRows(
-            listOf("targetDate", "itemName", "value"), listOf(record.copy(value = "(-)", unit = "", referenceRange = "", flag = ""))))
-    }
-
-    @Test
-    fun rereadsSheetsBeforeSaveAndPostsOnlyNewRows() = runBlocking {
-        val existing = record
-        val addition = record.copy(targetDate = LocalDate.of(2026, 10, 2), itemName = "尿蛋白", value = "(-)", unit = "", referenceRange = "", flag = "")
+    @Test fun rereadsAndPostsOnlyNewResultsAndNewItemsTogether() = runBlocking {
+        val existing = normalizeLabTables(listOf(record))
+        val addition = record.copy(targetDate = record.targetDate.plusDays(1), itemName = "新項目", value = "(-)")
         var fetchCount = 0
-        val posted = mutableListOf<List<List<String>>>()
-        val writer = testWriter(
-            rows = sheetRows(listOf(existing)),
-            onFetch = { fetchCount++ },
-            onPost = { _, values -> posted += values },
-        )
-
-        val result = writer.append("token", listOf(existing, addition))
-
-        assertEquals(LabResultsSaveResult(1, 1), result)
+        var newItems = emptyList<LabItem>()
+        var newRows = emptyList<List<String>>()
+        val writer = LabResultsWriter({ fetchCount++; existing }, { _, items, rows -> newItems = items; newRows = rows })
+        assertEquals(LabResultsSaveResult(1, 1), writer.append("token", listOf(record, addition)))
         assertEquals(1, fetchCount)
-        assertEquals(listOf(listOf("2026-10-02", "尿蛋白", "(-)", "", "", "")), posted.single())
+        assertEquals(listOf("新項目"), newItems.map { it.itemName })
+        assertEquals(listOf(listOf("2026-10-02", labItemId("新項目"), "(-)", "text")), newRows)
     }
 
-    @Test
-    fun doesNotPostWhenLatestRowsConflict() = runBlocking {
-        val changed = record.copy(value = "0.01")
-        var postCount = 0
-        val writer = testWriter(
-            rows = sheetRows(listOf(record)),
-            onPost = { _, _ -> postCount++ },
-        )
-
-        val error = runCatching { writer.append("token", listOf(changed)) }.exceptionOrNull()
-
-        assertTrue(error is IllegalArgumentException)
-        assertEquals(0, postCount)
-        assertTrue(error?.message.orEmpty().contains("同日・同項目"))
+    @Test fun existingItemUsesMasterIdAndDoesNotRepeatUnit() = runBlocking {
+        val item = LabItem("existing-id", record.itemName, "mg/dL")
+        val existing = LabTables(listOf(item), listOf(record))
+        var newRows = emptyList<List<String>>()
+        val writer = LabResultsWriter({ existing }, { _, items, rows -> assertTrue(items.isEmpty()); newRows = rows })
+        writer.append("token", listOf(record.copy(targetDate = record.targetDate.plusDays(1))))
+        assertEquals(listOf(listOf("2026-10-02", "existing-id", "0.00", "=")), newRows)
     }
 
-    @Test
-    fun postsRowsInExistingRawColumnOrder() = runBlocking {
-        val headers = listOf("value", "itemName", "targetDate", "flag", "referenceRange", "unit")
-        val posted = mutableListOf<List<List<String>>>()
-        val writer = testWriter(
-            rows = sheetRows(emptyList(), headers),
-            onPost = { _, values -> posted += values },
-        )
-
-        writer.append("token", listOf(record))
-
-        assertEquals(listOf(listOf("0.00", "試験項目", "2026-10-01", "", "", "")), posted.single())
+    @Test fun conflictDoesNotWriteAnything() = runBlocking {
+        var posts = 0
+        val writer = LabResultsWriter({ normalizeLabTables(listOf(record)) }, { _, _, _ -> posts++ })
+        assertTrue(runCatching { writer.append("token", listOf(record.copy(value = "1.0"))) }.isFailure)
+        assertEquals(0, posts)
     }
 
-    @Test
-    fun propagatesPostFailureAfterValidationAndComparison() = runBlocking {
-        val failure = IllegalStateException("テスト用POST失敗")
-        val writer = testWriter(
-            rows = sheetRows(emptyList()),
-            onPost = { _, _ -> throw failure },
-        )
-
-        val actual = runCatching { writer.append("token", listOf(record)) }.exceptionOrNull()
-
-        assertTrue(actual is IllegalStateException)
-        assertEquals(failure.message, actual?.message)
+    @Test fun duplicateDoesNotWriteAnything() = runBlocking {
+        val writer = LabResultsWriter({ normalizeLabTables(listOf(record)) }, { _, _, _ -> fail("重複を追記") })
+        assertEquals(LabResultsSaveResult(0, 1), writer.append("token", listOf(record)))
     }
 
-    @Test
-    fun rejectsEmptyEditedValueBeforeFetchingOrPosting() = runBlocking {
-        var fetchCount = 0
-        var postCount = 0
-        val writer = testWriter(
-            rows = sheetRows(emptyList()),
-            onFetch = { fetchCount++ },
-            onPost = { _, _ -> postCount++ },
-        )
-
-        val error = runCatching { writer.append("token", listOf(record.copy(value = ""))) }.exceptionOrNull()
-
-        assertTrue(error is IllegalArgumentException)
-        assertEquals(0, fetchCount)
-        assertEquals(0, postCount)
+    @Test fun decimalFormattingDoesNotCreateFalseConflict() = runBlocking {
+        val writer = LabResultsWriter({ normalizeLabTables(listOf(record)) }, { _, _, _ -> fail("同値を追記") })
+        assertEquals(LabResultsSaveResult(0, 1), writer.append("token", listOf(record.copy(value = "0"))))
+        assertTrue(labResultValuesEqual("<5.0", "5未満"))
+        assertFalse(labResultValuesEqual("5未満", "5以下"))
     }
 
-    private fun testWriter(
-        rows: JSONArray,
-        onFetch: () -> Unit = {},
-        onPost: suspend (String, List<List<String>>) -> Unit,
-    ): LabResultsWriter = LabResultsWriter(
-        fetchRows = {
-            onFetch()
-            rows
-        },
-        appendRows = onPost,
-    )
-
-    private fun sheetRows(records: List<LabResult>, headers: List<String> = STANDARD_HEADERS): JSONArray {
-        val rows = JSONArray().put(JSONArray(headers))
-        records.forEach { item ->
-            rows.put(JSONArray(listOf(item.targetDate.toString(), item.itemName, item.value,
-                item.unit, item.referenceRange, item.flag)))
-        }
-        return rows
+    @Test fun invalidValueFailsBeforeRead() = runBlocking {
+        var fetched = false
+        val writer = LabResultsWriter({ fetched = true; normalizeLabTables(emptyList()) }, { _, _, _ -> fail() })
+        assertTrue(runCatching { writer.append("token", listOf(record.copy(value = ""))) }.isFailure)
+        assertFalse(fetched)
     }
 
-    private companion object {
-        val STANDARD_HEADERS = listOf("targetDate", "itemName", "value", "unit", "referenceRange", "flag")
+    @Test fun failedAtomicWritePropagates() = runBlocking {
+        val writer = LabResultsWriter({ normalizeLabTables(emptyList()) }, { _, _, _ -> error("保存失敗") })
+        assertEquals("保存失敗", runCatching { writer.append("token", listOf(record)) }.exceptionOrNull()?.message)
     }
 }
