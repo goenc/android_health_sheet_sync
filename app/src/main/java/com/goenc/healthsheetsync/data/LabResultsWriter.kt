@@ -7,49 +7,72 @@ import org.json.JSONObject
 
 internal data class LabResultsSaveResult(val addedCount: Int, val duplicateCount: Int)
 
-/** 項目マスターの追加と結果の追記を1回のSheets batchUpdateで保存する。 */
+/** SQLiteの現在世代と、Sheetsへ最後に反映した世代をまとめたバックアップ単位。 */
+internal data class LabBackupSnapshot(
+    val tables: LabTables,
+    /** labReferenceRangesのヘッダーを含む行。 */
+    val references: List<List<String>>,
+    val revision: Long,
+    val backedUpRevision: Long,
+)
+
+/**
+ * 検査結果を先に端末内DBへ保存し、必要な場合だけSheetsへ全量バックアップする。
+ *
+ * Sheetsへは追記せず、各正規化テーブルの先頭から全行を送る。DBの世代を
+ * バックアップ済み世代として記録するのは、送信が成功した後だけに限定する。
+ */
 internal class LabResultsWriter(
-    private val fetchTables: suspend (String) -> LabTables,
-    private val appendTables: suspend (String, List<LabItem>, List<List<String>>) -> Unit,
-    private val localUnits: () -> Map<String, String> = { emptyMap() },
+    private val saveLocalRecords: (List<LabResult>) -> LabResultsSaveResult,
+    private val loadSnapshot: () -> LabBackupSnapshot,
+    private val uploadSnapshot: suspend (String, LabBackupSnapshot) -> Unit,
+    private val markBackedUp: (Long) -> Unit,
 ) {
-    constructor(reader: LabResultsReader) : this(reader::fetchTables, ::postLabTables, reader::localUnits)
+    constructor(reader: LabResultsReader) : this(
+        saveLocalRecords = reader::saveLocalRecords,
+        loadSnapshot = reader::backupSnapshot,
+        uploadSnapshot = ::postLabBackup,
+        markBackedUp = reader::markBackedUp,
+    )
 
-    suspend fun append(accessToken: String, incoming: List<LabResult>): LabResultsSaveResult = withContext(Dispatchers.IO) {
-        val validated = incoming.map { it.copy(itemName = it.itemName.trim(), value = it.value.trim(), unit = "", referenceRange = "", flag = "") }
-        normalizeLabTables(validated)
-        val existing = fetchTables(accessToken)
-        val plan = planLabResultsImport(validated, existing.results)
-        require(plan.conflicts.isEmpty()) { "保存先に値の異なる同日・同項目があります。更新して内容を確認してください" }
-        if (plan.additions.isEmpty()) return@withContext LabResultsSaveResult(0, plan.duplicates.size)
-        val knownNames = existing.items.map { it.itemName }.toSet()
-        val units = localUnits()
-        val addedItems = plan.additions.map { it.itemName }.distinct().filter { it !in knownNames }.map {
-            LabItem(labItemId(it), it, units[it].orEmpty())
-        }
-        val items = existing.items + addedItems
-        val newRows = labResultRows(plan.additions, items).drop(1)
-        parseLabRelationalTables(labItemRows(items), labResultRows(existing.results + plan.additions, items))
-        appendTables(accessToken, addedItems, newRows)
-        LabResultsSaveResult(plan.additions.size, plan.duplicates.size)
+    /** 端末内DBへの保存だけを行う。Sheetsの読込・送信は呼び出さない。 */
+    suspend fun saveLocal(incoming: List<LabResult>): LabResultsSaveResult = withContext(Dispatchers.IO) {
+        saveLocalRecords(incoming)
+    }
+
+    /** 未反映世代がある場合だけ全量バックアップし、成功後にその世代を確認済みにする。 */
+    suspend fun backupIfNeeded(accessToken: String): Boolean = withContext(Dispatchers.IO) {
+        val snapshot = loadSnapshot()
+        if (snapshot.revision <= snapshot.backedUpRevision) return@withContext false
+        uploadSnapshot(accessToken, snapshot)
+        markBackedUp(snapshot.revision)
+        true
     }
 }
 
-private fun appendRequest(sheetId: Int, rows: List<List<String>>): JSONObject = JSONObject().put("appendCells", JSONObject()
-    .put("sheetId", sheetId).put("fields", "userEnteredValue")
-    .put("rows", JSONArray(rows.map { row -> JSONObject().put("values", JSONArray(row.map { value ->
-        JSONObject().put("userEnteredValue", JSONObject().put("stringValue", value))
-    })) })))
-
-private suspend fun postLabTables(accessToken: String, items: List<LabItem>, rows: List<List<String>>) {
-    val metadata = labSheetsRequest(accessToken, "?fields=sheets(properties(sheetId,title))")
-    val sheets = metadata.getJSONArray("sheets")
-    val ids = (0 until sheets.length()).associate { index ->
-        val props = sheets.getJSONObject(index).getJSONObject("properties")
-        props.getString("title") to props.getInt("sheetId")
+/** 検査用の正規化テーブル全体を、同じ世代のままSheetsへ上書きする。 */
+internal suspend fun postLabBackup(accessToken: String, snapshot: LabBackupSnapshot) {
+    val itemRows = labItemRows(snapshot.tables.items)
+    val resultRows = labResultRows(snapshot.tables.results, snapshot.tables.items)
+    val referenceRows = snapshot.references
+    require(referenceRows.firstOrNull() == LAB_REFERENCE_BACKUP_HEADERS) {
+        "labReferenceRangesのヘッダーを確認してください"
     }
-    val requests = JSONArray()
-    if (items.isNotEmpty()) requests.put(appendRequest(requireNotNull(ids["labItems"]), labItemRows(items).drop(1)))
-    requests.put(appendRequest(requireNotNull(ids["labResults"]), rows))
-    labSheetsRequest(accessToken, ":batchUpdate", JSONObject().put("requests", requests))
+
+    val request = JSONObject()
+        .put("valueInputOption", "RAW")
+        .put("data", JSONArray().apply {
+            put(valueRange("labItems!A1:D${itemRows.size}", itemRows))
+            put(valueRange("labResults!A1:D${resultRows.size}", resultRows))
+            put(valueRange("labReferenceRanges!A1:F${referenceRows.size}", referenceRows))
+        })
+    // values:batchUpdateは既存行の同じ範囲を置き換えるため、再送しても重複しない。
+    labSheetsRequest(accessToken, "/values:batchUpdate", request)
 }
+
+private fun valueRange(range: String, rows: List<List<String>>): JSONObject = JSONObject()
+    .put("range", range)
+    .put("majorDimension", "ROWS")
+    .put("values", JSONArray().apply {
+        rows.forEach { row -> put(JSONArray().apply { row.forEach(::put) }) }
+    })

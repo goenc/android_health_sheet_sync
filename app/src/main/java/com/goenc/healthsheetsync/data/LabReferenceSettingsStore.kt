@@ -46,7 +46,7 @@ internal class LabReferenceSettingsStore(context: Context) {
     }
 
     fun save(itemName: String, range: LabReferenceRange?, unit: String? = null): Map<String, LabReferenceRange?> {
-        database.saveReference(itemName, range, unit)
+        database.saveReference(itemName, range, unit, requestBackup = true)
         return database.references()
     }
 }

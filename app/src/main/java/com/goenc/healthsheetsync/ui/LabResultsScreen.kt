@@ -73,6 +73,7 @@ fun LabResultsScreen(
     state: LabResultsUiState,
     onRefresh: () -> Unit,
     onImport: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
+    onItemSettingsSaved: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -148,6 +149,7 @@ fun LabResultsScreen(
             runCatching {
                 referenceSettings = referenceStore.save(name, range, unit)
                 itemUnits = referenceStore.units()
+                onItemSettingsSaved()
                 referenceError = null
                 selectedPlotRecord = null
             }.exceptionOrNull()?.let { it.message ?: "基準範囲を保存できませんでした" }

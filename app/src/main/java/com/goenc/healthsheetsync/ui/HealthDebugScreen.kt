@@ -92,6 +92,7 @@ fun HealthDebugScreen(
     labResultsState: LabResultsUiState = LabResultsUiState(),
     onRefreshLabResults: () -> Unit = {},
     onLoadLabResults: () -> Unit = {},
+    onLabItemSettingsSaved: () -> Unit = {},
     onImportLabResults: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
     modifier: Modifier = Modifier,
 ) {
@@ -144,6 +145,7 @@ fun HealthDebugScreen(
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
             if (showLabResults) {
                 LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults,
+                    onItemSettingsSaved = onLabItemSettingsSaved,
                     onImport = onImportLabResults, onBack = { showLabResults = false })
                 return@CompositionLocalProvider
             }

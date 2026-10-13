@@ -1,63 +1,153 @@
 package com.goenc.healthsheetsync.data
 
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
 class LabResultsWriterTest {
     private val record = LabResult(LocalDate.of(2026, 10, 1), "試験項目", "0.00", "mg/dL")
+    private val tables = normalizeLabTables(listOf(record))
+    private val references = listOf(
+        LAB_REFERENCE_BACKUP_HEADERS,
+        listOf(labItemId("試験項目"), "", "", "1", "1", "0"),
+    )
 
-    @Test fun rereadsAndPostsOnlyNewResultsAndNewItemsTogether() = runBlocking {
-        val existing = normalizeLabTables(listOf(record))
-        val addition = record.copy(targetDate = record.targetDate.plusDays(1), itemName = "新項目", value = "(-)")
-        var fetchCount = 0
-        var newItems = emptyList<LabItem>()
-        var newRows = emptyList<List<String>>()
-        val writer = LabResultsWriter({ fetchCount++; existing }, { _, items, rows -> newItems = items; newRows = rows })
-        assertEquals(LabResultsSaveResult(1, 1), writer.append("token", listOf(record, addition)))
-        assertEquals(1, fetchCount)
-        assertEquals(listOf("新項目"), newItems.map { it.itemName })
-        assertEquals(listOf(listOf("2026-10-02", labItemId("新項目"), "(-)", "text")), newRows)
+    @Test fun saveLocalWritesOnlyToLocalStore() = runBlocking {
+        val events = mutableListOf<String>()
+        val writer = writer(
+            saveLocalRecords = {
+                events += "local"
+                LabResultsSaveResult(1, 0)
+            },
+            loadSnapshot = {
+                events += "load"
+                snapshot()
+            },
+            uploadSnapshot = { _, _ -> events += "upload" },
+        )
+
+        assertEquals(LabResultsSaveResult(1, 0), writer.saveLocal(listOf(record)))
+        assertEquals(listOf("local"), events)
     }
 
-    @Test fun existingItemUsesMasterIdAndDoesNotRepeatUnit() = runBlocking {
-        val item = LabItem("existing-id", record.itemName, "mg/dL")
-        val existing = LabTables(listOf(item), listOf(record))
-        var newRows = emptyList<List<String>>()
-        val writer = LabResultsWriter({ existing }, { _, items, rows -> assertTrue(items.isEmpty()); newRows = rows })
-        writer.append("token", listOf(record.copy(targetDate = record.targetDate.plusDays(1))))
-        assertEquals(listOf(listOf("2026-10-02", "existing-id", "0.00", "=")), newRows)
+    @Test fun backupIsNotAutomaticAndSendsOnlyWhenCoordinatorCallsIt() = runBlocking {
+        var localSaves = 0
+        val uploads = mutableListOf<LabBackupSnapshot>()
+        val writer = writer(
+            saveLocalRecords = {
+                localSaves++
+                LabResultsSaveResult(1, 0)
+            },
+            uploadSnapshot = { _, snapshot -> uploads += snapshot },
+        )
+
+        writer.saveLocal(listOf(record))
+        assertEquals(1, localSaves)
+        assertTrue(uploads.isEmpty())
+
+        assertTrue(writer.backupIfNeeded("token"))
+        assertEquals(1, uploads.size)
     }
 
-    @Test fun conflictDoesNotWriteAnything() = runBlocking {
-        var posts = 0
-        val writer = LabResultsWriter({ normalizeLabTables(listOf(record)) }, { _, _, _ -> posts++ })
-        assertTrue(runCatching { writer.append("token", listOf(record.copy(value = "1.0"))) }.isFailure)
-        assertEquals(0, posts)
+    @Test fun failedUploadKeepsRevisionPending() = runBlocking {
+        var backedUpRevision = 0L
+        var attempts = 0
+        val writer = writer(
+            loadSnapshot = { snapshot(revision = 1, backedUpRevision = backedUpRevision) },
+            uploadSnapshot = { _, _ ->
+                attempts++
+                error("通信失敗")
+            },
+            markBackedUp = { backedUpRevision = it },
+        )
+
+        assertTrue(runCatching { writer.backupIfNeeded("token") }.isFailure)
+        assertEquals(0L, backedUpRevision)
+        assertEquals(1, attempts)
+        assertTrue(runCatching { writer.backupIfNeeded("token") }.isFailure)
+        assertEquals(2, attempts)
     }
 
-    @Test fun duplicateDoesNotWriteAnything() = runBlocking {
-        val writer = LabResultsWriter({ normalizeLabTables(listOf(record)) }, { _, _, _ -> fail("重複を追記") })
-        assertEquals(LabResultsSaveResult(0, 1), writer.append("token", listOf(record)))
+    @Test fun retryUsesTheSameSnapshotAndDoesNotAppendDuplicates() = runBlocking {
+        var backedUpRevision = 0L
+        val payloads = mutableListOf<LabBackupSnapshot>()
+        val writer = writer(
+            loadSnapshot = { snapshot(revision = 4, backedUpRevision = backedUpRevision) },
+            uploadSnapshot = { _, payload -> payloads += payload },
+            markBackedUp = { backedUpRevision = it },
+        )
+
+        assertTrue(writer.backupIfNeeded("token"))
+        assertEquals(1, payloads.size)
+        assertEquals(4L, backedUpRevision)
+        assertFalse(writer.backupIfNeeded("token"))
+        assertEquals(1, payloads.size)
     }
 
-    @Test fun decimalFormattingDoesNotCreateFalseConflict() = runBlocking {
-        val writer = LabResultsWriter({ normalizeLabTables(listOf(record)) }, { _, _, _ -> fail("同値を追記") })
-        assertEquals(LabResultsSaveResult(0, 1), writer.append("token", listOf(record.copy(value = "0"))))
-        assertTrue(labResultValuesEqual("<5.0", "5未満"))
-        assertFalse(labResultValuesEqual("5未満", "5以下"))
+    @Test fun acknowledgementOfSentRevisionDoesNotAcknowledgeConcurrentNewRevision() = runBlocking {
+        var currentRevision = 1L
+        var backedUpRevision = 0L
+        val payloads = mutableListOf<LabBackupSnapshot>()
+        val writer = writer(
+            loadSnapshot = { snapshot(revision = currentRevision, backedUpRevision = backedUpRevision) },
+            uploadSnapshot = { _, payload ->
+                payloads += payload
+                currentRevision = 2L
+            },
+            markBackedUp = { sentRevision ->
+                // 実DBもこの世代条件を満たす場合だけ確認済み世代を進める。
+                if (sentRevision == currentRevision) backedUpRevision = sentRevision
+            },
+        )
+
+        assertTrue(writer.backupIfNeeded("token"))
+        assertEquals(0L, backedUpRevision)
+        assertEquals(1, payloads.size)
+        assertEquals(1L, payloads.single().revision)
+
+        assertTrue(writer.backupIfNeeded("token"))
+        assertEquals(2, payloads.size)
+        assertEquals(2L, payloads.last().revision)
+        assertEquals(2L, backedUpRevision)
     }
 
-    @Test fun invalidValueFailsBeforeRead() = runBlocking {
-        var fetched = false
-        val writer = LabResultsWriter({ fetched = true; normalizeLabTables(emptyList()) }, { _, _, _ -> fail() })
-        assertTrue(runCatching { writer.append("token", listOf(record.copy(value = ""))) }.isFailure)
-        assertFalse(fetched)
+    @Test fun cleanBackupDoesNotCallHttp() = runBlocking {
+        var uploads = 0
+        val writer = writer(
+            loadSnapshot = { snapshot(revision = 5, backedUpRevision = 5) },
+            uploadSnapshot = { _, _ -> uploads++ },
+        )
+
+        assertFalse(writer.backupIfNeeded("token"))
+        assertEquals(0, uploads)
     }
 
-    @Test fun failedAtomicWritePropagates() = runBlocking {
-        val writer = LabResultsWriter({ normalizeLabTables(emptyList()) }, { _, _, _ -> error("保存失敗") })
-        assertEquals("保存失敗", runCatching { writer.append("token", listOf(record)) }.exceptionOrNull()?.message)
+    @Test fun localFailureDoesNotAttemptBackup() = runBlocking {
+        var uploads = 0
+        val writer = writer(
+            saveLocalRecords = { error("SQLite保存失敗") },
+            uploadSnapshot = { _, _ -> uploads++ },
+        )
+
+        assertTrue(runCatching { writer.saveLocal(listOf(record)) }.isFailure)
+        assertEquals(0, uploads)
     }
+
+    private fun writer(
+        saveLocalRecords: (List<LabResult>) -> LabResultsSaveResult = { LabResultsSaveResult(0, 0) },
+        loadSnapshot: () -> LabBackupSnapshot = { snapshot() },
+        uploadSnapshot: suspend (String, LabBackupSnapshot) -> Unit = { _, _ -> },
+        markBackedUp: (Long) -> Unit = {},
+    ): LabResultsWriter = LabResultsWriter(
+        saveLocalRecords = saveLocalRecords,
+        loadSnapshot = loadSnapshot,
+        uploadSnapshot = uploadSnapshot,
+        markBackedUp = markBackedUp,
+    )
+
+    private fun snapshot(revision: Long = 1, backedUpRevision: Long = 0): LabBackupSnapshot =
+        LabBackupSnapshot(tables, references, revision, backedUpRevision)
 }

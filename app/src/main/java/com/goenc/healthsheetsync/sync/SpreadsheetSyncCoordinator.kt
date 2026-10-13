@@ -15,6 +15,7 @@ import com.goenc.healthsheetsync.data.LabResultsReader
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsWriter
+import com.goenc.healthsheetsync.data.LabResultsSaveResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploader
 import kotlinx.coroutines.CoroutineScope
@@ -41,7 +42,7 @@ internal class SpreadsheetSyncCoordinator(
 ) {
     private val labResultsReader = LabResultsReader(activity.applicationContext)
     private val labResultsWriter = LabResultsWriter(labResultsReader)
-    private var pendingLabImport: List<LabResult>? = null
+    private var pendingLabSaveResult: LabResultsSaveResult? = null
     private var labImportResult: ((String?) -> Unit)? = null
     private var state = SpreadsheetSyncUiState(labResults = labResultsReader.loadCached())
     private var pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ConnectDrive
@@ -217,7 +218,15 @@ internal class SpreadsheetSyncCoordinator(
         startAutomaticSpreadsheetSync()
     }
 
-    fun refreshLabResults(allowAuthorizationResolution: Boolean = true) {
+    fun loadLocalLabResults() {
+        if (state.labResults.isLoading) return
+        scope.launch {
+            val loaded = withContext(Dispatchers.IO) { labResultsReader.loadCached() }
+            if (!state.labResults.isLoading) updateState { copy(labResults = loaded) }
+        }
+    }
+
+    fun refreshLabResults() {
         if (state.labResults.isLoading) return
         if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) {
             labResultsFailure("Google認証・同期が完了してから更新してください")
@@ -225,7 +234,7 @@ internal class SpreadsheetSyncCoordinator(
         }
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.LoadLabResults
         updateState { copy(labResults = labResults.copy(isLoading = true, status = "検査結果を取得中")) }
-        authorizeLabResults(allowAuthorizationResolution)
+        authorizeLabResults(true)
     }
 
     fun importLabResults(records: List<LabResult>, onResult: (String?) -> Unit) {
@@ -237,11 +246,32 @@ internal class SpreadsheetSyncCoordinator(
             onResult("取り込む検査結果がありません")
             return
         }
-        pendingLabImport = records.toList()
         labImportResult = onResult
-        pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ImportLabResults
-        updateState { copy(labResults = labResults.copy(isLoading = true, status = "検査結果の保存権限を確認中")) }
-        authorizeLabResults(true)
+        updateState { copy(labResults = labResults.copy(isLoading = true, status = "端末内DBへ保存中")) }
+        scope.launch {
+            try {
+                pendingLabSaveResult = labResultsWriter.saveLocal(records)
+                val loaded = withContext(Dispatchers.IO) { labResultsReader.loadCached() }
+                updateState { copy(labResults = loaded.copy(isLoading = true, status = "DB保存済み。Sheetsへ反映中")) }
+                pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ImportLabResults
+                authorizeLabResults(true)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                val message = error.message ?: "端末内DBへの保存に失敗しました"
+                updateState { copy(labResults = labResults.copy(isLoading = false, status = message)) }
+                finishLabImport(message)
+            }
+        }
+    }
+
+    /** 項目設定のDB保存が終わった直後に呼び出す。通常表示ではSheetsを読まない。 */
+    fun backupLabSettings() {
+        scope.launch {
+            while (state.labResults.isLoading || state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) delay(250)
+            pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ImportLabResults
+            updateState { copy(labResults = labResults.copy(isLoading = true, status = "項目設定をSheetsへ反映中")) }
+            authorizeLabResults(true)
+        }
     }
 
     private fun authorizeLabResults(allowAuthorizationResolution: Boolean) {
@@ -274,6 +304,8 @@ internal class SpreadsheetSyncCoordinator(
         }
         scope.launch {
             try {
+                // 未反映のローカル保存を先に保護。再取得は明示的な「更新」だけ。
+                while (labResultsWriter.backupIfNeeded(accessToken)) { /* 保存中の次世代変更も反映 */ }
                 val loaded = labResultsReader.read(accessToken)
                 updateState { copy(labResults = loaded) }
             } catch (error: Exception) {
@@ -284,37 +316,31 @@ internal class SpreadsheetSyncCoordinator(
     }
 
     private fun labResultsFailure(message: String) {
-        updateState { copy(labResults = labResults.copy(isLoading = false, status = message)) }
-        finishLabImport(message)
+        val localSaved = pendingGoogleAuthorizationAction == GoogleAuthorizationAction.ImportLabResults
+        updateState { copy(labResults = labResults.copy(isLoading = false,
+            status = if (localSaved) "DB保存済み。Sheets未反映: $message。「更新」で再試行できる" else message)) }
+        finishLabImport(if (localSaved) null else message)
     }
 
     private fun finishLabImport(error: String?) {
         val callback = labImportResult
         labImportResult = null
-        pendingLabImport = null
+        pendingLabSaveResult = null
         callback?.invoke(error)
     }
 
     private fun continueLabResultsImport(accessToken: String?) {
-        val records = pendingLabImport ?: return
         if (accessToken.isNullOrBlank()) {
             labResultsFailure("Google認証トークンを取得できませんでした")
             return
         }
         scope.launch {
             try {
-                updateState { copy(labResults = labResults.copy(status = "検査結果を保存中")) }
-                val saved = labResultsWriter.append(accessToken, records)
-                // 追記後の再取得失敗を保存失敗とは扱わない。
-                try {
-                    val loaded = labResultsReader.read(accessToken)
-                    updateState { copy(labResults = loaded.copy(status =
-                        "${saved.addedCount}件を保存、同一結果${saved.duplicateCount}件を除外")) }
-                } catch (error: Exception) {
-                    if (error is kotlinx.coroutines.CancellationException) throw error
-                    updateState { copy(labResults = labResults.copy(isLoading = false,
-                        status = "${saved.addedCount}件を保存済み。表示の再取得に失敗しました。「更新」を押してください")) }
-                }
+                while (labResultsWriter.backupIfNeeded(accessToken)) { /* 未反映世代が残る間だけ送信 */ }
+                val loaded = withContext(Dispatchers.IO) { labResultsReader.loadCached() }
+                val saved = pendingLabSaveResult
+                updateState { copy(labResults = loaded.copy(status = if (saved == null) "項目設定をSheetsへ反映済み"
+                    else "${saved.addedCount}件をDB保存・Sheets反映、同一結果${saved.duplicateCount}件を除外")) }
                 finishLabImport(null)
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error

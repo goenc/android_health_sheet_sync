@@ -32,23 +32,25 @@ internal class LabResultsReader(context: Context) {
     }.getOrElse { LabResultsUiState(status = "検査データの読み込みに失敗: ${it.message}") }
 
     suspend fun read(accessToken: String): LabResultsUiState = withContext(Dispatchers.IO) {
-        val tables = fetchTables(accessToken)
-        referenceSettings.initializeMissing(tables.results)
-        database.replace(tables, Instant.now())
-        database.load().copy(status = "${tables.results.size}件を取得")
-    }
-
-    internal suspend fun fetchTables(accessToken: String): LabTables = withContext(Dispatchers.IO) {
         val response = labSheetsRequest(accessToken,
-            "/values:batchGet?ranges=labItems!A:D&ranges=labResults!A:D&valueRenderOption=UNFORMATTED_VALUE")
+            "/values:batchGet?ranges=labItems!A:D&ranges=labResults!A:D&ranges=labReferenceRanges!A:F&valueRenderOption=UNFORMATTED_VALUE")
         val ranges = response.getJSONArray("valueRanges")
-        parseLabRelationalTables(
+        val tables = parseLabRelationalTables(
             ranges.getJSONObject(0).optJSONArray("values")?.toRows().orEmpty(),
             ranges.getJSONObject(1).optJSONArray("values")?.toRows().orEmpty(),
         )
+        val references = parseLabReferenceBackup(ranges.getJSONObject(2).optJSONArray("values")?.toRows().orEmpty(), tables.items)
+        check(database.backupSnapshot().let { it.revision <= it.backedUpRevision }) { "Sheets未反映の検査データがあります。先に反映してください" }
+        database.replace(tables, Instant.now())
+        val currentReferences = referenceSettings.load()
+        references.filterKeys { it !in currentReferences }.forEach { (name, range) -> database.saveReference(name, range) }
+        referenceSettings.initializeMissing(tables.results)
+        database.load().copy(status = "${tables.results.size}件を取得")
     }
 
-    internal fun localUnits(): Map<String, String> = database.units()
+    internal fun saveLocalRecords(records: List<LabResult>): LabResultsSaveResult = database.appendRecords(records)
+    internal fun backupSnapshot(): LabBackupSnapshot = database.backupSnapshot()
+    internal fun markBackedUp(revision: Long) = database.markBackedUp(revision)
 }
 
 /** 共通HTTP処理。トークンや検査値をログへ出力しない。 */

@@ -48,14 +48,64 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
     }
 
     @Synchronized fun load(): LabResultsUiState {
+        val tables = tables()
+        val pending = backupRevision() > backedUpRevision()
+        return LabResultsUiState(tables.results,
+            status = if (pending) "端末内DBに保存済み。Sheetsへの未反映データあり" else null,
+            lastUpdatedAt = metadata("updated_at")?.let(Instant::parse))
+    }
+
+    @Synchronized fun tables(): LabTables {
         val db = readableDatabase
         val items = itemRows(db)
         val rows = mutableListOf(listOf("targetDate", "itemId", "value", "valueQualifier"))
         db.rawQuery("SELECT r.target_date,r.item_id,r.value,r.value_qualifier FROM lab_results r JOIN lab_items i USING(item_id) ORDER BY r.target_date DESC,i.display_order,i.rowid", null).use { cursor ->
             while (cursor.moveToNext()) rows += (0..3).map { cursor.getString(it) }
         }
-        val tables = parseLabRelationalTables(items, rows)
-        return LabResultsUiState(tables.results, lastUpdatedAt = metadata("updated_at")?.let(Instant::parse))
+        return parseLabRelationalTables(items, rows)
+    }
+
+    /** 端末内DBへ先に確定し、同じトランザクションでバックアップ待ちを記録する。 */
+    @Synchronized fun appendRecords(incoming: List<LabResult>): LabResultsSaveResult {
+        val validated = incoming.map { it.copy(itemName = it.itemName.trim(), value = it.value.trim(), unit = "", referenceRange = "", flag = "") }
+        normalizeLabTables(validated)
+        val existing = tables()
+        val plan = planLabResultsImport(validated, existing.results)
+        require(plan.conflicts.isEmpty()) { "端末内DBに値の異なる同日・同項目があります。内容を確認してください" }
+        if (plan.additions.isEmpty()) return LabResultsSaveResult(0, plan.duplicates.size)
+        val names = existing.items.map { it.itemName }.toSet()
+        val newItems = normalizeLabTables(plan.additions).items.filter { it.itemName !in names }
+        val items = existing.items + newItems
+        val rows = labResultRows(plan.additions, items).drop(1)
+        parseLabRelationalTables(labItemRows(items), labResultRows(existing.results + plan.additions, items))
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            newItems.forEachIndexed { index, item -> upsertItem(db, item, existing.items.size + index) }
+            rows.forEach { row -> db.insertOrThrow("lab_results", null, ContentValues().apply {
+                put("target_date", row[0]); put("item_id", row[1]); put("value", row[2]); put("value_qualifier", row[3])
+            }) }
+            putMetadata(db, "updated_at", Instant.now().toString())
+            incrementBackupRevision(db)
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return LabResultsSaveResult(plan.additions.size, plan.duplicates.size)
+    }
+
+    @Synchronized fun backupSnapshot(): LabBackupSnapshot {
+        val rows = mutableListOf(LAB_REFERENCE_BACKUP_HEADERS)
+        readableDatabase.rawQuery("SELECT item_id,minimum,maximum,minimum_inclusive,maximum_inclusive,disabled FROM lab_reference_ranges ORDER BY item_id", null).use { cursor ->
+            while (cursor.moveToNext()) rows += (0..5).map { cursor.getString(it).orEmpty() }
+        }
+        return LabBackupSnapshot(tables(), rows, backupRevision(), backedUpRevision())
+    }
+
+    private fun backupRevision() = metadata("backup_revision")?.toLong() ?: 0L
+    private fun backedUpRevision() = metadata("backed_up_revision")?.toLong() ?: 0L
+    private fun incrementBackupRevision(db: SQLiteDatabase) = putMetadata(db, "backup_revision", (backupRevision() + 1).toString())
+    @Synchronized fun markBackedUp(revision: Long) {
+        require(revision <= backupRevision()) { "未保存の世代をバックアップ済みにできません" }
+        putMetadata(writableDatabase, "backed_up_revision", maxOf(revision, backedUpRevision()).toString())
     }
 
     @Synchronized fun replace(tables: LabTables, updatedAt: Instant) {
@@ -113,7 +163,7 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
         ))
     } }
 
-    @Synchronized fun saveReference(name: String, range: LabReferenceRange?, unit: String? = null) {
+    @Synchronized fun saveReference(name: String, range: LabReferenceRange?, unit: String? = null, requestBackup: Boolean = false) {
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -129,6 +179,7 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
             unit?.let { db.update("lab_items", ContentValues().apply {
                 put("unit", it.trim()); put("unit_configured", 1)
             }, "item_id=?", arrayOf(id)) }
+            if (requestBackup) incrementBackupRevision(db)
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
     }
