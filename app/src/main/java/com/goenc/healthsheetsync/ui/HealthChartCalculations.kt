@@ -39,14 +39,14 @@ internal enum class WeightChartRange(
 
     fun window(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): ChartTimeWindow? {
         if (this == All) {
-            val firstAt = records.firstOrNull()?.measuredAt ?: return null
-            val latestAt = records.lastOrNull()?.measuredAt ?: return null
+            val firstAt = records.firstOrNull()?.measuredAt?.toLocalDate()?.atStartOfDay() ?: return null
+            val latestAt = maximumEndAt(records) ?: return null
             return ChartTimeWindow(
                 startAt = firstAt.minusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
                 endAt = latestAt.plusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
             )
         }
-        val rangeEndAt = visibleEndAt ?: records.lastOrNull()?.measuredAt ?: return null
+        val rangeEndAt = visibleEndAt ?: maximumEndAt(records) ?: return null
         val rangeStartAt = startAt(rangeEndAt)
         val leftPaddingDays = if (this == OneWeek || this == TwoWeeks) 0L else CHART_EMPTY_EDGE_PADDING_DAYS
         return ChartTimeWindow(
@@ -59,12 +59,16 @@ internal enum class WeightChartRange(
         return Duration.between(startAt(endAt), endAt)
     }
 
+    // 最新側の停止位置を日付で固定し、朝・夜の記録追加で表示範囲をずらさない。
+    fun maximumEndAt(records: List<DebugWeightRecord>): LocalDateTime? =
+        records.lastOrNull()?.measuredAt?.toLocalDate()?.atStartOfDay()
+
     fun minimumEndAt(records: List<DebugWeightRecord>): LocalDateTime? {
         if (this == All) {
-            return records.lastOrNull()?.measuredAt
+            return maximumEndAt(records)
         }
-        val firstAt = records.firstOrNull()?.measuredAt ?: return null
-        val latestAt = records.lastOrNull()?.measuredAt ?: return null
+        val firstAt = records.firstOrNull()?.measuredAt?.toLocalDate()?.atStartOfDay() ?: return null
+        val latestAt = maximumEndAt(records) ?: return null
         val endForFirstRecord = endAt(firstAt)
         return if (endForFirstRecord.isAfter(latestAt)) latestAt else endForFirstRecord
     }

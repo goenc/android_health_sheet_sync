@@ -12,11 +12,85 @@ import com.goenc.healthsheetsync.health.ManualRecordType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
 
 class HealthChartCalculationsTest {
+    @Test
+    fun allRanges_keepFirstMorningAndLatestDayVisibleAfterDraggingToLatest() {
+        val latestDate = LocalDate.of(2026, 10, 13)
+        val historyStart = latestDate.minusYears(1)
+        val expectedStarts = mapOf(
+            WeightChartRange.OneWeek to latestDate.minusWeeks(1),
+            WeightChartRange.TwoWeeks to latestDate.minusWeeks(2),
+            WeightChartRange.OneMonth to latestDate.minusMonths(1).minusDays(2),
+            WeightChartRange.TwoMonths to latestDate.minusMonths(2).minusDays(2),
+            WeightChartRange.ThreeMonths to latestDate.minusMonths(3).minusDays(2),
+            WeightChartRange.FourMonths to latestDate.minusMonths(4).minusDays(2),
+            WeightChartRange.FiveMonths to latestDate.minusMonths(5).minusDays(2),
+            WeightChartRange.SixMonths to latestDate.minusMonths(6).minusDays(2),
+            WeightChartRange.All to historyStart,
+        )
+        WeightChartRange.entries.forEach { range ->
+            val firstDate = expectedStarts.getValue(range)
+            val records = listOf(
+                weightRecord(historyStart, "朝", 70.0),
+                weightRecord(firstDate, "朝", 69.0),
+                weightRecord(firstDate, "夜", 69.5),
+                weightRecord(latestDate, "朝", 68.0),
+            ).sortedBy { it.measuredAt }
+            val end = chartEndAtAfterHorizontalDrag(
+                currentEndAt = range.minimumEndAt(records),
+                earliestEndAt = range.minimumEndAt(records),
+                latestEndAt = range.maximumEndAt(records),
+                dragAmount = -10_000f,
+                width = 1_000f,
+            )
+            val window = range.window(records, end)!!
+            // ALLの左端は最古の実記録の日から余白を取る。
+            val expectedStart = if (range == WeightChartRange.All) firstDate.minusDays(2) else firstDate
+            assertEquals(range.name, expectedStart.atStartOfDay(), window.startAt)
+            assertEquals(range.name, latestDate.plusDays(2).atStartOfDay(), window.endAt)
+            assertTrue(range.name, !firstDate.atTime(8, 0).isBefore(window.startAt))
+            assertTrue(range.name, !latestDate.atTime(20, 0).isAfter(window.endAt))
+            val withNight = records + weightRecord(latestDate, "夜", 68.5)
+            assertEquals(range.name, window, range.window(withNight, null))
+            assertEquals(range.name, end, range.maximumEndAt(withNight))
+        }
+    }
+
+    @Test
+    fun allRanges_includeFirstMorningAtOldestStopAndHandleShortOrEmptyHistory() {
+        val firstDate = LocalDate.of(2024, 2, 29)
+        WeightChartRange.entries.forEach { range ->
+            val records = listOf(weightRecord(firstDate, "夜", 70.0),
+                weightRecord(firstDate.plusYears(1), "朝", 69.0))
+            val end = chartEndAtAfterHorizontalDrag(null, range.minimumEndAt(records),
+                range.maximumEndAt(records), 10_000f, 1_000f)
+            val window = range.window(records, end)!!
+            assertTrue(range.name, !firstDate.atTime(8, 0).isBefore(window.startAt))
+            assertTrue(range.name, !firstDate.atTime(20, 0).isAfter(window.endAt))
+            val shortHistory = records.take(1)
+            assertEquals(range.name, range.maximumEndAt(shortHistory), range.minimumEndAt(shortHistory))
+            assertNotNull(range.window(shortHistory, null))
+            assertNull(range.window(emptyList(), null))
+        }
+    }
+
+    @Test
+    fun draggingBetweenStops_preservesSubDayMovement() {
+        val records = listOf(weightRecord(LocalDate.of(2026, 1, 1), "朝", 70.0),
+            weightRecord(LocalDate.of(2026, 10, 13), "夜", 69.0))
+        val range = WeightChartRange.TwoWeeks
+        val latest = range.maximumEndAt(records)!!
+        val moved = chartEndAtAfterHorizontalDrag(null, range.minimumEndAt(records), latest, 1f, 1_000f)!!
+        assertTrue(moved.isBefore(latest))
+        assertTrue(moved.isAfter(latest.minusDays(1)))
+        assertEquals(moved.plusDays(2), range.window(records, moved)!!.endAt)
+    }
+
     @Test
     fun longRanges_cycleThroughMonthsAndAll() {
         val expected = listOf(WeightChartRange.TwoMonths, WeightChartRange.ThreeMonths,

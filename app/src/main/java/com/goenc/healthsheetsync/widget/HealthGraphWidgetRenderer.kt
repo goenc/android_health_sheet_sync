@@ -96,9 +96,8 @@ internal object HealthGraphWidgetRenderer {
         canvas.drawRoundRect(card, 18f * density, 18f * density, cardPaint)
 
         val weightRecords = storedData.weightRecords.sortedBy { it.measuredAt }
-        val latestAt = weightRecords.lastOrNull()?.measuredAt
         val range = WeightChartRange.TwoWeeks
-        val window = range.window(weightRecords, latestAt)
+        val window = range.window(weightRecords, null)
         if (weightRecords.isEmpty() || window == null) {
             drawEmptyState(canvas, safeWidth, safeHeight, density, scaledDensity)
             return bitmap

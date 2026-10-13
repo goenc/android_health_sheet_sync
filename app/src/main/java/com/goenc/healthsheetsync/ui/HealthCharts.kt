@@ -96,7 +96,7 @@ internal fun WeightTrendChart(
     var longRange by remember { mutableStateOf(selectedRange.takeIf { it.isLongRange } ?: WeightChartRange.TwoMonths) }
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var chartEndAt by remember(sortedRecords, selectedRange) {
-        mutableStateOf(sortedRecords.lastOrNull()?.measuredAt)
+        mutableStateOf(selectedRange.maximumEndAt(sortedRecords))
     }
     val chartWindow = remember(sortedRecords, selectedRange, chartEndAt) {
         selectedRange.window(sortedRecords, chartEndAt)
@@ -152,7 +152,7 @@ internal fun WeightTrendChart(
             }
         }
     }
-    val latestEndAt = sortedRecords.lastOrNull()?.measuredAt
+    val latestEndAt = selectedRange.maximumEndAt(sortedRecords)
     val trendDuration = if (selectedRange == WeightChartRange.All) {
         chartRecords.firstOrNull()?.measuredAt?.let { firstAt ->
             chartRecords.lastOrNull()?.measuredAt?.let { lastAt ->
