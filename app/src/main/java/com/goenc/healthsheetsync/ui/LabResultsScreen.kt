@@ -52,15 +52,14 @@ import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabDisplaySettingsStore
 
-private const val LabComparisonCount = 3
 private const val LabItemColumnWeight = 2.4f
 private const val LabValueColumnWeight = 1f
 
-private fun Modifier.labMonthDividers(): Modifier = drawBehind {
+private fun Modifier.labMonthDividers(comparisonCount: Int): Modifier = drawBehind {
     val gap = 4.dp.toPx()
-    val weightWidth = (size.width - gap * LabComparisonCount) /
-        (LabItemColumnWeight + LabValueColumnWeight * LabComparisonCount)
-    repeat(LabComparisonCount) { index ->
+    val weightWidth = (size.width - gap * comparisonCount) /
+        (LabItemColumnWeight + LabValueColumnWeight * comparisonCount)
+    repeat(comparisonCount) { index ->
         val x = weightWidth * (LabItemColumnWeight + LabValueColumnWeight * index) + gap * (index + 0.5f)
         drawLine(DividerColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
     }
@@ -77,6 +76,8 @@ fun LabResultsScreen(
     val displaySettings = remember(context) { LabDisplaySettingsStore(context.applicationContext) }
     var excludedItems by remember { mutableStateOf(displaySettings.excludedItems()) }
     var showTargetOnly by remember { mutableStateOf(displaySettings.showTargetOnly()) }
+    var comparisonCount by remember { mutableStateOf(displaySettings.comparisonCount()) }
+    val comparisonFontSize = (16 - comparisonCount).sp
     val itemNames = remember(state.records) {
         state.records.sortedBy { it.targetDate }.map { it.itemName }.distinct()
     }
@@ -88,10 +89,10 @@ fun LabResultsScreen(
     val dates = remember(state.records) {
         state.records.map { it.targetDate }.distinct().sortedDescending()
     }
-    val maxDateIndex = (dates.size - LabComparisonCount).coerceAtLeast(0)
+    val maxDateIndex = (dates.size - comparisonCount).coerceAtLeast(0)
     val dateIndex = dates.indexOfFirst { it.toString() == selectedDate }.coerceIn(0, maxDateIndex)
     val effectiveDate = dates.getOrNull(dateIndex)
-    val comparisonDates = dates.drop(dateIndex).take(LabComparisonCount)
+    val comparisonDates = dates.drop(dateIndex).take(comparisonCount)
     val comparisonRows = remember(state.records, comparisonDates) {
         comparisonDates.map { dailyLabResultRows(state.records, it) }
     }
@@ -111,6 +112,10 @@ fun LabResultsScreen(
     }
     if (showSettings) {
         LabResultsSettingsScreen(state = state, itemNames = itemNames, excludedItems = excludedItems,
+            comparisonCount = comparisonCount, onComparisonCountChanged = {
+                comparisonCount = it
+                displaySettings.saveComparisonCount(it)
+            },
             onItemChecked = { name, checked ->
                 excludedItems = if (checked) excludedItems - name else excludedItems + name
                 displaySettings.saveExcludedItems(excludedItems)
@@ -155,7 +160,7 @@ fun LabResultsScreen(
                     }
                     TextButton(onClick = { selectedDate = dates[dateIndex + 1].toString() }, enabled = dateIndex < maxDateIndex) { Text("次へ") }
                 }
-                Row(Modifier.fillMaxWidth().labMonthDividers(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().labMonthDividers(comparisonCount), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(LabItemColumnWeight), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(selected = !showTargetOnly, onClick = {
                             showTargetOnly = false
@@ -168,13 +173,13 @@ fun LabResultsScreen(
                     }
                     comparisonDates.forEach { date ->
                         Text("${date.monthValue}月", modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), textAlign = TextAlign.End,
-                            fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            fontWeight = FontWeight.Bold, fontSize = comparisonFontSize)
                     }
-                    repeat(LabComparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
+                    repeat(comparisonCount - comparisonDates.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
                 }
             }
             LazyColumn(modifier = Modifier.weight(1f).let { listModifier ->
-                if (selectedItem != null) listModifier else listModifier.pointerInput(dates, effectiveDate) {
+                if (selectedItem != null) listModifier else listModifier.pointerInput(dates, effectiveDate, comparisonCount) {
                     var dragDistance = 0f
                     val threshold = 48.dp.toPx()
                     detectHorizontalDragGestures(
@@ -196,7 +201,8 @@ fun LabResultsScreen(
                 if (selectedItem == null) {
                     if (comparisonIndices.isEmpty()) item { Text("対象項目がありません。設定で表示する項目を選択してください。") }
                     items(comparisonIndices) { index ->
-                        LabComparisonRow(comparisonRows.map { it[index] }, onClick = { selectedItem = visible[index].itemName })
+                        LabComparisonRow(comparisonRows.map { it[index] }, comparisonCount,
+                            onClick = { selectedItem = visible[index].itemName })
                     }
                 } else {
                     item {
@@ -213,18 +219,20 @@ fun LabResultsScreen(
 }
 
 @Composable
-private fun LabComparisonRow(results: List<LabResult>, onClick: () -> Unit) {
+private fun LabComparisonRow(results: List<LabResult>, comparisonCount: Int, onClick: () -> Unit) {
     val item = results.first()
+    val fontSize = (16 - comparisonCount).sp
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(Modifier.fillMaxWidth().labMonthDividers().padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(item.itemName, modifier = Modifier.weight(LabItemColumnWeight), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.fillMaxWidth().labMonthDividers(comparisonCount).padding(vertical = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(item.itemName, modifier = Modifier.weight(LabItemColumnWeight), fontSize = fontSize,
+                maxLines = if (comparisonCount == 3) 1 else 2, overflow = TextOverflow.Ellipsis)
             results.forEach { result ->
                 Text(when (result.flag) { "H" -> "↑ "; "L" -> "↓ "; else -> "" } + result.value,
-                    modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(LabValueColumnWeight).padding(end = 4.dp), fontSize = fontSize, fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = when (result.flag) { "L" -> LabLowValueBlue; "H" -> MaterialTheme.colorScheme.error; else -> AppText })
             }
-            repeat(LabComparisonCount - results.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
+            repeat(comparisonCount - results.size) { Text("", modifier = Modifier.weight(LabValueColumnWeight)) }
         }
         HorizontalDivider(color = DividerColor)
     }
@@ -235,6 +243,8 @@ private fun LabResultsSettingsScreen(
     state: LabResultsUiState,
     itemNames: List<String>,
     excludedItems: Set<String>,
+    comparisonCount: Int,
+    onComparisonCountChanged: (Int) -> Unit,
     onItemChecked: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
@@ -247,6 +257,13 @@ private fun LabResultsSettingsScreen(
         }
         OutlinedButton(onClick = onRefresh, enabled = !state.isLoading, modifier = Modifier.fillMaxWidth()) {
             Text(if (state.isLoading) "更新中" else "更新")
+        }
+        Text("表示する月数", fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            (1..3).forEach { count ->
+                FilterChip(selected = comparisonCount == count, onClick = { onComparisonCountChanged(count) },
+                    label = { Text("${count}か月") }, modifier = Modifier.weight(1f))
+            }
         }
         Text("対象項目", fontWeight = FontWeight.Bold)
         Text("チェックした項目を「対象項目」で表示する。", style = MaterialTheme.typography.bodySmall)

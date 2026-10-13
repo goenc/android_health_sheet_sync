@@ -17,4 +17,10 @@ internal class LabDisplaySettingsStore(context: Context) {
     fun saveShowTargetOnly(enabled: Boolean) {
         preferences.edit().putBoolean("show_target_only", enabled).apply()
     }
+
+    fun comparisonCount(): Int = preferences.getInt("comparison_count", 3).coerceIn(1, 3)
+
+    fun saveComparisonCount(count: Int) {
+        preferences.edit().putInt("comparison_count", count.coerceIn(1, 3)).apply()
+    }
 }
