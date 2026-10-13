@@ -550,6 +550,10 @@ internal fun FastingGlucoseChart.displayRecord(): DebugGlucoseRecord? {
     return visibleRecords.lastOrNull() ?: rightBoundaryRecord ?: nearestRightRecord ?: latestRecord
 }
 
+internal fun FastingGlucoseChart.pointAt(record: DebugGlucoseRecord): LocalDateTime =
+    if (record == leftBoundaryRecord || record == rightBoundaryRecord) record.measuredAt
+    else record.targetDate.atTime(LocalTime.NOON)
+
 internal fun A1cChart.displayRecord(): A1cChartRecord? {
     return visibleRecords.lastOrNull() ?: rightBoundaryRecord ?: nearestRightRecord ?: latestRecord
 }

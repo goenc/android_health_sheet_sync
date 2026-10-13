@@ -57,6 +57,7 @@ import com.goenc.healthsheetsync.ui.displayRecord
 import com.goenc.healthsheetsync.ui.formatDecimal
 import com.goenc.healthsheetsync.ui.formatTrendChange
 import com.goenc.healthsheetsync.ui.isMorning
+import com.goenc.healthsheetsync.ui.pointAt
 import com.goenc.healthsheetsync.ui.shouldShowChartDateNumber
 import com.goenc.healthsheetsync.ui.toChartWeightPoints
 import java.time.DayOfWeek
@@ -389,12 +390,12 @@ internal object HealthGraphWidgetRenderer {
 
         glucoseChart?.let { chart ->
             val linePoints = chart.lineRecords.map { record ->
-                xAtTime(record.measuredAt) to glucoseYAt(record.bloodGlucoseMgDl)
+                xAtTime(chart.pointAt(record)) to glucoseYAt(record.bloodGlucoseMgDl)
             }
             drawPolyline(canvas, linePoints, glucoseLinePaint)
             chart.visibleRecords.forEach { record ->
                 canvas.drawCircle(
-                    xAtTime(record.measuredAt),
+                    xAtTime(chart.pointAt(record)),
                     glucoseYAt(record.bloodGlucoseMgDl),
                     4f * density,
                     glucoseLinePaint,
@@ -402,7 +403,7 @@ internal object HealthGraphWidgetRenderer {
             }
             chart.displayRecord()?.let { latest ->
                 val latestY = glucoseYAt(latest.bloodGlucoseMgDl)
-                canvas.drawLine(xAtTime(latest.measuredAt), latestY, chartRight, latestY, glucoseLinePaint)
+                canvas.drawLine(xAtTime(chart.pointAt(latest)), latestY, chartRight, latestY, glucoseLinePaint)
                 canvas.drawText(
                     formatDecimal(latest.bloodGlucoseMgDl),
                     chartRight - (4f * density),

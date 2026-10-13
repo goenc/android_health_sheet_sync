@@ -19,6 +19,23 @@ import java.time.LocalDateTime
 
 class HealthChartCalculationsTest {
     @Test
+    fun glucosePoints_alignWithStepCentersWithoutMovingBoundaryPointsOrMeasurementTimes() {
+        val record = glucoseRecord(2026, 10, 12, 110.0)
+        val records = listOf(glucoseRecord(2026, 10, 10, 100.0), record,
+            glucoseRecord(2026, 10, 14, 120.0))
+        val window = chartWindow(2026, 10, 11, 2026, 10, 13)
+        val chart = calculateFastingGlucoseChart(records, window)!!
+        val step = calculateStepBars(listOf(stepDaily(2026, 10, 12, 10_000)), window).single()
+        assertEquals(step.centerAt, chart.pointAt(record))
+        assertEquals(record, chart.visibleRecords.single())
+        assertEquals(LocalDateTime.of(2026, 10, 12, 7, 0), record.measuredAt)
+        assertEquals(window.startAt, chart.pointAt(chart.leftBoundaryRecord!!))
+        assertEquals(window.endAt, chart.pointAt(chart.rightBoundaryRecord!!))
+        val latestChart = calculateFastingGlucoseChart(records.take(2), window)!!
+        assertEquals(step.centerAt, latestChart.pointAt(latestChart.displayRecord()!!))
+    }
+
+    @Test
     fun selectedDay_drawsBothLinesWithMissingWeightWithoutAddingPoints() {
         val date = LocalDate.of(2026, 10, 13)
         val morning = listOf(weightRecord(date, "朝", 70.0)).toChartWeightPoints().single()

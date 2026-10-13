@@ -567,7 +567,7 @@ internal fun WeightTrendChart(
                 }
 
                 val linePoints = chart.lineRecords.map { record ->
-                    Offset(xAtTime(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl))
+                    Offset(xAtTime(chart.pointAt(record)), glucoseYAt(record.bloodGlucoseMgDl))
                 }
                 if (linePoints.size > 1) {
                     val glucosePath = Path()
@@ -588,14 +588,14 @@ internal fun WeightTrendChart(
                     drawCircle(
                         color = ChartGlucose,
                         radius = 4.dp.toPx(),
-                        center = Offset(xAtTime(record.measuredAt), glucoseYAt(record.bloodGlucoseMgDl)),
+                        center = Offset(xAtTime(chart.pointAt(record)), glucoseYAt(record.bloodGlucoseMgDl)),
                     )
                 }
                 chart.displayRecord()?.let { latest ->
                     val latestY = glucoseYAt(latest.bloodGlucoseMgDl)
                     drawLine(
                         color = ChartGlucose,
-                        start = Offset(xAtTime(latest.measuredAt), latestY),
+                        start = Offset(xAtTime(chart.pointAt(latest)), latestY),
                         end = Offset(chartRight, latestY),
                         strokeWidth = 1.5.dp.toPx(),
                     )
