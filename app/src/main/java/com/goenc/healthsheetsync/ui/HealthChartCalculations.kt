@@ -118,6 +118,12 @@ internal data class ChartDaySelection(
 ) {
     val points: List<ChartWeightPoint>
         get() = listOfNotNull(morning, night)
+
+    val selectionLineTimes: List<LocalDateTime>
+        get() = listOf(
+            morning?.measuredAt ?: date.atTime("朝".chartRepresentativeTime()),
+            night?.measuredAt ?: date.atTime("夜".chartRepresentativeTime()),
+        )
 }
 
 internal data class ChartTimeWindow(

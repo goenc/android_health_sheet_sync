@@ -867,15 +867,20 @@ internal fun WeightTrendChart(
                 }
             }
 
+                selectedDay?.selectionLineTimes?.filter {
+                    !it.isBefore(visibleWindow.startAt) && !it.isAfter(visibleWindow.endAt)
+                }?.forEach { measuredAt ->
+                    val x = xAtTime(measuredAt)
+                    drawLine(
+                        color = selectedColor,
+                        start = Offset(x, chartTop),
+                        end = Offset(x, chartBottom),
+                        strokeWidth = 1.dp.toPx(),
+                    )
+                }
                 selectedDay?.points?.forEach { record ->
                     chartPoints.indexOf(record).takeIf { it >= 0 }?.let { index ->
                         val selectedPoint = Offset(xAt(index), yAt(record.weightKg))
-                        drawLine(
-                            color = selectedColor,
-                            start = Offset(selectedPoint.x, chartTop),
-                            end = Offset(selectedPoint.x, chartBottom),
-                            strokeWidth = 1.dp.toPx(),
-                        )
                         drawCircle(
                             color = selectedColor,
                             radius = 6.dp.toPx(),

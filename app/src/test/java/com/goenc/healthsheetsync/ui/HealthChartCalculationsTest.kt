@@ -19,6 +19,22 @@ import java.time.LocalDateTime
 
 class HealthChartCalculationsTest {
     @Test
+    fun selectedDay_drawsBothLinesWithMissingWeightWithoutAddingPoints() {
+        val date = LocalDate.of(2026, 10, 13)
+        val morning = listOf(weightRecord(date, "朝", 70.0)).toChartWeightPoints().single()
+        val night = listOf(weightRecord(date, "夜", 70.5)).toChartWeightPoints().single()
+        listOf(morning to null, null to night, morning to night).forEach { (am, pm) ->
+            val day = ChartDaySelection(date, am, pm, null, null)
+            assertEquals(listOf(date.atTime(8, 0), date.atTime(20, 0)), day.selectionLineTimes)
+            assertEquals(listOfNotNull(am, pm), day.points)
+        }
+        val measuredMorning = morning.copy(measuredAt = date.atTime(7, 15))
+        val measuredNight = night.copy(measuredAt = date.atTime(21, 30))
+        val day = ChartDaySelection(date, measuredMorning, measuredNight, null, null)
+        assertEquals(listOf(measuredMorning.measuredAt, measuredNight.measuredAt), day.selectionLineTimes)
+    }
+
+    @Test
     fun allRanges_keepFirstMorningAndLatestDayVisibleAfterDraggingToLatest() {
         val latestDate = LocalDate.of(2026, 10, 13)
         val historyStart = latestDate.minusYears(1)
