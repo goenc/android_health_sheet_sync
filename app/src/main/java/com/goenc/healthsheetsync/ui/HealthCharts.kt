@@ -319,20 +319,21 @@ internal fun WeightTrendChart(
             }
 
             fun yAt(weightKg: Double): Float {
-                val rawRatio = ((weightKg - minWeight) / weightRange).toFloat()
-                val ratio = if (customWeight != null) rawRatio.coerceIn(0f, 1f) else rawRatio
+                val ratio = ((weightKg - minWeight) / weightRange).toFloat()
                 return chartBottom - chartHeight * ratio
             }
 
+            // 設定値は目盛りの範囲。範囲外の実測値も同じスケールで描画する。
             fun a1cYAt(value: Double): Float {
-                val ratio = (customA1c?.ratio(value) ?: ((value - A1C_CHART_MIN) / (A1C_CHART_MAX - A1C_CHART_MIN))).toFloat()
-                    .coerceIn(0f, 1f)
+                val ratio = customA1c?.ratio(value)?.toFloat()
+                    ?: ((value - A1C_CHART_MIN) / (A1C_CHART_MAX - A1C_CHART_MIN)).toFloat()
+                        .coerceIn(0f, 1f)
                 return chartBottom - chartHeight * ratio
             }
 
             fun waistYAt(value: Double): Float {
                 val waistHeight = max(1f, chartBottom - waistTop)
-                if (customWaist != null) return chartBottom - waistHeight * customWaist.ratio(value).toFloat().coerceIn(0f, 1f)
+                if (customWaist != null) return chartBottom - waistHeight * customWaist.ratio(value).toFloat()
                 val ratio = ((value - WAIST_CHART_MIN_CM) /
                     (WAIST_CHART_GUIDE_MAX_CM - WAIST_CHART_MIN_CM)).toFloat()
                     .coerceIn(
@@ -352,16 +353,18 @@ internal fun WeightTrendChart(
             val stepChartMaxSteps = max(STEP_REFERENCE_STEPS, STEP_REFERENCE_STEPS / stepReferenceRatio)
 
             fun stepYAt(steps: Float): Float {
-                val ratio = (customSteps?.ratio(steps.toDouble())?.toFloat() ?: (steps / stepChartMaxSteps)).coerceIn(0f, 1f)
+                val ratio = customSteps?.ratio(steps.toDouble())?.toFloat()
+                    ?: (steps / stepChartMaxSteps).coerceIn(0f, 1f)
                 return chartBottom - chartHeight * ratio
             }
 
             fun bloodPressureYAt(value: Double): Float {
                 val bloodPressureBottom = chartTop + chartHeight * BLOOD_PRESSURE_CHART_HEIGHT_RATIO
                 val bloodPressureHeight = max(1f, bloodPressureBottom - chartTop)
-                val ratio = (customBloodPressure?.ratio(value) ?: ((value - BLOOD_PRESSURE_CHART_MIN) /
-                    (BLOOD_PRESSURE_CHART_MAX - BLOOD_PRESSURE_CHART_MIN))).toFloat()
-                    .coerceIn(0f, 1f)
+                val ratio = customBloodPressure?.ratio(value)?.toFloat()
+                    ?: ((value - BLOOD_PRESSURE_CHART_MIN) /
+                        (BLOOD_PRESSURE_CHART_MAX - BLOOD_PRESSURE_CHART_MIN)).toFloat()
+                        .coerceIn(0f, 1f)
                 return bloodPressureBottom - bloodPressureHeight * ratio
             }
 
@@ -560,9 +563,10 @@ internal fun WeightTrendChart(
 
             glucoseChart?.let { chart ->
                 fun glucoseYAt(value: Double): Float {
-                    val ratio = (axisRanges[ChartMetric.Glucose]?.ratio(value) ?: ((value - chart.minValueMgDl) / (chart.maxValueMgDl - chart.minValueMgDl)))
-                        .toFloat()
-                        .coerceIn(0f, 1f)
+                    val ratio = axisRanges[ChartMetric.Glucose]?.ratio(value)?.toFloat()
+                        ?: ((value - chart.minValueMgDl) / (chart.maxValueMgDl - chart.minValueMgDl))
+                            .toFloat()
+                            .coerceIn(0f, 1f)
                     return chartBottom - chartHeight * ratio
                 }
 
