@@ -150,8 +150,6 @@ class MainActivity : ComponentActivity() {
                             saveWeightMovingAverageMode(mode, onResult)
                         },
                         dailyBodySettings = healthState.dailyBodySettings,
-                        currentMealState = spreadsheetSyncState.currentMeal,
-                        onRefreshCurrentMeal = { spreadsheetSyncCoordinator.refreshCurrentMeal() },
                         labResultsState = spreadsheetSyncState.labResults,
                         onRefreshLabResults = { spreadsheetSyncCoordinator.refreshLabResults() },
                         onLoadLabResults = { spreadsheetSyncCoordinator.loadLocalLabResults() },
