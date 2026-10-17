@@ -42,6 +42,7 @@ import kotlinx.coroutines.delay
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.data.ChartAxisSettingsStore
+import com.goenc.healthsheetsync.data.CurrentMealUiState
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.health.DebugA1cDaily
@@ -89,6 +90,8 @@ fun HealthDebugScreen(
     onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
     dailyBodySettings: List<DailyBodySetting>,
     onSaveDailyBodySetting: (Double, Int, (String?) -> Unit) -> Unit,
+    currentMealState: CurrentMealUiState = CurrentMealUiState(),
+    onRefreshCurrentMeal: () -> Unit = {},
     labResultsState: LabResultsUiState = LabResultsUiState(),
     onRefreshLabResults: () -> Unit = {},
     onLoadLabResults: () -> Unit = {},
@@ -101,6 +104,7 @@ fun HealthDebugScreen(
     var chartAxisRanges by remember { mutableStateOf(chartAxisStore.load()) }
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
+    var showCurrentMeal by remember { mutableStateOf(false) }
     var showLabResults by remember { mutableStateOf(false) }
     var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
     var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
@@ -121,8 +125,10 @@ fun HealthDebugScreen(
         }
     }
 
-    BackHandler(enabled = showSettings || showManualInput || showLabResults) {
-        if (showLabResults) {
+    BackHandler(enabled = showSettings || showManualInput || showLabResults || showCurrentMeal) {
+        if (showCurrentMeal) {
+            showCurrentMeal = false
+        } else if (showLabResults) {
             showLabResults = false
         } else if (showManualInput) {
             showManualInput = false
@@ -132,7 +138,7 @@ fun HealthDebugScreen(
         }
     }
 
-    if (!showLabResults && state.isLoading && state.availability == HealthConnectAvailability.Checking) {
+    if (!showCurrentMeal && !showLabResults && state.isLoading && state.availability == HealthConnectAvailability.Checking) {
         LoadingScreen(modifier = modifier)
         return
     }
@@ -143,6 +149,10 @@ fun HealthDebugScreen(
             .background(AppBackground),
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
+            if (showCurrentMeal) {
+                CurrentMealScreen(currentMealState, onRefreshCurrentMeal, onBack = { showCurrentMeal = false })
+                return@CompositionLocalProvider
+            }
             if (showLabResults) {
                 LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults,
                     onItemSettingsSaved = onLabItemSettingsSaved,
@@ -296,12 +306,20 @@ fun HealthDebugScreen(
                         }
                     }
                 }
-                OutlinedButton(
-                    onClick = { showLabResults = true },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RectangleShape,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                ) { Text("検査結果") }
+                Row(Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { showLabResults = true },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RectangleShape,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) { Text("検査結果") }
+                    OutlinedButton(
+                        onClick = { showCurrentMeal = true; onRefreshCurrentMeal() },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RectangleShape,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    ) { Text("今の食事内容") }
+                }
             }
         }
     }
