@@ -225,7 +225,10 @@ internal class SpreadsheetSyncCoordinator(
         }
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.LoadCurrentMeal
         updateState { copy(currentMeal = currentMeal.copy(isLoading = true, status = "先頭の食事プランを取得中")) }
-        val request = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(DRIVE_APP_DATA_SCOPE))).build()
+        // メシ残高のDriveAccessManager.authorizationScopesと同じ認証要求。
+        val request = AuthorizationRequest.builder()
+            .setRequestedScopes(listOf(Scope(DRIVE_APP_DATA_SCOPE), Scope(DRIVE_READ_SCOPE)))
+            .build()
         Identity.getAuthorizationClient(activity).authorize(request)
             .addOnSuccessListener { result ->
                 if (!result.hasResolution()) {
@@ -566,6 +569,7 @@ internal class SpreadsheetSyncCoordinator(
         private const val TAG = "HealthSheetSync"
         private const val DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
         private const val DRIVE_APP_DATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
+        private const val DRIVE_READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
         private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
         private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
         private const val AUTOMATIC_SYNC_DEBOUNCE_MS = 1_000L

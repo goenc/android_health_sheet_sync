@@ -25,9 +25,6 @@ internal data class CurrentMealReadResult(val plan: CurrentMealPlan?, val fileCo
 internal class CurrentMealReader {
     suspend fun read(accessToken: String): CurrentMealReadResult = withContext(Dispatchers.IO) {
         val batches = listBatches(accessToken)
-        check(batches.isNotEmpty()) {
-            "対象の同期ファイルが見つかりません。同じGoogleアカウントでも別アプリの専用領域は読めない場合があります。PfcPlanBoardの同期状況とOAuth設定を確認してください"
-        }
         val contents = coroutineScope {
             val semaphore = Semaphore(4)
             batches.map { batch ->
@@ -43,6 +40,7 @@ internal class CurrentMealReader {
 
     private fun listBatches(token: String): List<MealSyncBatch> {
         val files = mutableListOf<MealSyncBatch>()
+        var listedCount = 0
         var page: String? = null
         do {
             val url = Uri.parse("$API/files").buildUpon()
@@ -53,11 +51,19 @@ internal class CurrentMealReader {
             page?.let { url.appendQueryParameter("pageToken", it) }
             val response = request(token, url.build().toString().removePrefix(API))
             val array = response.optJSONArray("files") ?: JSONArray()
+            listedCount += array.length()
             repeat(array.length()) { index ->
                 parseMealSyncBatch(array.getJSONObject(index))?.let { files += it }
             }
             page = response.optString("nextPageToken").takeIf { it.isNotBlank() }
         } while (page != null)
+        check(files.isNotEmpty()) {
+            if (listedCount == 0) {
+                "同期ファイルの取得0件。メシ残高と同じGoogleアカウントで認証してください。同じアカウントでも0件なら、両アプリのOAuth登録先を確認してください"
+            } else {
+                "同期ファイル候補${listedCount}件、対象0件。データセットIDまたは同期ファイルのアプリ専用プロパティを確認できませんでした"
+            }
+        }
         return files.sortedWith(compareBy<MealSyncBatch> { it.deviceId }
             .thenBy { it.deviceSequence }.thenBy { it.name }.thenBy { it.id })
     }
