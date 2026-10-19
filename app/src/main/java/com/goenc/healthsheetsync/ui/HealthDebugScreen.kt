@@ -389,7 +389,7 @@ private fun MainDestinationButton(label: String, icon: Int, onClick: () -> Unit,
         onClick = onClick,
         modifier = modifier.height(56.dp),
         shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26384D), contentColor = Color.White),
+        colors = ButtonDefaults.buttonColors(containerColor = AppPrimary, contentColor = Color.White),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
