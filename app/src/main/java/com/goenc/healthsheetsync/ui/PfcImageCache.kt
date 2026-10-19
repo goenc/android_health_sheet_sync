@@ -31,6 +31,7 @@ internal object PfcImageCache {
                     var sample = 1
                     while (bounds.outWidth / sample > edge || bounds.outHeight / sample > edge) sample *= 2
                     BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
+                        ?.apply { prepareToDraw() }
                         ?.asImageBitmap()
                 }.getOrNull()
                 bitmap?.also { cache.put(Key(file.absolutePath, edge), it) }
@@ -38,13 +39,14 @@ internal object PfcImageCache {
         }
     }
 
-    suspend fun prefetch(files: Collection<File>) {
+    suspend fun prefetch(files: Collection<File>, initialPlan: Boolean = false) {
         for (file in files.distinctBy { it.absolutePath }) {
             // Do not let speculative reads evict images already used by the user.
             if (peek(file, 128) != null) continue
-            if (!cache.hasRoomFor(128 * 128 * 4)) return
-            load(file, 128, prefetch = true)
-            delay(16) // Yield between images; cancellation stops prefetch when interaction resumes.
+            if (!initialPlan && !cache.hasRoomFor(128 * 128 * 4)) return
+            load(file, 128, prefetch = !initialPlan)
+            // The initial plan is prepared immediately after the main screen draws.
+            if (!initialPlan) delay(16)
         }
     }
 }

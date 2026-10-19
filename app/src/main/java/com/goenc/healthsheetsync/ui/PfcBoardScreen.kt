@@ -51,15 +51,20 @@ private data class PlanDetail(
     val text: String = "", val lines: List<String> = emptyList(),
 )
 
+internal fun initialPfcPlan(boards: List<PfcBoard>): PfcPlan? {
+    val plans = boards.flatMap { it.plans }.distinctBy { it.id }
+    return plans.firstOrNull { it.id == boards.firstOrNull()?.baselineId } ?: plans.firstOrNull()
+}
+
 @Composable
 fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Unit) {
     val choices = remember(state.boards) {
         state.boards.flatMap { board -> board.plans.map { PlanChoice(board, it) } }.distinctBy { it.plan.id }
     }
+    val initialPlanId = remember(state.boards) { initialPfcPlan(state.boards)?.id }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     val choice = choices.firstOrNull { it.plan.id == selectedId }
-        ?: choices.firstOrNull { it.plan.id == state.boards.firstOrNull()?.baselineId }
-        ?: choices.firstOrNull()
+        ?: choices.firstOrNull { it.plan.id == initialPlanId }
     var detail by remember(choice?.plan?.id) { mutableStateOf<PlanDetail?>(null) }
     val planStates = rememberSaveableStateHolder()
     val tabs = rememberLazyListState()

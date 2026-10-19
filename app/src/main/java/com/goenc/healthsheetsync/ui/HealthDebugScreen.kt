@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -124,6 +125,20 @@ fun HealthDebugScreen(
     LaunchedEffect(Unit) { onLoadLabResults(); onLoadPfcBoard() }
 
     val lastInteraction = remember { MutableStateFlow<Long?>(System.nanoTime()) }
+    var mainScreenDisplayed by remember { mutableStateOf(false) }
+    val initialPlanFiles = remember(pfcBoardState.boards, pfcBoardState.images) {
+        initialPfcPlan(pfcBoardState.boards)?.meals.orEmpty().flatMap { meal ->
+            meal.items.filter { it.enabled || (it.isMainDishCandidate && it.sourceEnabled) }
+                .mapNotNull { it.imageId }
+        }.mapNotNull { pfcBoardState.images[it.lowercase()] }.distinctBy { it.absolutePath }
+    }
+    var initialPlanPrepared by remember(initialPlanFiles) { mutableStateOf(false) }
+    LaunchedEffect(mainScreenDisplayed, initialPlanFiles) {
+        if (!mainScreenDisplayed) return@LaunchedEffect
+        // Opening the menu must not cancel preparation of its default plan.
+        PfcImageCache.prefetch(initialPlanFiles, initialPlan = true)
+        initialPlanPrepared = true
+    }
     val prefetchFiles = remember(pfcBoardState.boards, pfcBoardState.images) {
         pfcBoardState.boards.flatMap { board ->
             board.plans.sortedBy { it.id != board.baselineId }.flatMap { plan ->
@@ -131,7 +146,8 @@ fun HealthDebugScreen(
             }
         }.mapNotNull { pfcBoardState.images[it.lowercase()] }.distinctBy { it.absolutePath }
     }
-    LaunchedEffect(prefetchFiles) {
+    LaunchedEffect(prefetchFiles, initialPlanPrepared) {
+        if (!initialPlanPrepared) return@LaunchedEffect
         lastInteraction.collectLatest { releasedAt ->
             if (releasedAt == null) return@collectLatest
             delay(650)
@@ -190,6 +206,14 @@ fun HealthDebugScreen(
                     onItemSettingsSaved = onLabItemSettingsSaved,
                     onImport = onImportLabResults, onBack = { showLabResults = false })
                 return@CompositionLocalProvider
+            }
+            LaunchedEffect(state.isLoading, showSettings, showManualInput) {
+                if (!state.isLoading && !showSettings && !showManualInput && !mainScreenDisplayed) {
+                    // Wait until the loaded main screen has actually had a chance to draw.
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    mainScreenDisplayed = true
+                }
             }
             Column(
                 modifier = Modifier.fillMaxSize().let { rootModifier ->
