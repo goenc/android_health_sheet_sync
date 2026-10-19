@@ -50,13 +50,18 @@ data class PfcNutrition(
     val f: BigDecimal,
     val c: BigDecimal,
     val purineMg: BigDecimal,
+    val availableCarbohydrateG: BigDecimal? = null,
+    val dietaryFiberG: BigDecimal? = null,
 ) {
     operator fun plus(other: PfcNutrition) = PfcNutrition(
         kcal + other.kcal, p + other.p, f + other.f, c + other.c, purineMg + other.purineMg,
+        knownSum(availableCarbohydrateG, other.availableCarbohydrateG), knownSum(dietaryFiberG, other.dietaryFiberG),
     )
 
     operator fun minus(other: PfcNutrition) = PfcNutrition(
         kcal - other.kcal, p - other.p, f - other.f, c - other.c, purineMg - other.purineMg,
+        availableCarbohydrateG?.let { a -> other.availableCarbohydrateG?.let { a - it } },
+        dietaryFiberG?.let { a -> other.dietaryFiberG?.let { a - it } },
     )
 
     /** PC display rounding: kcal integer, other values to one decimal, midpoint away from zero. */
@@ -334,6 +339,7 @@ private class Projection(private val snapshot: PfcSyncSnapshot) {
             recipe.long("externalFatMilligrams"),
             recipe.long("externalCarbohydrateMilligrams"),
             0, 0, 0,
+            carbohydrateBreakdown(recipe, "externalAvailableCarbohydrateMilligrams", "externalDietaryFiberMilligrams"),
         )
     }
 
@@ -386,9 +392,26 @@ private class Projection(private val snapshot: PfcSyncSnapshot) {
             EnergyBand(low, high),
             row.long("proteinMilligrams"), row.long("fatMilligrams"), row.long("carbohydrateMilligrams"),
             animal, plant, other,
+            carbohydrateBreakdown(row, "availableCarbohydrateMilligrams", "dietaryFiberMilligrams"),
         )
     }
 }
+
+private data class CarbohydrateMg(val available: Long, val fiber: Long) {
+    operator fun plus(other: CarbohydrateMg) = CarbohydrateMg(available + other.available, fiber + other.fiber)
+    fun scale(ratio: ScaleRatio) = CarbohydrateMg(scaleLong(available, ratio), scaleLong(fiber, ratio))
+}
+
+private fun carbohydrateBreakdown(row: JSONObject, availableKey: String, fiberKey: String): CarbohydrateMg? {
+    val available = row.optionalString(availableKey)
+    val fiber = row.optionalString(fiberKey)
+    if (available == null && fiber == null) return null
+    require(available != null && fiber != null) { "糖質・食物繊維の内訳が片方だけ存在" }
+    return CarbohydrateMg(row.long(availableKey), row.long(fiberKey))
+}
+
+private fun knownSum(a: BigDecimal?, b: BigDecimal?): BigDecimal? =
+    if (a == null && b == null) null else (a ?: BigDecimal.ZERO) + (b ?: BigDecimal.ZERO)
 
 private data class EnergyBand(val low: Long, val high: Long) {
     private fun effective(): EnergyBand {
@@ -427,6 +450,7 @@ private data class Raw(
     val animalPurineUg: Long,
     val plantPurineUg: Long,
     val otherPurineUg: Long,
+    val knownCarbohydrate: CarbohydrateMg? = null,
 ) {
     operator fun plus(other: Raw) = Raw(
         energy + other.energy,
@@ -436,18 +460,22 @@ private data class Raw(
         animalPurineUg + other.animalPurineUg,
         plantPurineUg + other.plantPurineUg,
         otherPurineUg + other.otherPurineUg,
+        if (knownCarbohydrate == null) other.knownCarbohydrate else
+            knownCarbohydrate + (other.knownCarbohydrate ?: CarbohydrateMg(0, 0)),
     )
 
     fun scale(ratio: ScaleRatio) = Raw(
         energy.scale(ratio),
         scaleLong(proteinMg, ratio), scaleLong(fatMg, ratio), scaleLong(carbohydrateMg, ratio),
         scaleLong(animalPurineUg, ratio), scaleLong(plantPurineUg, ratio), scaleLong(otherPurineUg, ratio),
+        knownCarbohydrate?.scale(ratio),
     )
 
     fun scaleExact(ratio: ScaleRatio) = Raw(
         energy.scaleExact(ratio),
         scaleLong(proteinMg, ratio), scaleLong(fatMg, ratio), scaleLong(carbohydrateMg, ratio),
         scaleLong(animalPurineUg, ratio), scaleLong(plantPurineUg, ratio), scaleLong(otherPurineUg, ratio),
+        knownCarbohydrate?.scale(ratio),
     )
 
     fun scaleRatio(numerator: BigDecimal, denominator: BigDecimal) = scale(ScaleRatio(numerator, denominator))
@@ -458,6 +486,8 @@ private data class Raw(
         BigDecimal.valueOf(fatMg).divide(THOUSAND),
         BigDecimal.valueOf(carbohydrateMg).divide(THOUSAND),
         BigDecimal.valueOf(animalPurineUg + plantPurineUg + otherPurineUg).divide(THOUSAND),
+        knownCarbohydrate?.available?.let { BigDecimal.valueOf(it).divide(THOUSAND) },
+        knownCarbohydrate?.fiber?.let { BigDecimal.valueOf(it).divide(THOUSAND) },
     )
 
     companion object {

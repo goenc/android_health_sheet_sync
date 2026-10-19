@@ -109,6 +109,8 @@ class PfcBoardProjectionTest {
             put("otherProteinMilligrams", 0L)
             put("fatMilligrams", 0L)
             put("carbohydrateMilligrams", 0L)
+            put("availableCarbohydrateMilligrams", 20_000L)
+            put("dietaryFiberMilligrams", 4_000L)
             put("purineMicrogramsPerReference", 1_500L)
             put("animalPurineMicrogramsPerReference", 1_500L)
             put("plantPurineMicrogramsPerReference", 0L)
@@ -124,6 +126,8 @@ class PfcBoardProjectionTest {
         assertEquals("Recipe", recipe.name)
         assertDecimal("75", recipe.nutrition.kcal)
         assertDecimal("5", recipe.nutrition.p)
+        assertDecimal("10", recipe.nutrition.availableCarbohydrateG!!)
+        assertDecimal("2", recipe.nutrition.dietaryFiberG!!)
         assertEquals(listOf("Ingredient 200g"), recipe.details)
     }
 
@@ -269,6 +273,30 @@ class PfcBoardProjectionTest {
         val plan = snapshot(rows).boards().single().plans.single()
         assertEquals(listOf(0, 9), plan.meals.map { it.slot })
         assertDecimal("225", plan.nutrition.kcal)
+    }
+
+    @Test
+    fun `daily carbohydrate breakdown scales quantities and shared drinks and keeps known values`() {
+        val rows = mutableRows(fixture(0))
+        val foods = rows.getValue("DailyPlanFoodSnapshotEntity")
+        foods.getValue("food-item").apply {
+            put("availableCarbohydrateMilligrams", 40_000L); put("dietaryFiberMilligrams", 10_000L)
+        }
+        foods.getValue("drink-item").apply {
+            put("availableCarbohydrateMilligrams", 1_000L); put("dietaryFiberMilligrams", 2_000L)
+        }
+        rows.getValue("DailyPlanMealItemSnapshotEntity").getValue("food-item").put("standardAmount", 50_000L)
+        var total = snapshot(rows).boards().single().plans.single().nutrition
+        assertDecimal("23", total.availableCarbohydrateG!!)
+        assertDecimal("11", total.dietaryFiberG!!)
+        foods.getValue("food-item").remove("availableCarbohydrateMilligrams")
+        foods.getValue("food-item").remove("dietaryFiberMilligrams")
+        total = snapshot(rows).boards().single().plans.single().nutrition
+        assertDecimal("3", total.availableCarbohydrateG!!)
+        assertDecimal("6", total.dietaryFiberG!!)
+        assertEquals(null, fixture(0).boards().single().plans.single().nutrition.availableCarbohydrateG)
+        foods.getValue("food-item").put("dietaryFiberMilligrams", 10_000L)
+        assertThrows(IllegalArgumentException::class.java) { snapshot(rows).boards() }
     }
 
     private fun fixture(mode: Int, includeFood: Boolean = true): PfcSyncSnapshot {
