@@ -962,25 +962,23 @@ private fun SelectedDaySummary(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SummaryInfoLine(
                     text = "朝 ${day?.morning.weightText() ?: "-"}",
                     color = ChartBlue,
                     bold = true,
-                    modifier = Modifier.weight(1f),
                 )
                 SummaryInfoLine(
                     text = "夜 ${day?.night.weightText() ?: "-"}",
                     color = ChartBlue,
                     bold = true,
-                    modifier = Modifier.weight(1f),
                 )
                 SummaryInfoLine(
                     text = "差 ${day?.weightDifferenceText() ?: "-"}",
                     color = ChartBlue,
                     bold = true,
-                    modifier = Modifier.weight(1f),
                 )
             }
             Row(
@@ -1006,27 +1004,30 @@ private fun SelectedDaySummary(
                 )
                 SummaryInfoLine(
                     text = "A1c ${graphValues?.a1cText ?: "-"}",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1.6f),
                 )
             }
-            SummaryInfoLine("血圧 ${graphValues?.bloodPressureText ?: "-"}")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                SummaryInfoLine("血圧 ${graphValues?.bloodPressureText ?: "-"}", modifier = Modifier.weight(1f))
                 SummaryInfoLine(
-                    text = "腹囲 ${graphValues?.waistText ?: "-"}",
-                    modifier = Modifier.weight(0.85f),
+                    text = "腹囲 ${graphValues?.waistText ?: "-"}  WHtR " +
+                        (selectedDayWaistHeightRatioText(day?.date, graphValues?.waistCm, dailyBodySettings) ?: "-"),
+                    modifier = Modifier.weight(1.6f),
                 )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 SummaryInfoLine(
                     text = "BMI ${selectedDayBmiText(day, dailyBodySettings) ?: "-"}",
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.weight(0.75f),
                 )
                 SummaryInfoLine(
                     text = "FFMI ${selectedDayFfmiText(day, manualRecords, dailyBodySettings) ?: "-"}",
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.weight(1.4f),
                 )
             }
         }

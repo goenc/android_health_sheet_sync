@@ -5,6 +5,7 @@ import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DailyEnergyDisplay
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
@@ -15,6 +16,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -196,6 +198,7 @@ internal data class SelectedGraphValues(
     val a1cText: String?,
     val bloodPressureText: String?,
     val waistText: String?,
+    val waistCm: Double? = null,
 )
 
 internal data class GraphValue(
@@ -747,14 +750,28 @@ internal fun selectedGraphValuesFor(
         ?.visibleRecords
         ?.lastOrNull { it.measuredAt.toLocalDate() == date }
         ?.let { "${it.systolic.roundToInt()}/${it.diastolic.roundToInt()}" }
-    val waist = calculateWaistChart(manualRecords, window)
-        ?.selectedValueText(date)
+    val waistChart = calculateWaistChart(manualRecords, window)
     return SelectedGraphValues(
         glucoseText = fastingGlucose,
         a1cText = a1c,
         bloodPressureText = bloodPressure,
-        waistText = waist,
+        waistText = waistChart?.selectedValueText(date),
+        waistCm = waistChart?.actualValueAt(date) ?: waistChart?.estimatedValueAt(date),
     )
+}
+
+internal fun selectedDayWaistHeightRatioText(
+    date: LocalDate?,
+    waistCm: Double?,
+    dailyBodySettings: List<DailyBodySetting>,
+): String? {
+    if (date == null || waistCm == null || !waistCm.isFinite() || waistCm <= 0.0) return null
+    val heightCm = dailyBodySettings.filter { !it.targetDate.isAfter(date) }
+        .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
+        ?.heightCm ?: return null
+    if (!heightCm.isFinite() || heightCm <= 0.0) return null
+    val ratio = waistCm / heightCm
+    return ratio.takeIf { it.isFinite() && it > 0.0 }?.let { String.format(Locale.ROOT, "%.2f", it) }
 }
 
 internal fun nearestFastingGlucoseRecord(
@@ -800,14 +817,16 @@ internal fun FastingGlucoseChart.selectedValueText(date: LocalDate): String {
 }
 
 internal fun WaistChart.selectedValueText(date: LocalDate): String? {
-    val actualValue = visibleRecords
-        .filter { it.measuredAt.toLocalDate() == date }
-        .maxByOrNull { it.measuredAt }
-        ?.value
+    val actualValue = actualValueAt(date)
     return actualValue
         ?.let { "${formatDecimal(it)} cm" }
         ?: estimatedValueAt(date)?.let { "${formatDecimal(it)} cm$ASSUMED_VALUE_SUFFIX" }
 }
+
+private fun WaistChart.actualValueAt(date: LocalDate): Double? = visibleRecords
+        .filter { it.measuredAt.toLocalDate() == date }
+        .maxByOrNull { it.measuredAt }
+        ?.value
 
 internal fun WaistChart.estimatedValueAt(date: LocalDate): Double? {
     val sortedRecords = lineRecords.sortedBy { it.measuredAt }

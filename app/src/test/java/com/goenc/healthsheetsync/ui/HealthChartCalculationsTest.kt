@@ -336,6 +336,26 @@ class HealthChartCalculationsTest {
     }
 
     @Test
+    fun waistHeightRatio_uses_height_on_or_before_selected_date_and_two_decimal_places() {
+        val settings = listOf(bodySetting(2026, 1, 1, 168.0), bodySetting(2026, 1, 10, 180.0))
+        assertEquals("0.43", selectedDayWaistHeightRatioText(LocalDate.of(2026, 1, 5), 72.4, settings))
+        assertEquals("0.40", selectedDayWaistHeightRatioText(LocalDate.of(2026, 1, 10), 72.4, settings))
+        assertNull(selectedDayWaistHeightRatioText(LocalDate.of(2025, 12, 31), 72.4, settings))
+    }
+
+    @Test
+    fun waistHeightRatio_omits_missing_or_invalid_measurements() {
+        val date = LocalDate.of(2026, 1, 5)
+        val settings = listOf(bodySetting(2026, 1, 1, 168.0))
+        assertNull(selectedDayWaistHeightRatioText(null, 72.4, settings))
+        assertNull(selectedDayWaistHeightRatioText(date, null, settings))
+        listOf(0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY).forEach { invalid ->
+            assertNull(selectedDayWaistHeightRatioText(date, invalid, settings))
+            assertNull(selectedDayWaistHeightRatioText(date, 72.4, listOf(bodySetting(2026, 1, 1, invalid))))
+        }
+    }
+
+    @Test
     fun averageEstimatedTotalKcal_changes_with_chart_window() {
         val steps = listOf(
             stepDaily(2026, 1, 1, 10_000),
