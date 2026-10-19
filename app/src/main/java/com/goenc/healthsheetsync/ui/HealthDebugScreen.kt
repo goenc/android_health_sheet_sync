@@ -385,10 +385,10 @@ fun HealthDebugScreen(
 
 @Composable
 private fun MainDestinationButton(label: String, icon: Int, onClick: () -> Unit, modifier: Modifier) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 36.dp) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 38.dp) {
         Button(
             onClick = onClick,
-            modifier = modifier.height(36.dp),
+            modifier = modifier.height(38.dp),
             shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(containerColor = AppPrimary, contentColor = Color.White),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
