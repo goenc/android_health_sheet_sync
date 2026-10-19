@@ -89,17 +89,15 @@ internal fun SettingsScreen(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        BackIconButton(onClick = onBack)
         Text(
             text = "設定",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
-        OutlinedButton(onClick = onBack) {
-            Text("メインに戻る")
-        }
     }
     ChartAxisSettingsSection(chartAxisRanges, onSaveChartAxisRange)
     Column(

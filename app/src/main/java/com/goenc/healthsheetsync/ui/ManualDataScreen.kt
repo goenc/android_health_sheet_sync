@@ -98,17 +98,15 @@ internal fun ManualDataScreen(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        BackIconButton(onClick = onBack)
         Text(
             text = "手入力",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
         )
-        OutlinedButton(onClick = onBack) {
-            Text("戻る")
-        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -157,7 +157,7 @@ fun LabResultsScreen(
     }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { if (selectedItem != null) selectedItem = null else onBack() }) { Text("戻る") }
+            BackIconButton(onClick = { if (selectedItem != null) selectedItem = null else onBack() })
             Text("検査結果", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             IconButton(onClick = { showSettings = true }) {
                 Icon(painterResource(R.drawable.ic_settings_24), contentDescription = "検査結果の設定")
@@ -298,7 +298,7 @@ private fun LabResultsSettingsScreen(
     }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("戻る") }
+            BackIconButton(onClick = onBack)
             Text("検査結果の設定", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         OutlinedButton(onClick = onRefresh, enabled = !state.isLoading, modifier = Modifier.fillMaxWidth()) {

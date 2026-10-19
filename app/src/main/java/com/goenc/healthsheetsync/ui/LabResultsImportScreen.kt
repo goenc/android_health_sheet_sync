@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -38,8 +39,8 @@ internal fun LabResultsImportScreen(
     val goBack = { if (!busy) { if (preview != null) preview = null else onBack() } }
     BackHandler { goBack() }
     Column(modifier.fillMaxSize().imePadding().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row {
-            TextButton(onClick = goBack, enabled = !busy) { Text("戻る") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BackIconButton(onClick = goBack, enabled = !busy)
             Text("検査結果の取り込み", style = MaterialTheme.typography.titleLarge)
         }
         val records = preview

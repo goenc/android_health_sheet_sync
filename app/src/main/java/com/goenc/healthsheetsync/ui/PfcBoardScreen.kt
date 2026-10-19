@@ -74,9 +74,7 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
     }
     Column(Modifier.fillMaxSize().background(SheetBackground)) {
         Row(Modifier.fillMaxWidth().background(Color.White), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(painterResource(R.drawable.ic_arrow_back_24), "戻る", tint = SheetInk, modifier = Modifier.size(20.dp))
-            }
+            BackIconButton(onClick = onBack)
             LazyRow(state = tabs, modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 items(choices, key = { it.plan.id }) { candidate ->
                     val active = candidate.plan.id == choice?.plan?.id
