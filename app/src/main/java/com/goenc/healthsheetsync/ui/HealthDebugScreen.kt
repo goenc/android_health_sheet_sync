@@ -36,12 +36,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.data.ChartAxisSettingsStore
@@ -119,6 +123,22 @@ fun HealthDebugScreen(
     // 検査結果を開く前に取得を始め、保存済みの結果はそのまま表示に使う。
     LaunchedEffect(Unit) { onLoadLabResults(); onLoadPfcBoard() }
 
+    val lastInteraction = remember { MutableStateFlow<Long?>(System.nanoTime()) }
+    val prefetchFiles = remember(pfcBoardState.boards, pfcBoardState.images) {
+        pfcBoardState.boards.flatMap { board ->
+            board.plans.sortedBy { it.id != board.baselineId }.flatMap { plan ->
+                plan.meals.flatMap { meal -> meal.items.filter { it.sourceEnabled }.mapNotNull { it.imageId } }
+            }
+        }.mapNotNull { pfcBoardState.images[it.lowercase()] }.distinctBy { it.absolutePath }
+    }
+    LaunchedEffect(prefetchFiles) {
+        lastInteraction.collectLatest { releasedAt ->
+            if (releasedAt == null) return@collectLatest
+            delay(650)
+            PfcImageCache.prefetch(prefetchFiles)
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             val zoneId = ZoneId.systemDefault()
@@ -150,7 +170,15 @@ fun HealthDebugScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(AppBackground),
+            .background(AppBackground)
+            .pointerInput(lastInteraction) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        lastInteraction.value = if (event.changes.any { it.pressed }) null else System.nanoTime()
+                    }
+                }
+            },
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
             if (showPfcBoard) {

@@ -47,6 +47,7 @@ internal class SpreadsheetSyncCoordinator(
 ) {
     private val pfcBoardReader = PfcBoardReader(activity.applicationContext)
     private var pfcTokenRefreshAttempted = false
+    private var localPfcBoardLoadStarted = false
     private val labResultsReader = LabResultsReader(activity.applicationContext)
     private val labResultsWriter = LabResultsWriter(labResultsReader)
     private var pendingLabSaveResult: LabResultsSaveResult? = null
@@ -228,6 +229,8 @@ internal class SpreadsheetSyncCoordinator(
     }
 
     fun loadLocalPfcBoard() {
+        if (localPfcBoardLoadStarted || state.pfcBoard.loading) return
+        localPfcBoardLoadStarted = true
         val initial = state.pfcBoard
         scope.launch {
             val loaded = pfcBoardReader.cached()

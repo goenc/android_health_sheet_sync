@@ -1,6 +1,5 @@
 package com.goenc.healthsheetsync.ui
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,11 +16,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -36,8 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -64,6 +61,7 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
         ?: choices.firstOrNull { it.plan.id == state.boards.firstOrNull()?.baselineId }
         ?: choices.firstOrNull()
     var detail by remember(choice?.plan?.id) { mutableStateOf<PlanDetail?>(null) }
+    val planStates = rememberSaveableStateHolder()
     val tabs = rememberLazyListState()
     LaunchedEffect(choice?.plan?.id) {
         val index = choices.indexOf(choice)
@@ -103,9 +101,11 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
                     color = SheetMuted, fontSize = 13.sp, textAlign = TextAlign.Center)
             }
         } else {
-            ScrollPlanSheet(choice.plan, state.images,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 8.dp),
-                onDetail = { detail = it })
+            planStates.SaveableStateProvider(choice.plan.id) {
+                ScrollPlanSheet(choice.plan, state.images,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 8.dp),
+                    onDetail = { detail = it })
+            }
         }
     }
     detail?.let { selected ->
@@ -113,7 +113,7 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
             title = { Text(selected.title, color = SheetInk, fontSize = 18.sp) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (selected.imageId != null) FoodImage(selected.imageId, state.images, Modifier.fillMaxWidth().height(160.dp))
+                    if (selected.imageId != null) FoodImage(selected.imageId, state.images, Modifier.fillMaxWidth().height(160.dp), edge = 512)
                     if (selected.text.isNotBlank()) Text(selected.text, color = SheetInk)
                     val nutrition = selected.nutrition
                     Text("${nutrition.kcal.number(0)} kcal  P ${nutrition.p.number(1)}g  " +
@@ -269,18 +269,11 @@ private fun FoodGrid(items: List<PfcItem>, images: Map<String, File>, onDetail: 
 }
 
 @Composable
-private fun FoodImage(id: String?, files: Map<String, File>, modifier: Modifier) {
+private fun FoodImage(id: String?, files: Map<String, File>, modifier: Modifier, edge: Int = 128) {
     val file = id?.let { files[it.lowercase()] }
-    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, file, file?.lastModified()) {
-        value = withContext(Dispatchers.IO) {
-            if (file == null) return@withContext null
-            runCatching {
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.absolutePath, bounds)
-                var sample = 1
-                while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2
-                BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
-            }.getOrNull()
+    val bitmap by key(file, edge) {
+        produceState(PfcImageCache.peek(file, edge)) {
+            value = PfcImageCache.load(file, edge)
         }
     }
     Box(modifier.clip(RoundedCornerShape(3.dp)).background(Color(0xFFF5F7F8)), contentAlignment = Alignment.Center) {
