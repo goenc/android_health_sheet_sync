@@ -24,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -291,7 +292,6 @@ fun HealthDebugScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 11.dp),
                 ) {
                     IconButton(
@@ -361,8 +361,8 @@ fun HealthDebugScreen(
                     }
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth().background(Color.White)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     MainDestinationButton(
@@ -385,16 +385,18 @@ fun HealthDebugScreen(
 
 @Composable
 private fun MainDestinationButton(label: String, icon: Int, onClick: () -> Unit, modifier: Modifier) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(56.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = AppPrimary, contentColor = Color.White),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(painterResource(icon), contentDescription = null, tint = Color(0xFFCEDBEF), modifier = Modifier.size(20.dp))
-            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 36.dp) {
+        Button(
+            onClick = onClick,
+            modifier = modifier.height(36.dp),
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AppPrimary, contentColor = Color.White),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(painterResource(icon), contentDescription = null, tint = Color(0xFFCEDBEF), modifier = Modifier.size(20.dp))
+                Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
         }
     }
 }
