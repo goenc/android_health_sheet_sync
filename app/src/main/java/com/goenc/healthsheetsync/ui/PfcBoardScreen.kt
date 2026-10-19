@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +30,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -115,6 +118,9 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
                     val nutrition = selected.nutrition
                     Text("${nutrition.kcal.number(0)} kcal  P ${nutrition.p.number(1)}g  " +
                         "F ${nutrition.f.number(1)}g  C ${nutrition.c.number(1)}g", color = SheetInk)
+                    Text("糖質 ${nutrition.availableCarbohydrateG?.number(1) ?: "—"} g  /  " +
+                        "食物繊維 ${nutrition.dietaryFiberG?.number(1) ?: "—"} g",
+                        color = SheetMuted, fontSize = 13.sp)
                     selected.lines.forEach { Text(it, color = SheetMuted, fontSize = 13.sp) }
                 }
             }, confirmButton = { TextButton(onClick = { detail = null }) { Text("閉じる") } })
@@ -279,7 +285,11 @@ private fun FoodImage(id: String?, files: Map<String, File>, modifier: Modifier)
     }
     Box(modifier.clip(RoundedCornerShape(3.dp)).background(Color(0xFFF5F7F8)), contentAlignment = Alignment.Center) {
         bitmap?.let { Image(it, "食品画像", Modifier.fillMaxSize().padding(1.dp), contentScale = ContentScale.Fit) }
-            ?: Text(if (id == null) "—" else "画像なし", color = SheetMuted, fontSize = 10.sp)
+            ?: BasicText(if (id == null) "—" else "画像なし",
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                style = TextStyle(color = SheetMuted, textAlign = TextAlign.Center),
+                autoSize = TextAutoSize.StepBased(minFontSize = 2.sp, maxFontSize = 8.sp, stepSize = 1.sp),
+                maxLines = 1, softWrap = false)
     }
 }
 
