@@ -112,7 +112,9 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (selected.imageId != null) FoodImage(selected.imageId, state.images, Modifier.fillMaxWidth().height(160.dp))
                     if (selected.text.isNotBlank()) Text(selected.text, color = SheetInk)
-                    Text(selected.nutrition.summary, color = SheetInk)
+                    val nutrition = selected.nutrition
+                    Text("${nutrition.kcal.number(0)} kcal  P ${nutrition.p.number(1)}g  " +
+                        "F ${nutrition.f.number(1)}g  C ${nutrition.c.number(1)}g", color = SheetInk)
                     selected.lines.forEach { Text(it, color = SheetMuted, fontSize = 13.sp) }
                 }
             }, confirmButton = { TextButton(onClick = { detail = null }) { Text("閉じる") } })
@@ -158,7 +160,7 @@ private fun PlanPaper(plan: PfcPlan, mode: Int, images: Map<String, File>, onDet
                         }
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(9, 1, 4, 5).forEach { slot ->
+                        listOf(1, 4, 5).forEach { slot ->
                             val meal = plan.meals.firstOrNull { it.slot == slot }
                             if (meal != null && meal.items.any { it.sourceEnabled }) MealPrintCard(slot, meal, images, onDetail)
                         }
@@ -166,7 +168,7 @@ private fun PlanPaper(plan: PfcPlan, mode: Int, images: Map<String, File>, onDet
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0, 9, 1, 2, 4, 3, 5).forEach { slot ->
+                    listOf(0, 1, 2, 4, 3, 5).forEach { slot ->
                         val meal = plan.meals.firstOrNull { it.slot == slot }
                         if (slot in listOf(0, 2, 3) || meal?.items?.any { it.sourceEnabled } == true) {
                             MealPrintCard(slot, meal, images, onDetail)
@@ -174,6 +176,9 @@ private fun PlanPaper(plan: PfcPlan, mode: Int, images: Map<String, File>, onDet
                     }
                 }
             }
+        }
+        plan.meals.firstOrNull { it.slot == 9 && it.items.any { food -> food.sourceEnabled } }?.let {
+            MealPrintCard(9, it, images, onDetail)
         }
     }
 }
@@ -190,19 +195,16 @@ private fun MealPrintCard(slot: Int, meal: PfcMeal?, images: Map<String, File>, 
             meal?.let { onDetail(PlanDetail(it.name, it.nutrition, it.imageId, it.memo,
                 it.items.map { food -> "${food.name}  ${food.amount}" })) }
         }) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top,
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (slot == 9) "食前ドリンク · 毎食前1回分" else meal?.name?.takeIf { it.isNotBlank() } ?: slotName,
                     color = SheetAccent, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f))
                 meal?.let {
+                    PfcGraph(it.nutrition, Modifier.weight(1.5f))
                     Text("${it.nutrition.kcal.number(0)} kcal", fontSize = 13.sp, lineHeight = 18.sp,
                         color = SheetInk, fontWeight = FontWeight.Bold)
                 }
-            }
-            meal?.let {
-                Text("P ${it.nutrition.p.number(1)}  /  F ${it.nutrition.f.number(1)}  /  C ${it.nutrition.c.number(1)} g",
-                    color = SheetMuted, fontSize = 11.sp, lineHeight = 16.sp)
             }
         }
         if (mainItems.isEmpty()) Text("—", fontSize = 11.sp, color = SheetLine)
@@ -211,6 +213,28 @@ private fun MealPrintCard(slot: Int, meal: PfcMeal?, images: Map<String, File>, 
             HorizontalDivider(color = SheetLine)
             Text("主菜候補", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SheetMuted)
             FoodGrid(candidates, images, onDetail)
+        }
+    }
+}
+
+/** Bar widths show the energy ratio (P/C: 4 kcal/g, F: 9 kcal/g); labels show grams. */
+@Composable
+private fun PfcGraph(nutrition: PfcNutrition, modifier: Modifier = Modifier) {
+    val values = listOf(nutrition.p, nutrition.f, nutrition.c)
+    val energy = values.mapIndexed { index, value -> value.toFloat().coerceAtLeast(0f) * if (index == 1) 9f else 4f }
+    val colors = listOf(SheetAccent, Color(0xFFC28A36), Color(0xFF6286B1))
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            values.forEachIndexed { index, value ->
+                Text("${listOf("P", "F", "C")[index]}${value.number(1)}", color = colors[index],
+                    fontSize = 10.sp, lineHeight = 14.sp, maxLines = 1)
+            }
+        }
+        Row(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(SheetLine)
+            .semantics { contentDescription = "PFCエネルギー比率" }) {
+            energy.forEachIndexed { index, amount ->
+                if (amount > 0f) Box(Modifier.weight(amount).fillMaxHeight().background(colors[index]))
+            }
         }
     }
 }
