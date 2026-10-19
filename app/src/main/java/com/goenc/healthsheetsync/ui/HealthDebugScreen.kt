@@ -15,16 +15,16 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import com.goenc.healthsheetsync.data.PfcBoardState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -36,7 +36,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
@@ -113,7 +112,6 @@ fun HealthDebugScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
     var showPfcBoard by remember { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
     var showLabResults by remember { mutableStateOf(false) }
     var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
     var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
@@ -362,26 +360,41 @@ fun HealthDebugScreen(
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().height(48.dp)) {
-                    OutlinedButton(
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(Color.White)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    MainDestinationButton(
+                        label = "検査結果",
+                        icon = R.drawable.ic_lab_results_24,
                         onClick = { showLabResults = true },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RectangleShape,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    ) { Text("検査結果") }
-                    Box {
-                        OutlinedButton(onClick = { showMenu = true }, modifier = Modifier.height(48.dp), shape = RectangleShape) {
-                            Text("メニュー")
-                        }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(text = { Text("食事プラン") }, onClick = {
-                                showMenu = false
-                                showPfcBoard = true
-                            })
-                        }
-                    }
+                        modifier = Modifier.weight(1f),
+                    )
+                    MainDestinationButton(
+                        label = "メニュー",
+                        icon = R.drawable.ic_restaurant_24,
+                        onClick = { showPfcBoard = true },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MainDestinationButton(label: String, icon: Int, onClick: () -> Unit, modifier: Modifier) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(56.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26384D), contentColor = Color.White),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(painterResource(icon), contentDescription = null, tint = Color(0xFFCEDBEF), modifier = Modifier.size(20.dp))
+            Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
