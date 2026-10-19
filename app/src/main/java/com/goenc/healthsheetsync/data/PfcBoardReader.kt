@@ -22,7 +22,7 @@ data class PfcBoardState(
     val updatedAt: String? = null,
 )
 
-internal class PfcBoardReadException(message: String) : Exception(message)
+internal class PfcBoardReadException(message: String, val retryAuthorization: Boolean = false) : Exception(message)
 
 /** SpreadsheetUploaderと同じ標準HTTP方式。リモート操作はGETだけに限定。 */
 internal class PfcBoardReader(context: Context) {
@@ -40,7 +40,7 @@ internal class PfcBoardReader(context: Context) {
         }.getOrElse { PfcBoardState(status = "端末内データを復元できません。「更新」で再取得") }
     }
 
-    suspend fun read(token: String): PfcBoardState = withContext(Dispatchers.IO) {
+    suspend fun read(token: String, onProgress: suspend (Int, Int) -> Unit = { _, _ -> }): PfcBoardState = withContext(Dispatchers.IO) {
         val inventory = listFiles(token)
         val batchFiles = inventory.filter { file ->
             file.getString("name").startsWith("pfc-sync-") &&
@@ -52,10 +52,11 @@ internal class PfcBoardReader(context: Context) {
         if (batchFiles.isEmpty()) {
             val project = oauthProjectNumber(token)
             throw PfcBoardReadException("同期データなし。PCの同期、同じGoogleアカウント・OAuthプロジェクト・DatasetIdを確認" +
-                (project?.let { "。Android OAuthプロジェクト番号: $it" } ?: ""))
+                (project?.let { "。Android OAuthプロジェクト番号: $it" } ?: ""), retryAuthorization = true)
         }
         val reducer = PfcSyncReducer()
-        batchFiles.forEach { file ->
+        onProgress(0, batchFiles.size)
+        batchFiles.forEachIndexed { index, file ->
             currentCoroutineContext().ensureActive()
             val properties = file.getJSONObject("appProperties")
             val batch = JSONObject(download(token, file.getString("id"), 32 * 1024 * 1024).toString(Charsets.UTF_8))
@@ -63,6 +64,7 @@ internal class PfcBoardReader(context: Context) {
                 batch.getString("deviceId") == properties.getString("deviceId") &&
                 batch.getLong("deviceSequence") == properties.getString("deviceSequence").toLong()) { "同期情報が不一致" }
             reducer.apply(batch)
+            if ((index + 1) % 10 == 0 || index == batchFiles.lastIndex) onProgress(index + 1, batchFiles.size)
         }
         val snapshot = reducer.snapshot()
         val boards = snapshot.boards() // 関連行・計算の検証も保存前に完了させる

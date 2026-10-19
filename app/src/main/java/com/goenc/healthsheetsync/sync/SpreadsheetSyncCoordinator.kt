@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.ClearTokenRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
@@ -45,6 +46,7 @@ internal class SpreadsheetSyncCoordinator(
     private val onStateChanged: (SpreadsheetSyncUiState) -> Unit,
 ) {
     private val pfcBoardReader = PfcBoardReader(activity.applicationContext)
+    private var pfcTokenRefreshAttempted = false
     private val labResultsReader = LabResultsReader(activity.applicationContext)
     private val labResultsWriter = LabResultsWriter(labResultsReader)
     private var pendingLabSaveResult: LabResultsSaveResult? = null
@@ -240,7 +242,12 @@ internal class SpreadsheetSyncCoordinator(
             return
         }
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.LoadPfcBoard
+        pfcTokenRefreshAttempted = false
         updateState { copy(pfcBoard = pfcBoard.copy(loading = true, status = "比較ボードを取得中")) }
+        authorizePfcBoard()
+    }
+
+    private fun authorizePfcBoard() {
         val request = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(DRIVE_APPDATA_SCOPE))).build()
         Identity.getAuthorizationClient(activity).authorize(request)
             .addOnSuccessListener { result ->
@@ -262,13 +269,28 @@ internal class SpreadsheetSyncCoordinator(
             pfcBoardFailure("Google認証トークンを取得できませんでした")
             return
         }
+        updateState { copy(pfcBoard = pfcBoard.copy(status = "比較ボードの一覧を取得中")) }
         scope.launch {
             try {
-                val loaded = pfcBoardReader.read(token)
+                val loaded = pfcBoardReader.read(token) { completed, total ->
+                    withContext(Dispatchers.Main) {
+                        updateState { copy(pfcBoard = pfcBoard.copy(status = "比較ボードを復元中 $completed/$total")) }
+                    }
+                }
                 updateState { copy(pfcBoard = loaded) }
                 retryPendingAutomaticSpreadsheetSync()
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
+                if (error is PfcBoardReadException && error.retryAuthorization && !pfcTokenRefreshAttempted) {
+                    // OAuth登録の移設後も旧tokenがキャッシュされる。保存データや同意は消さず一度だけ再取得。
+                    pfcTokenRefreshAttempted = true
+                    updateState { copy(pfcBoard = pfcBoard.copy(status = "Google認証トークンを再取得中")) }
+                    Identity.getAuthorizationClient(activity)
+                        .clearToken(ClearTokenRequest.builder().setToken(token).build())
+                        .addOnSuccessListener { authorizePfcBoard() }
+                        .addOnFailureListener { pfcBoardFailure("認証キャッシュの更新に失敗。再度更新してください") }
+                    return@launch
+                }
                 // HTTP本文・例外・同期payloadをログや画面へ流さない。
                 pfcBoardFailure((error as? PfcBoardReadException)?.message
                     ?: "取得・復元に失敗。通信とPCの同期形式を確認してください")
