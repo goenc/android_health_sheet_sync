@@ -145,7 +145,7 @@ private fun PlanPaper(plan: PfcPlan, images: Map<String, File>, onDetail: (PlanD
                 Text("P ${plan.nutrition.p.number(1)}  /  F ${plan.nutrition.f.number(1)}  /  C ${plan.nutrition.c.number(1)} g",
                     color = SheetInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, lineHeight = 17.sp)
                 Text("糖質 ${plan.nutrition.availableCarbohydrateG?.number(1) ?: "—"} g  /  " +
-                    "食物繊維 ${plan.nutrition.dietaryFiberG?.number(1) ?: "—"} g（登録分）",
+                    "食物繊維 ${plan.nutrition.dietaryFiberG?.number(1) ?: "—"} g",
                     color = SheetMuted, fontSize = 10.sp, lineHeight = 15.sp)
             }
         }
