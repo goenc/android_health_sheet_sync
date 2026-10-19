@@ -40,6 +40,8 @@ data class PfcItem(
     val nutrition: PfcNutrition,
     val enabled: Boolean,
     val details: List<String>,
+    val isMainDishCandidate: Boolean = false,
+    val sourceEnabled: Boolean = true,
 )
 
 data class PfcNutrition(
@@ -198,7 +200,7 @@ private class Projection(private val snapshot: PfcSyncSnapshot) {
         return ItemProjection(
             PfcItem(itemName, amount, row.optionalString("imageAssetId")
                 ?: snapshot.find(if (componentType == COMPONENT_FOOD) "DailyPlanFoodSnapshotEntity" else "DailyPlanRecipeSnapshotEntity", id)
-                    ?.optionalString("imageAssetId"), rawAndDetails.first.toPublic(mode), contributes, rawAndDetails.second),
+                    ?.optionalString("imageAssetId"), rawAndDetails.first.toPublic(mode), contributes, rawAndDetails.second, candidate, enabled),
             raw,
             contributes,
         )

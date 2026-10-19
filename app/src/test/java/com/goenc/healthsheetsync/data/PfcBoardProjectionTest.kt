@@ -146,6 +146,8 @@ class PfcBoardProjectionTest {
         assertDecimal("150", breakfast.nutrition.kcal)
         val skipped = breakfast.items.single { it.name == "other-item" }
         assertEquals(false, skipped.enabled)
+        assertEquals(true, skipped.isMainDishCandidate)
+        assertEquals(true, skipped.sourceEnabled)
         assertDecimal("50", skipped.nutrition.kcal)
     }
 

@@ -322,7 +322,7 @@ fun HealthDebugScreen(
                             Text("メニュー")
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(text = { Text("比較ボード（閲覧専用）") }, onClick = {
+                            DropdownMenuItem(text = { Text("食事プラン") }, onClick = {
                                 showMenu = false
                                 showPfcBoard = true
                             })

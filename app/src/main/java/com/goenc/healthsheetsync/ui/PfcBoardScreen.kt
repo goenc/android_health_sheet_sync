@@ -2,122 +2,249 @@ package com.goenc.healthsheetsync.ui
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.math.BigDecimal
+import java.math.RoundingMode
+
+private val SheetInk = Color(0xFF182B3A)
+private val SheetMuted = Color(0xFF667785)
+private val SheetLine = Color(0xFFD6DEE3)
+private val SheetBackground = Color(0xFFF1F4F6)
+private val SheetAccent = Color(0xFF226B67)
+
+private data class PlanChoice(val board: PfcBoard, val plan: PfcPlan)
+private data class PlanDetail(
+    val title: String, val nutrition: PfcNutrition, val imageId: String?,
+    val text: String = "", val lines: List<String> = emptyList(),
+)
 
 @Composable
 fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Unit) {
-    var boardId by remember { mutableStateOf<String?>(null) }
-    val board = state.boards.firstOrNull { it.id == boardId } ?: state.boards.firstOrNull()
-    var planId by remember(board?.id) { mutableStateOf<String?>(null) }
-    var baselineId by remember(board?.id) { mutableStateOf<String?>(null) }
-    val baseline = board?.plans?.firstOrNull { it.id == (baselineId ?: board.baselineId) } ?: board?.plans?.firstOrNull()
-    val plan = board?.plans?.firstOrNull { it.id == planId } ?: baseline
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onBack) { Text("戻る") }
-            TextButton(onClick = onRefresh, enabled = !state.loading) { Text("更新") }
-        }
-        Text("比較ボード · 閲覧専用", style = MaterialTheme.typography.titleLarge)
-        Text(state.status, style = MaterialTheme.typography.bodySmall)
-        state.updatedAt?.let { updated ->
-            val display = remember(updated) {
-                runCatching { java.time.Instant.parse(updated).atZone(java.time.ZoneId.systemDefault())
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")) }.getOrDefault(updated)
+    val choices = remember(state.boards) {
+        state.boards.flatMap { board -> board.plans.map { PlanChoice(board, it) } }.distinctBy { it.plan.id }
+    }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    val choice = choices.firstOrNull { it.plan.id == selectedId }
+        ?: choices.firstOrNull { it.plan.id == state.boards.firstOrNull()?.baselineId }
+        ?: choices.firstOrNull()
+    var detail by remember(choice?.plan?.id) { mutableStateOf<PlanDetail?>(null) }
+    val tabs = rememberLazyListState()
+    LaunchedEffect(choice?.plan?.id) {
+        val index = choices.indexOf(choice)
+        if (index >= 0) tabs.animateScrollToItem(index)
+    }
+    Column(Modifier.fillMaxSize().background(SheetBackground)) {
+        Row(Modifier.fillMaxWidth().background(Color.White), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(painterResource(R.drawable.ic_arrow_back_24), "戻る", tint = SheetInk, modifier = Modifier.size(20.dp))
             }
-            Text("最終取得: $display", style = MaterialTheme.typography.bodySmall)
-        }
-        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
-        if (board == null) {
-            Text(if (state.loading) "初回の全履歴を取得・復元中。このままお待ちください。"
-                else "表示できる比較ボードなし。PCで保存・同期後、「更新」を実行。", Modifier.padding(vertical = 20.dp))
-            return@Column
-        }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.boards.forEach { candidate ->
-                FilterChip(selected = board.id == candidate.id, onClick = { boardId = candidate.id },
-                    label = { Text(candidate.name) })
-            }
-        }
-        Text("計算モード: ${when (board.mode) { 0 -> "Standard"; 1 -> "HIGH"; 2 -> "LOW"; else -> "未対応" }}",
-            style = MaterialTheme.typography.bodySmall)
-        if (baseline == null || plan == null) {
-            Text("ボードに日次プランなし", Modifier.padding(16.dp))
-            return@Column
-        }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
-            item {
-                Text("比較差分 = 各プラン − 基準（${baseline.name}）", style = MaterialTheme.typography.titleSmall)
-                Column(Modifier.horizontalScroll(rememberScrollState())) {
-                    board.plans.forEach { candidate ->
-                        Text("${candidate.name}: ${candidate.nutrition.summary}")
-                        Text("差分: ${candidate.nutrition.difference(baseline.nutrition)}", style = MaterialTheme.typography.bodySmall)
+            LazyRow(state = tabs, modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                items(choices, key = { it.plan.id }) { candidate ->
+                    val active = candidate.plan.id == choice?.plan?.id
+                    Column(Modifier.width(IntrinsicSize.Max).semantics { selected = active; role = Role.Tab }
+                        .clickable { selectedId = candidate.plan.id }.padding(horizontal = 12.dp)) {
+                        Text(candidate.plan.name, color = if (active) SheetInk else SheetMuted,
+                            fontSize = 15.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 10.dp), maxLines = 1)
+                        Box(Modifier.fillMaxWidth().height(2.dp).background(if (active) SheetAccent else Color.Transparent))
                     }
                 }
             }
-            item {
-                Text("基準を選択", style = MaterialTheme.typography.labelMedium)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    board.plans.forEach { candidate ->
-                        FilterChip(selected = baseline.id == candidate.id, onClick = { baselineId = candidate.id },
-                            label = { Text(candidate.name) })
-                    }
-                }
-                Text("食事内容を表示", style = MaterialTheme.typography.labelMedium)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    board.plans.forEach { candidate ->
-                        FilterChip(selected = plan.id == candidate.id, onClick = { planId = candidate.id },
-                            label = { Text(candidate.name) })
-                    }
-                }
-                Text("${plan.name} ${plan.date.orEmpty()}", style = MaterialTheme.typography.titleMedium)
-                if (plan.memo.isNotBlank()) Text(plan.memo)
-                PfcImage(plan.imageId, state.images)
-                Text(plan.nutrition.summary)
+            IconButton(onClick = onRefresh, enabled = !state.loading) {
+                Icon(painterResource(R.drawable.ic_refresh_24), "更新", tint = if (state.loading) SheetLine else SheetInk,
+                    modifier = Modifier.size(20.dp))
             }
-            items(plan.meals) { meal ->
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(meal.name, style = MaterialTheme.typography.titleMedium)
-                        if (meal.memo.isNotBlank()) Text(meal.memo)
-                        PfcImage(meal.imageId, state.images)
-                        Text(meal.nutrition.summary)
-                        val combined = nutritionForSlot(plan, meal.slot)
-                        if (meal.slot in listOf(0, 2, 3)) Text("食前飲料込み: ${combined.summary}", style = MaterialTheme.typography.bodySmall)
-                        Text("差分: ${combined.difference(nutritionForSlot(baseline, meal.slot), true)}",
-                            style = MaterialTheme.typography.bodySmall)
-                        meal.items.forEach { food ->
-                            HorizontalDivider()
-                            Text("${food.name}  ${food.amount}${if (food.enabled) "" else "（集計対象外）"}")
-                            PfcImage(food.imageId, state.images)
-                            Text(food.nutrition.summary, style = MaterialTheme.typography.bodySmall)
-                            food.details.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                        }
-                    }
-                }
+        }
+        HorizontalDivider(color = SheetLine)
+        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = SheetAccent)
+        val showStatus = state.loading || state.status.startsWith("取得失敗") || state.status.contains("未同期画像")
+        if (showStatus) Text(state.status.replace("比較ボード", "データ"), fontSize = 11.sp, lineHeight = 15.sp,
+            color = if (state.status.startsWith("取得失敗")) Color(0xFFAC3D35) else SheetMuted,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp))
+        if (choice == null) {
+            Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                Text(if (state.loading) "保存済みのプランを取得中" else "保存済みのプランがない。右上の更新から取得。",
+                    color = SheetMuted, fontSize = 13.sp, textAlign = TextAlign.Center)
             }
-            item { Spacer(Modifier.height(16.dp)) }
+        } else {
+            ScrollPlanSheet(choice.plan, choice.board.mode, state.images,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 8.dp),
+                onDetail = { detail = it })
+        }
+    }
+    detail?.let { selected ->
+        AlertDialog(onDismissRequest = { detail = null }, containerColor = Color.White,
+            title = { Text(selected.title, color = SheetInk, fontSize = 18.sp) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (selected.imageId != null) FoodImage(selected.imageId, state.images, Modifier.fillMaxWidth().height(160.dp))
+                    if (selected.text.isNotBlank()) Text(selected.text, color = SheetInk)
+                    Text(selected.nutrition.summary, color = SheetInk)
+                    selected.lines.forEach { Text(it, color = SheetMuted, fontSize = 13.sp) }
+                }
+            }, confirmButton = { TextButton(onClick = { detail = null }) { Text("閉じる") } })
+    }
+}
+
+/** PC印刷の左右配置を保ち、縮小せず縦スクロールで読む。 */
+@Composable
+private fun ScrollPlanSheet(plan: PfcPlan, mode: Int, images: Map<String, File>, modifier: Modifier,
+                            onDetail: (PlanDetail) -> Unit) {
+    key(plan.id) {
+        Column(modifier.verticalScroll(rememberScrollState())) {
+            PlanPaper(plan, mode, images, onDetail)
         }
     }
 }
 
 @Composable
-private fun PfcImage(id: String?, files: Map<String, File>) {
-    if (id.isNullOrBlank()) return
-    val file = files[id.lowercase()]
+private fun PlanPaper(plan: PfcPlan, mode: Int, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
+    Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(6.dp))
+        .border(1.dp, SheetLine, RoundedCornerShape(6.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().clickable {
+            onDetail(PlanDetail(plan.name, plan.nutrition, plan.imageId, plan.memo, listOfNotNull(plan.date)))
+        }.padding(horizontal = 3.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("1日合計", color = SheetMuted, fontSize = 11.sp, lineHeight = 15.sp)
+                Text("${plan.nutrition.kcal.number(0)} kcal", color = SheetInk, fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold, lineHeight = 27.sp)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("P ${plan.nutrition.p.number(1)}  /  F ${plan.nutrition.f.number(1)}  /  C ${plan.nutrition.c.number(1)} g",
+                    color = SheetInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, lineHeight = 17.sp)
+                Text(when (mode) { 1 -> "HIGH"; 2 -> "LOW"; else -> "Standard" }, color = SheetMuted, fontSize = 11.sp)
+            }
+        }
+        HorizontalDivider(color = SheetLine)
+        BoxWithConstraints {
+            if (maxWidth >= 600.dp) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0, 2, 3).forEach { slot ->
+                            MealPrintCard(slot, plan.meals.firstOrNull { it.slot == slot }, images, onDetail)
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(9, 1, 4, 5).forEach { slot ->
+                            val meal = plan.meals.firstOrNull { it.slot == slot }
+                            if (meal != null && meal.items.any { it.sourceEnabled }) MealPrintCard(slot, meal, images, onDetail)
+                        }
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0, 9, 1, 2, 4, 3, 5).forEach { slot ->
+                        val meal = plan.meals.firstOrNull { it.slot == slot }
+                        if (slot in listOf(0, 2, 3) || meal?.items?.any { it.sourceEnabled } == true) {
+                            MealPrintCard(slot, meal, images, onDetail)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MealPrintCard(slot: Int, meal: PfcMeal?, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
+    val slotName = when (slot) { 0 -> "朝食"; 2 -> "昼食"; 3 -> "夕食"; 9 -> "食前ドリンク";
+        1 -> "朝の間食"; 4 -> "昼の間食"; else -> "自由間食" }
+    val mainItems = meal?.items?.filter { it.enabled }.orEmpty()
+    val candidates = meal?.items?.filter { it.isMainDishCandidate && it.sourceEnabled && !it.enabled }.orEmpty()
+    Column(Modifier.fillMaxWidth().border(0.7.dp, SheetLine, RoundedCornerShape(4.dp)).padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Column(Modifier.fillMaxWidth().clickable(enabled = meal != null) {
+            meal?.let { onDetail(PlanDetail(it.name, it.nutrition, it.imageId, it.memo,
+                it.items.map { food -> "${food.name}  ${food.amount}" })) }
+        }) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (slot == 9) "食前ドリンク · 毎食前1回分" else meal?.name?.takeIf { it.isNotBlank() } ?: slotName,
+                    color = SheetAccent, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f))
+                meal?.let {
+                    Text("${it.nutrition.kcal.number(0)} kcal", fontSize = 13.sp, lineHeight = 18.sp,
+                        color = SheetInk, fontWeight = FontWeight.Bold)
+                }
+            }
+            meal?.let {
+                Text("P ${it.nutrition.p.number(1)}  /  F ${it.nutrition.f.number(1)}  /  C ${it.nutrition.c.number(1)} g",
+                    color = SheetMuted, fontSize = 11.sp, lineHeight = 16.sp)
+            }
+        }
+        if (mainItems.isEmpty()) Text("—", fontSize = 11.sp, color = SheetLine)
+        else FoodGrid(mainItems, images, onDetail)
+        if (candidates.isNotEmpty()) {
+            HorizontalDivider(color = SheetLine)
+            Text("主菜候補", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = SheetMuted)
+            FoodGrid(candidates, images, onDetail)
+        }
+    }
+}
+
+@Composable
+private fun FoodGrid(items: List<PfcItem>, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
+    BoxWithConstraints {
+        val columns = when { maxWidth >= 290.dp -> 4; maxWidth >= 210.dp -> 3; else -> 2 }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items.chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEach { food ->
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(3.dp)).clickable {
+                            onDetail(PlanDetail(food.name, food.nutrition, food.imageId, food.amount, food.details))
+                        }, horizontalAlignment = Alignment.CenterHorizontally) {
+                            val frame = if (food.enabled && food.isMainDishCandidate) SheetAccent else SheetLine
+                            FoodImage(food.imageId, images, Modifier.size(40.dp).border(0.7.dp, frame, RoundedCornerShape(3.dp)))
+                            Text(food.name, color = SheetInk, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 3,
+                                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 3.dp))
+                            Text(food.amount, color = SheetInk, fontSize = 12.sp, lineHeight = 16.sp,
+                                fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                        }
+                    }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FoodImage(id: String?, files: Map<String, File>, modifier: Modifier) {
+    val file = id?.let { files[it.lowercase()] }
     val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, file, file?.lastModified()) {
         value = withContext(Dispatchers.IO) {
             if (file == null) return@withContext null
@@ -125,18 +252,15 @@ private fun PfcImage(id: String?, files: Map<String, File>) {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeFile(file.absolutePath, bounds)
                 var sample = 1
-                while (bounds.outWidth / sample > 1024 || bounds.outHeight / sample > 1024) sample *= 2
+                while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2
                 BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
             }.getOrNull()
         }
     }
-    bitmap?.let { Image(it, contentDescription = "関連画像", modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp),
-        contentScale = ContentScale.Fit) } ?: Text(if (file == null) "画像未取得" else "画像を読み込めない場合は更新してください",
-        style = MaterialTheme.typography.bodySmall)
+    Box(modifier.clip(RoundedCornerShape(3.dp)).background(Color(0xFFF5F7F8)), contentAlignment = Alignment.Center) {
+        bitmap?.let { Image(it, "食品画像", Modifier.fillMaxSize().padding(1.dp), contentScale = ContentScale.Fit) }
+            ?: Text(if (id == null) "—" else "画像なし", color = SheetMuted, fontSize = 10.sp)
+    }
 }
 
-private fun nutritionForSlot(plan: PfcPlan, slot: Int): PfcNutrition {
-    val zero = java.math.BigDecimal.ZERO
-    val meal = plan.meals.firstOrNull { it.slot == slot }?.nutrition ?: PfcNutrition(zero, zero, zero, zero, zero)
-    return if (slot in listOf(0, 2, 3)) plan.meals.firstOrNull { it.slot == 9 }?.let { meal + it.nutrition } ?: meal else meal
-}
+private fun BigDecimal.number(scale: Int): String = setScale(scale, RoundingMode.HALF_UP).toPlainString()
