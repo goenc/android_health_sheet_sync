@@ -42,7 +42,8 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
         }
         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
         if (board == null) {
-            Text("表示できる比較ボードなし。PCで保存・同期後、「更新」を実行。", Modifier.padding(vertical = 20.dp))
+            Text(if (state.loading) "初回の全履歴を取得・復元中。このままお待ちください。"
+                else "表示できる比較ボードなし。PCで保存・同期後、「更新」を実行。", Modifier.padding(vertical = 20.dp))
             return@Column
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
