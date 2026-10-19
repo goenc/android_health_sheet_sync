@@ -132,20 +132,18 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
     }
 }
 
-/** PC印刷の左右配置を保ち、縮小せず縦スクロールで読む。 */
+/** 合計欄は固定し、PC印刷の左右配置を保った食事欄だけをスクロールする。 */
 @Composable
 private fun ScrollPlanSheet(plan: PfcPlan, images: Map<String, File>, modifier: Modifier,
                             onDetail: (PlanDetail) -> Unit) {
     key(plan.id) {
-        Column(modifier.verticalScroll(rememberScrollState())) {
-            PlanPaper(plan, images, onDetail)
-        }
+        PlanPaper(plan, images, onDetail, modifier)
     }
 }
 
 @Composable
-private fun PlanPaper(plan: PfcPlan, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(6.dp))
+private fun PlanPaper(plan: PfcPlan, images: Map<String, File>, onDetail: (PlanDetail) -> Unit, modifier: Modifier) {
+    Column(modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(6.dp))
         .border(1.dp, SheetLine, RoundedCornerShape(6.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().clickable {
             onDetail(PlanDetail(plan.name, plan.nutrition, plan.imageId, plan.memo, listOfNotNull(plan.date)))
@@ -161,34 +159,37 @@ private fun PlanPaper(plan: PfcPlan, images: Map<String, File>, onDetail: (PlanD
             }
         }
         HorizontalDivider(color = SheetLine)
-        BoxWithConstraints {
-            if (maxWidth >= 600.dp) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(0, 2, 3).forEach { slot ->
-                            MealPrintCard(slot, plan.meals.firstOrNull { it.slot == slot }, images, onDetail)
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BoxWithConstraints {
+                if (maxWidth >= 600.dp) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(0, 2, 3).forEach { slot ->
+                                MealPrintCard(slot, plan.meals.firstOrNull { it.slot == slot }, images, onDetail)
+                            }
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(1, 4, 5).forEach { slot ->
+                                val meal = plan.meals.firstOrNull { it.slot == slot }
+                                if (meal != null && meal.items.any { it.sourceEnabled }) MealPrintCard(slot, meal, images, onDetail)
+                            }
                         }
                     }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(1, 4, 5).forEach { slot ->
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0, 1, 2, 4, 3, 5).forEach { slot ->
                             val meal = plan.meals.firstOrNull { it.slot == slot }
-                            if (meal != null && meal.items.any { it.sourceEnabled }) MealPrintCard(slot, meal, images, onDetail)
-                        }
-                    }
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0, 1, 2, 4, 3, 5).forEach { slot ->
-                        val meal = plan.meals.firstOrNull { it.slot == slot }
-                        if (slot in listOf(0, 2, 3) || meal?.items?.any { it.sourceEnabled } == true) {
-                            MealPrintCard(slot, meal, images, onDetail)
+                            if (slot in listOf(0, 2, 3) || meal?.items?.any { it.sourceEnabled } == true) {
+                                MealPrintCard(slot, meal, images, onDetail)
+                            }
                         }
                     }
                 }
             }
-        }
-        plan.meals.firstOrNull { it.slot == 9 && it.items.any { food -> food.sourceEnabled } }?.let {
-            MealPrintCard(9, it, images, onDetail)
+            plan.meals.firstOrNull { it.slot == 9 && it.items.any { food -> food.sourceEnabled } }?.let {
+                MealPrintCard(9, it, images, onDetail)
+            }
         }
     }
 }
