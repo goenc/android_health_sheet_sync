@@ -150,6 +150,9 @@ class MainActivity : ComponentActivity() {
                             saveWeightMovingAverageMode(mode, onResult)
                         },
                         dailyBodySettings = healthState.dailyBodySettings,
+                        pfcBoardState = spreadsheetSyncState.pfcBoard,
+                        onRefreshPfcBoard = { spreadsheetSyncCoordinator.refreshPfcBoard() },
+                        onLoadPfcBoard = { spreadsheetSyncCoordinator.loadLocalPfcBoard() },
                         labResultsState = spreadsheetSyncState.labResults,
                         onRefreshLabResults = { spreadsheetSyncCoordinator.refreshLabResults() },
                         onLoadLabResults = { spreadsheetSyncCoordinator.loadLocalLabResults() },

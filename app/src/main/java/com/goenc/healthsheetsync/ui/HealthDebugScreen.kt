@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.goenc.healthsheetsync.data.PfcBoardState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -89,6 +92,9 @@ fun HealthDebugScreen(
     onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
     dailyBodySettings: List<DailyBodySetting>,
     onSaveDailyBodySetting: (Double, Int, (String?) -> Unit) -> Unit,
+    pfcBoardState: PfcBoardState = PfcBoardState(),
+    onRefreshPfcBoard: () -> Unit = {},
+    onLoadPfcBoard: () -> Unit = {},
     labResultsState: LabResultsUiState = LabResultsUiState(),
     onRefreshLabResults: () -> Unit = {},
     onLoadLabResults: () -> Unit = {},
@@ -101,6 +107,8 @@ fun HealthDebugScreen(
     var chartAxisRanges by remember { mutableStateOf(chartAxisStore.load()) }
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
+    var showPfcBoard by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
     var showLabResults by remember { mutableStateOf(false) }
     var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
     var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
@@ -109,7 +117,7 @@ fun HealthDebugScreen(
     val shouldScrollRoot = showManualInput || showSettings
 
     // 検査結果を開く前に取得を始め、保存済みの結果はそのまま表示に使う。
-    LaunchedEffect(Unit) { onLoadLabResults() }
+    LaunchedEffect(Unit) { onLoadLabResults(); onLoadPfcBoard() }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -121,8 +129,10 @@ fun HealthDebugScreen(
         }
     }
 
-    BackHandler(enabled = showSettings || showManualInput || showLabResults) {
-        if (showLabResults) {
+    BackHandler(enabled = showSettings || showManualInput || showLabResults || showPfcBoard) {
+        if (showPfcBoard) {
+            showPfcBoard = false
+        } else if (showLabResults) {
             showLabResults = false
         } else if (showManualInput) {
             showManualInput = false
@@ -132,7 +142,7 @@ fun HealthDebugScreen(
         }
     }
 
-    if (!showLabResults && state.isLoading && state.availability == HealthConnectAvailability.Checking) {
+    if (!showPfcBoard && !showLabResults && state.isLoading && state.availability == HealthConnectAvailability.Checking) {
         LoadingScreen(modifier = modifier)
         return
     }
@@ -143,6 +153,10 @@ fun HealthDebugScreen(
             .background(AppBackground),
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
+            if (showPfcBoard) {
+                PfcBoardScreen(pfcBoardState, onRefreshPfcBoard, { showPfcBoard = false })
+                return@CompositionLocalProvider
+            }
             if (showLabResults) {
                 LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults,
                     onItemSettingsSaved = onLabItemSettingsSaved,
@@ -296,12 +310,25 @@ fun HealthDebugScreen(
                         }
                     }
                 }
-                OutlinedButton(
-                    onClick = { showLabResults = true },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RectangleShape,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                ) { Text("検査結果") }
+                Row(Modifier.fillMaxWidth().height(48.dp)) {
+                    OutlinedButton(
+                        onClick = { showLabResults = true },
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RectangleShape,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    ) { Text("検査結果") }
+                    Box {
+                        OutlinedButton(onClick = { showMenu = true }, modifier = Modifier.height(48.dp), shape = RectangleShape) {
+                            Text("メニュー")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(text = { Text("比較ボード（閲覧専用）") }, onClick = {
+                                showMenu = false
+                                showPfcBoard = true
+                            })
+                        }
+                    }
+                }
             }
         }
     }

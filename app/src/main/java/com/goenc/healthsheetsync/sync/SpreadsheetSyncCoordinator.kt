@@ -10,6 +10,9 @@ import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
+import com.goenc.healthsheetsync.data.PfcBoardReader
+import com.goenc.healthsheetsync.data.PfcBoardState
+import com.goenc.healthsheetsync.data.PfcBoardReadException
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
 import com.goenc.healthsheetsync.data.LabResultsReader
 import com.goenc.healthsheetsync.data.LabResultsUiState
@@ -31,6 +34,7 @@ internal data class SpreadsheetSyncUiState(
     val spreadsheetUploadStatus: String? = null,
     val isSpreadsheetUploading: Boolean = false,
     val labResults: LabResultsUiState = LabResultsUiState(),
+    val pfcBoard: PfcBoardState = PfcBoardState(),
 )
 
 internal class SpreadsheetSyncCoordinator(
@@ -40,6 +44,7 @@ internal class SpreadsheetSyncCoordinator(
     private val spreadsheetUploader: SpreadsheetUploader = SpreadsheetUploader(),
     private val onStateChanged: (SpreadsheetSyncUiState) -> Unit,
 ) {
+    private val pfcBoardReader = PfcBoardReader(activity.applicationContext)
     private val labResultsReader = LabResultsReader(activity.applicationContext)
     private val labResultsWriter = LabResultsWriter(labResultsReader)
     private var pendingLabSaveResult: LabResultsSaveResult? = null
@@ -79,9 +84,10 @@ internal class SpreadsheetSyncCoordinator(
                 }
                 GoogleAuthorizationAction.LoadLabResults -> continueLabResultsRead(authorizationResult.accessToken)
                 GoogleAuthorizationAction.ImportLabResults -> continueLabResultsImport(authorizationResult.accessToken)
+                GoogleAuthorizationAction.LoadPfcBoard -> continuePfcBoardRead(authorizationResult.accessToken)
             }
         } catch (error: ApiException) {
-            Log.e(TAG, "Google Drive authorization failed.", error)
+            if (action != GoogleAuthorizationAction.LoadPfcBoard) Log.e(TAG, "Google Drive authorization failed.", error)
             when (action) {
                 GoogleAuthorizationAction.ConnectDrive -> {
                     updateState {
@@ -103,12 +109,13 @@ internal class SpreadsheetSyncCoordinator(
                 }
                 GoogleAuthorizationAction.LoadLabResults -> labResultsFailure("Google認証を完了できませんでした")
                 GoogleAuthorizationAction.ImportLabResults -> labResultsFailure("Google認証を完了できませんでした")
+                GoogleAuthorizationAction.LoadPfcBoard -> pfcBoardFailure("Google認証を完了できませんでした（code=${error.statusCode}）")
             }
         }
     }
 
     fun authorizeGoogleDrive() {
-        if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading || state.labResults.isLoading) return
+        if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading || state.labResults.isLoading || state.pfcBoard.loading) return
 
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ConnectDrive
         updateState {
@@ -165,7 +172,7 @@ internal class SpreadsheetSyncCoordinator(
     }
 
     fun uploadSpreadsheetData(isHealthLoading: Boolean) {
-        if (state.isSpreadsheetUploading || state.isGoogleDriveAuthorizing || state.labResults.isLoading || isHealthLoading) return
+        if (state.isSpreadsheetUploading || state.isGoogleDriveAuthorizing || state.labResults.isLoading || state.pfcBoard.loading || isHealthLoading) return
 
         pendingGoogleAuthorizationAction = GoogleAuthorizationAction.UploadSpreadsheet
         updateState {
@@ -218,6 +225,62 @@ internal class SpreadsheetSyncCoordinator(
         startAutomaticSpreadsheetSync()
     }
 
+    fun loadLocalPfcBoard() {
+        val initial = state.pfcBoard
+        scope.launch {
+            val loaded = pfcBoardReader.cached()
+            if (state.pfcBoard === initial) updateState { copy(pfcBoard = loaded) }
+        }
+    }
+
+    fun refreshPfcBoard() {
+        if (state.pfcBoard.loading) return
+        if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading || state.labResults.isLoading || isAutomaticSpreadsheetSyncing) {
+            pfcBoardFailure("Google認証・同期が完了してから更新してください")
+            return
+        }
+        pendingGoogleAuthorizationAction = GoogleAuthorizationAction.LoadPfcBoard
+        updateState { copy(pfcBoard = pfcBoard.copy(loading = true, status = "比較ボードを取得中")) }
+        val request = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(DRIVE_APPDATA_SCOPE))).build()
+        Identity.getAuthorizationClient(activity).authorize(request)
+            .addOnSuccessListener { result ->
+                if (!result.hasResolution()) continuePfcBoardRead(result.accessToken)
+                else {
+                    val pending = result.pendingIntent
+                    if (pending == null) pfcBoardFailure("Google認証画面を開けませんでした")
+                    else startGoogleAuthorization.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+                }
+            }
+            .addOnFailureListener { error ->
+                val code = (error as? ApiException)?.statusCode
+                pfcBoardFailure("Google認証に失敗（code=${code ?: "不明"}）。OAuth登録・同意設定を確認してください")
+            }
+    }
+
+    private fun continuePfcBoardRead(token: String?) {
+        if (token.isNullOrBlank()) {
+            pfcBoardFailure("Google認証トークンを取得できませんでした")
+            return
+        }
+        scope.launch {
+            try {
+                val loaded = pfcBoardReader.read(token)
+                updateState { copy(pfcBoard = loaded) }
+                retryPendingAutomaticSpreadsheetSync()
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                // HTTP本文・例外・同期payloadをログや画面へ流さない。
+                pfcBoardFailure((error as? PfcBoardReadException)?.message
+                    ?: "取得・復元に失敗。通信とPCの同期形式を確認してください")
+            }
+        }
+    }
+
+    private fun pfcBoardFailure(message: String) {
+        updateState { copy(pfcBoard = pfcBoard.copy(loading = false, status = "取得失敗: $message")) }
+        retryPendingAutomaticSpreadsheetSync()
+    }
+
     fun loadLocalLabResults() {
         if (state.labResults.isLoading) return
         scope.launch {
@@ -228,7 +291,7 @@ internal class SpreadsheetSyncCoordinator(
 
     fun refreshLabResults() {
         if (state.labResults.isLoading) return
-        if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) {
+        if (state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading || state.pfcBoard.loading) {
             labResultsFailure("Google認証・同期が完了してから更新してください")
             return
         }
@@ -238,7 +301,7 @@ internal class SpreadsheetSyncCoordinator(
     }
 
     fun importLabResults(records: List<LabResult>, onResult: (String?) -> Unit) {
-        if (state.labResults.isLoading || state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) {
+        if (state.labResults.isLoading || state.pfcBoard.loading || state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) {
             onResult("取得・認証・同期が完了してから保存してください")
             return
         }
@@ -267,7 +330,7 @@ internal class SpreadsheetSyncCoordinator(
     /** 項目設定のDB保存が終わった直後に呼び出す。通常表示ではSheetsを読まない。 */
     fun backupLabSettings() {
         scope.launch {
-            while (state.labResults.isLoading || state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) delay(250)
+            while (state.labResults.isLoading || state.pfcBoard.loading || state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) delay(250)
             pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ImportLabResults
             updateState { copy(labResults = labResults.copy(isLoading = true, status = "項目設定をSheetsへ反映中")) }
             authorizeLabResults(true)
@@ -397,7 +460,7 @@ internal class SpreadsheetSyncCoordinator(
     }
 
     private fun startAutomaticSpreadsheetSync() {
-        if (isAutomaticSpreadsheetSyncing || state.isSpreadsheetUploading) {
+        if (isAutomaticSpreadsheetSyncing || state.isSpreadsheetUploading || state.pfcBoard.loading) {
             automaticSpreadsheetSyncPending = true
             return
         }
@@ -510,10 +573,12 @@ internal class SpreadsheetSyncCoordinator(
         UploadSpreadsheet,
         LoadLabResults,
         ImportLabResults,
+        LoadPfcBoard,
     }
 
     private companion object {
         private const val TAG = "HealthSheetSync"
+        private const val DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
         private const val DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
         private const val SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
         private const val API_CONSOLE_UNREGISTERED_STATUS = "UNREGISTERED_ON_API_CONSOLE"
