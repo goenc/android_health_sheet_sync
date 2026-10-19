@@ -1,6 +1,7 @@
 package com.goenc.healthsheetsync.data
 
 import org.json.JSONObject
+import org.json.JSONArray
 
 /** PC の差分を読み取るだけの reducer。端末の変更や送信キューは持たない。 */
 class PfcSyncSnapshot(val rows: Map<String, Map<String, JSONObject>>) {
@@ -39,26 +40,70 @@ internal class PfcSyncReducer {
     private val batchIds = mutableSetOf<String>()
     private val operations = mutableSetOf<String>()
 
+    fun processedBatchIds(): Set<String> = batchIds.toSet()
+
+    /** Compact checkpoint: current rows, deletion revisions and deduplication IDs, no raw history. */
+    fun toStateJson(): JSONObject = JSONObject()
+        .put("schemaVersion", 1)
+        .put("datasetId", PfcSyncSnapshot.DATASET_ID)
+        .put("batchIds", JSONArray(batchIds.toList()))
+        .put("operations", JSONArray(operations.toList()))
+        .put("winners", JSONArray(winners.map { (key, winner) ->
+            JSONObject().put("type", key.first).put("key", key.second)
+                .put("revision", winner.revision.toJson())
+                .put("payload", winner.payload ?: JSONObject.NULL)
+        }))
+
+    companion object {
+        fun fromStateJson(state: JSONObject): PfcSyncReducer {
+            require(state.getInt("schemaVersion") == 1) { "未対応の受信キャッシュ形式" }
+            require(state.getString("datasetId").equals(PfcSyncSnapshot.DATASET_ID, true)) { "異なるデータセット" }
+            return PfcSyncReducer().apply {
+                val batches = state.getJSONArray("batchIds")
+                for (i in 0 until batches.length()) batchIds.add(batches.getString(i).lowercase())
+                val seen = state.getJSONArray("operations")
+                for (i in 0 until seen.length()) operations.add(seen.getString(i).lowercase())
+                val rows = state.getJSONArray("winners")
+                for (i in 0 until rows.length()) {
+                    val row = rows.getJSONObject(i)
+                    val key = row.getString("type") to row.getString("key").lowercase()
+                    require(key.first.isNotBlank() && key.second.isNotBlank() && key !in winners) { "不正な受信キャッシュ行" }
+                    val revision = Revision(row.getJSONObject("revision"))
+                    require(revision.operation in operations) { "受信キャッシュの操作情報が欠落" }
+                    winners[key] = Winner(revision, if (row.isNull("payload")) null else
+                        normalize(JSONObject(row.getJSONObject("payload").toString())))
+                }
+            }
+        }
+    }
+
     fun apply(batch: JSONObject) {
         require(batch.getString("datasetId").equals(PfcSyncSnapshot.DATASET_ID, true)) { "異なるデータセット" }
         require(batch.optInt("protocolVersion", 1) == 1) { "未対応の同期形式" }
-        if (!batchIds.add(batch.getString("batchId").lowercase())) return
+        val batchId = batch.getString("batchId").lowercase()
+        if (batchId in batchIds) return
+        val pendingWinners = mutableMapOf<Pair<String, String>, Winner>()
+        val pendingOperations = mutableSetOf<String>()
         val changes = batch.getJSONArray("changes")
         (0 until changes.length()).map { changes.getJSONObject(it) }
             .sortedBy { Revision(it.getJSONObject("revision")) }.forEach change@{ change ->
-                if (!operations.add(change.getString("operationId").lowercase())) return@change
+                val operation = change.getString("operationId").lowercase()
+                if (operation in operations || !pendingOperations.add(operation)) return@change
                 val type = change.getString("entityType").substringAfterLast('.')
                 val key = change.getString("rowKey").lowercase()
                 val revision = Revision(change.getJSONObject("revision"))
-                val old = winners[type to key]
+                val old = pendingWinners[type to key] ?: winners[type to key]
                 if (old != null && old.revision >= revision) return@change
                 val payload = when (change.getInt("changeKind")) {
                     0 -> normalize(JSONObject(change.getString("payloadJson")))
                     1 -> null
                     else -> error("未対応の変更種別")
                 }
-                winners[type to key] = Winner(revision, payload)
+                pendingWinners[type to key] = Winner(revision, payload)
             }
+        winners.putAll(pendingWinners)
+        operations.addAll(pendingOperations)
+        batchIds.add(batchId)
     }
 
     fun snapshot(): PfcSyncSnapshot {
@@ -84,4 +129,15 @@ private data class Revision(val ticks: Long, val device: String, val sequence: L
         json.getLong("deviceSequence"), json.getString("operationId").lowercase())
     override fun compareTo(other: Revision): Int = compareValuesBy(this, other,
         { it.ticks }, { it.device }, { it.sequence }, { it.operation })
+
+    fun toJson(): JSONObject = JSONObject().put("editedUtcTicks", ticks).put("deviceId", device)
+        .put("deviceSequence", sequence).put("operationId", operation)
 }
+
+/** A missing/old/broken checkpoint or missing remote history requires a safe full replay. */
+internal fun resumePfcReducer(saved: JSONObject?, remoteBatchIds: Set<String>): PfcSyncReducer = runCatching {
+    require(saved?.getString("datasetId").equals(PfcSyncSnapshot.DATASET_ID, true)) { "異なるデータセット" }
+    val reducer = PfcSyncReducer.fromStateJson(saved!!.getJSONObject("reducer"))
+    require(remoteBatchIds.containsAll(reducer.processedBatchIds())) { "受信済み履歴が一覧に存在しない" }
+    reducer
+}.getOrElse { PfcSyncReducer() }

@@ -54,9 +54,15 @@ internal class PfcBoardReader(context: Context) {
             throw PfcBoardReadException("同期データなし。PCの同期、同じGoogleアカウント・OAuthプロジェクト・DatasetIdを確認" +
                 (project?.let { "。Android OAuthプロジェクト番号: $it" } ?: ""), retryAuthorization = true)
         }
-        val reducer = PfcSyncReducer()
-        onProgress(0, batchFiles.size)
-        batchFiles.forEachIndexed { index, file ->
+        val saved = runCatching { cache.openRead().bufferedReader().use { JSONObject(it.readText()) } }.getOrNull()
+        val reducer = resumePfcReducer(saved, batchFiles.map {
+            it.getJSONObject("appProperties").getString("batchId").lowercase()
+        }.toSet())
+        val received = reducer.processedBatchIds()
+        val pending = batchFiles.filter { it.getJSONObject("appProperties").getString("batchId").lowercase() !in received }
+            .distinctBy { it.getJSONObject("appProperties").getString("batchId").lowercase() }
+        onProgress(0, pending.size)
+        pending.forEachIndexed { index, file ->
             currentCoroutineContext().ensureActive()
             val properties = file.getJSONObject("appProperties")
             val batch = JSONObject(download(token, file.getString("id"), 32 * 1024 * 1024).toString(Charsets.UTF_8))
@@ -64,7 +70,7 @@ internal class PfcBoardReader(context: Context) {
                 batch.getString("deviceId") == properties.getString("deviceId") &&
                 batch.getLong("deviceSequence") == properties.getString("deviceSequence").toLong()) { "同期情報が不一致" }
             reducer.apply(batch)
-            if ((index + 1) % 10 == 0 || index == batchFiles.lastIndex) onProgress(index + 1, batchFiles.size)
+            if ((index + 1) % 10 == 0 || index == pending.lastIndex) onProgress(index + 1, pending.size)
         }
         val snapshot = reducer.snapshot()
         val boards = snapshot.boards() // 関連行・計算の検証も保存前に完了させる
@@ -93,11 +99,11 @@ internal class PfcBoardReader(context: Context) {
             catch (error: Exception) { atomic.failWrite(output); throw error }
         }
         val updated = java.time.Instant.now().toString()
-        val saved = JSONObject().put("updatedAt", updated).put("datasetId", PfcSyncSnapshot.DATASET_ID)
-            .put("rows", snapshot.toJson())
+        val checkpoint = JSONObject().put("updatedAt", updated).put("datasetId", PfcSyncSnapshot.DATASET_ID)
+            .put("rows", snapshot.toJson()).put("reducer", reducer.toStateJson())
         currentCoroutineContext().ensureActive()
         val output = cache.startWrite()
-        try { output.write(saved.toString().toByteArray(Charsets.UTF_8)); cache.finishWrite(output) }
+        try { output.write(checkpoint.toString().toByteArray(Charsets.UTF_8)); cache.finishWrite(output) }
         catch (error: Exception) { cache.failWrite(output); throw error }
         PfcBoardState(boards, imageFiles(snapshot), status = when {
             boards.isEmpty() -> "比較ボードなし。PC側で保存・同期してください"
