@@ -100,7 +100,7 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
                     color = SheetMuted, fontSize = 13.sp, textAlign = TextAlign.Center)
             }
         } else {
-            ScrollPlanSheet(choice.plan, choice.board.mode, state.images,
+            ScrollPlanSheet(choice.plan, state.images,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 8.dp),
                 onDetail = { detail = it })
         }
@@ -123,32 +123,26 @@ fun PfcBoardScreen(state: PfcBoardState, onRefresh: () -> Unit, onBack: () -> Un
 
 /** PC印刷の左右配置を保ち、縮小せず縦スクロールで読む。 */
 @Composable
-private fun ScrollPlanSheet(plan: PfcPlan, mode: Int, images: Map<String, File>, modifier: Modifier,
+private fun ScrollPlanSheet(plan: PfcPlan, images: Map<String, File>, modifier: Modifier,
                             onDetail: (PlanDetail) -> Unit) {
     key(plan.id) {
         Column(modifier.verticalScroll(rememberScrollState())) {
-            PlanPaper(plan, mode, images, onDetail)
+            PlanPaper(plan, images, onDetail)
         }
     }
 }
 
 @Composable
-private fun PlanPaper(plan: PfcPlan, mode: Int, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
+private fun PlanPaper(plan: PfcPlan, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
     Column(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(6.dp))
         .border(1.dp, SheetLine, RoundedCornerShape(6.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().clickable {
             onDetail(PlanDetail(plan.name, plan.nutrition, plan.imageId, plan.memo, listOfNotNull(plan.date)))
         }.padding(horizontal = 3.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("1日合計", color = SheetMuted, fontSize = 11.sp, lineHeight = 15.sp)
-                Text("${plan.nutrition.kcal.number(0)} kcal", color = SheetInk, fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold, lineHeight = 27.sp)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("P ${plan.nutrition.p.number(1)}  /  F ${plan.nutrition.f.number(1)}  /  C ${plan.nutrition.c.number(1)} g",
-                    color = SheetInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, lineHeight = 17.sp)
-                Text(when (mode) { 1 -> "HIGH"; 2 -> "LOW"; else -> "Standard" }, color = SheetMuted, fontSize = 11.sp)
-            }
+            Text("${plan.nutrition.kcal.number(0)} kcal", color = SheetInk, fontSize = 24.sp,
+                fontWeight = FontWeight.Bold, lineHeight = 27.sp, modifier = Modifier.weight(1f))
+            Text("P ${plan.nutrition.p.number(1)}  /  F ${plan.nutrition.f.number(1)}  /  C ${plan.nutrition.c.number(1)} g",
+                color = SheetInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, lineHeight = 17.sp)
         }
         HorizontalDivider(color = SheetLine)
         BoxWithConstraints {
@@ -241,11 +235,11 @@ private fun PfcGraph(nutrition: PfcNutrition, modifier: Modifier = Modifier) {
 
 @Composable
 private fun FoodGrid(items: List<PfcItem>, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
-    BoxWithConstraints {
-        val columns = when { maxWidth >= 290.dp -> 4; maxWidth >= 210.dp -> 3; else -> 2 }
+    Box {
+        val columns = 5
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items.chunked(columns).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     row.forEach { food ->
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(3.dp)).clickable {
                             onDetail(PlanDetail(food.name, food.nutrition, food.imageId, food.amount, food.details))
