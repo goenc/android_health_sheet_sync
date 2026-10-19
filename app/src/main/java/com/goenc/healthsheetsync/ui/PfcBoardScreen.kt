@@ -23,12 +23,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.R
@@ -181,7 +181,7 @@ private fun PlanPaper(plan: PfcPlan, mode: Int, images: Map<String, File>, onDet
 @Composable
 private fun MealPrintCard(slot: Int, meal: PfcMeal?, images: Map<String, File>, onDetail: (PlanDetail) -> Unit) {
     val slotName = when (slot) { 0 -> "朝食"; 2 -> "昼食"; 3 -> "夕食"; 9 -> "食前ドリンク";
-        1 -> "朝の間食"; 4 -> "昼の間食"; else -> "自由間食" }
+        1 -> "午前中間食"; 4 -> "午後間食"; else -> "フリー間食" }
     val mainItems = meal?.items?.filter { it.enabled }.orEmpty()
     val candidates = meal?.items?.filter { it.isMainDishCandidate && it.sourceEnabled && !it.enabled }.orEmpty()
     Column(Modifier.fillMaxWidth().border(0.7.dp, SheetLine, RoundedCornerShape(4.dp)).padding(6.dp),
@@ -225,12 +225,9 @@ private fun FoodGrid(items: List<PfcItem>, images: Map<String, File>, onDetail: 
                     row.forEach { food ->
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(3.dp)).clickable {
                             onDetail(PlanDetail(food.name, food.nutrition, food.imageId, food.amount, food.details))
-                        }, horizontalAlignment = Alignment.CenterHorizontally) {
+                        }.semantics { contentDescription = food.name }, horizontalAlignment = Alignment.CenterHorizontally) {
                             val frame = if (food.enabled && food.isMainDishCandidate) SheetAccent else SheetLine
                             FoodImage(food.imageId, images, Modifier.size(40.dp).border(0.7.dp, frame, RoundedCornerShape(3.dp)))
-                            Text(food.name, color = SheetInk, fontSize = 11.sp, lineHeight = 14.sp, maxLines = 3,
-                                overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(top = 3.dp))
                             Text(food.amount, color = SheetInk, fontSize = 12.sp, lineHeight = 16.sp,
                                 fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                         }

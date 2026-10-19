@@ -120,10 +120,12 @@ private class Projection(private val snapshot: PfcSyncSnapshot) {
 
     private fun plan(row: JSONObject, mode: Int): PfcPlan {
         val id = row.requiredString("id")
-        val meals = snapshot.all("DailyPlanMealSnapshotEntity")
+        val sources = snapshot.all("DailyPlanMealSnapshotEntity")
             .filter { it.requiredString("dailyPlanId").sameId(id) }
             .sortedWith(compareBy({ it.int("slot") }, { it.long("createdUtcTicks") }, { it.requiredString("id") }))
-            .map { meal(it, mode) }
+            .map { row -> MealRows(row, snapshot.all("DailyPlanMealItemSnapshotEntity")
+                .filter { it.requiredString("dailyPlanMealSnapshotId").sameId(row.requiredString("id")) }) }
+        val meals = normalizeDrinks(sources).map { meal(it, mode) }
 
         var total = meals.fold(Raw.ZERO) { acc, meal -> acc + meal.raw }
         // The PC plan total counts the shared PreMealDrink once before each main meal.
@@ -143,12 +145,64 @@ private class Projection(private val snapshot: PfcSyncSnapshot) {
     }
 
     private data class MealProjection(val value: PfcMeal, val raw: Raw)
+    private data class MealRows(val row: JSONObject, val items: List<JSONObject>)
 
-    private fun meal(row: JSONObject, mode: Int): MealProjection {
-        val id = row.requiredString("id")
+    /** Same read-time migration as PC DailyPlan.SeparateLegacyDrink / MergeLegacyDrinks. */
+    private fun normalizeDrinks(sources: List<MealRows>): List<MealRows> {
+        require(sources.map { it.row.int("slot") }.distinct().size == sources.size) { "食事枠が重複" }
+        val bySlot = sources.associateBy { it.row.int("slot") }.toMutableMap()
+        fun partition(source: MealRows, items: List<JSONObject>, slot: Int, selected: String?): MealRows {
+            val row = JSONObject(source.row.toString()).put("slot", slot)
+            row.put("selectedMainDishItemId", selected?.takeIf { id -> items.any { it.requiredString("id").sameId(id) } }
+                ?: JSONObject.NULL)
+            return MealRows(row, items)
+        }
+        listOf(0 to 6, 2 to 7, 3 to 8).forEach { (mainSlot, drinkSlot) ->
+            val main = bySlot[mainSlot] ?: return@forEach
+            val moving = main.items.filter { it.optBoolean("isPreMealDrink", false) }
+            if (moving.isEmpty()) return@forEach
+            val selected = main.row.optionalString("selectedMainDishItemId")
+            bySlot[mainSlot] = partition(main, main.items - moving.toSet(), mainSlot, selected)
+            val drink = bySlot[drinkSlot]
+            bySlot[drinkSlot] = partition(drink ?: main, drink?.items.orEmpty() + moving, drinkSlot,
+                drink?.row?.optionalString("selectedMainDishItemId") ?: selected)
+        }
+        val drinks = listOf(9, 6, 7, 8).mapNotNull { bySlot[it] }
+        if (drinks.isNotEmpty()) {
+            // Preserve duplicates within one card, but collapse equal entries across old meal cards.
+            val unique = linkedMapOf<Pair<List<Any?>, Int>, JSONObject>()
+            drinks.forEach { source ->
+                val occurrences = mutableMapOf<List<Any?>, Int>()
+                source.items.sortedBy { it.int("displayOrder") }.forEach { item ->
+                    val id = item.requiredString("id")
+                    val type = item.int("componentType")
+                    val component = snapshot.find(if (type == COMPONENT_FOOD) "DailyPlanFoodSnapshotEntity" else "DailyPlanRecipeSnapshotEntity", id)
+                    val sourceKey = if (type == COMPONENT_FOOD) "sourceFoodId" else "sourceRecipeId"
+                    val key = listOf(
+                        (component?.optionalString(sourceKey) ?: item.optionalString(sourceKey) ?: id).lowercase(),
+                        item.long("standardAmount"), item.int("standardUnit"), item.optionalString("standardCustomUnitName")?.trim(),
+                        item.optionalString("maximumAmount"), item.optionalString("maximumUnit"), item.optionalString("maximumCustomUnitName")?.trim(),
+                        item.boolean("isEnabled"), item.boolean("isMainDishCandidate"),
+                        source.row.optionalString("selectedMainDishItemId")?.sameId(id) == true,
+                    )
+                    val index = occurrences.getOrDefault(key, 0)
+                    occurrences[key] = index + 1
+                    unique.putIfAbsent(key to index, item)
+                }
+            }
+            val items = unique.values.toList()
+            val selected = drinks.firstNotNullOfOrNull { source ->
+                source.row.optionalString("selectedMainDishItemId")?.takeIf { id -> items.any { it.requiredString("id").sameId(id) } }
+            }
+            bySlot[9] = partition(drinks.first(), items, 9, selected)
+        }
+        return listOf(0, 1, 2, 3, 4, 5, 9).mapNotNull { bySlot[it] }
+    }
+
+    private fun meal(source: MealRows, mode: Int): MealProjection {
+        val row = source.row
         val selectedMain = row.optionalString("selectedMainDishItemId")
-        val items = snapshot.all("DailyPlanMealItemSnapshotEntity")
-            .filter { it.requiredString("dailyPlanMealSnapshotId").sameId(id) }
+        val items = source.items
             .sortedWith(compareBy({ it.int("displayOrder") }, { it.requiredString("id") }))
             .map { item(it, mode, selectedMain) }
         val raw = items.fold(Raw.ZERO) { acc, item ->
@@ -156,7 +210,12 @@ private class Projection(private val snapshot: PfcSyncSnapshot) {
         }
         return MealProjection(
             PfcMeal(
-                name = row.string("name"),
+                name = when (row.int("slot")) {
+                    1 -> row.string("name").replace("朝間食", "午前中間食")
+                    4 -> row.string("name").replace("夜間食", "午後間食").replace("昼間食", "午後間食")
+                    9 -> "食前ドリンク（毎食前・1回分）"
+                    else -> row.string("name")
+                },
                 slot = row.int("slot"),
                 memo = row.string("memo"),
                 imageId = row.optionalString("imageAssetId"),

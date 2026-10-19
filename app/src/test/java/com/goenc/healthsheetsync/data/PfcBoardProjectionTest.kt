@@ -193,6 +193,84 @@ class PfcBoardProjectionTest {
         assertEquals(true, meal.endsWith("プリン体 0mg"))
     }
 
+    @Test
+    fun `legacy snack names normalize without replacing custom names`() {
+        val rows = mutableRows(fixture(0))
+        val meals = rows.getValue("DailyPlanMealSnapshotEntity").toMutableMap()
+        meals["snack"] = JSONObject(meals.getValue("breakfast").toString()).apply {
+            put("id", "snack"); put("slot", 1); put("name", "朝間食・基本")
+        }
+        meals["afternoon"] = JSONObject(meals.getValue("breakfast").toString()).apply {
+            put("id", "afternoon"); put("slot", 4); put("name", "昼間食・夜間食")
+        }
+        rows["DailyPlanMealSnapshotEntity"] = meals
+        val plan = snapshot(rows).boards().single().plans.single()
+        assertEquals("午前中間食・基本", plan.meals.single { it.slot == 1 }.name)
+        assertEquals("午後間食・午後間食", plan.meals.single { it.slot == 4 }.name)
+        assertEquals("Breakfast", plan.meals.single { it.slot == 0 }.name)
+    }
+
+    @Test
+    fun `embedded shared drinks merge while breakfast only drink stays in breakfast`() {
+        val rows = mutableRows(fixture(0))
+        val meals = rows.getValue("DailyPlanMealSnapshotEntity").toMutableMap()
+        meals.remove("drink")
+        meals["lunch"] = JSONObject(meals.getValue("breakfast").toString()).apply {
+            put("id", "lunch"); put("slot", 2)
+        }
+        rows["DailyPlanMealSnapshotEntity"] = meals
+        val items = rows.getValue("DailyPlanMealItemSnapshotEntity").toMutableMap()
+        items.getValue("drink-item").put("dailyPlanMealSnapshotId", "breakfast")
+        items["lunch-drink"] = itemRow("lunch-drink", "lunch").put("isPreMealDrink", true)
+        items["morning-only"] = itemRow("morning-only", "breakfast")
+        rows["DailyPlanMealItemSnapshotEntity"] = items
+        val foods = rows.getValue("DailyPlanFoodSnapshotEntity").toMutableMap()
+        foods.getValue("drink-item").put("sourceFoodId", "shared-source")
+        foods["lunch-drink"] = JSONObject(foods.getValue("drink-item").toString()).put("dailyPlanMealItemSnapshotId", "lunch-drink")
+        foods["morning-only"] = JSONObject(foods.getValue("drink-item").toString()).put("sourceFoodId", "morning-source").put("name", "morning-only")
+        rows["DailyPlanFoodSnapshotEntity"] = foods
+        val plan = snapshot(rows).boards().single().plans.single()
+        assertEquals(setOf("food-item", "morning-only"), plan.meals.single { it.slot == 0 }.items.map { it.name }.toSet())
+        assertEquals(2, plan.meals.single { it.slot == 0 }.items.size)
+        assertEquals(1, plan.meals.single { it.slot == 9 }.items.size)
+        assertDecimal("175", plan.meals.single { it.slot == 0 }.nutrition.kcal)
+        assertDecimal("25", plan.meals.single { it.slot == 9 }.nutrition.kcal)
+        assertDecimal("250", plan.nutrition.kcal)
+        assertEquals(plan, snapshot(rows).boards().single().plans.single()) // no mutation or repeat accumulation
+    }
+
+    @Test
+    fun `drink merge preserves within card duplicates quantities and disabled state`() {
+        val rows = mutableRows(fixture(0))
+        val items = rows.getValue("DailyPlanMealItemSnapshotEntity").toMutableMap()
+        val foods = rows.getValue("DailyPlanFoodSnapshotEntity").toMutableMap()
+        foods.getValue("drink-item").put("sourceFoodId", "shared-source")
+        listOf("copy-one", "copy-two", "half", "disabled").forEach { id ->
+            items[id] = itemRow(id, "breakfast").put("isPreMealDrink", true)
+            foods[id] = JSONObject(foods.getValue("drink-item").toString()).put("dailyPlanMealItemSnapshotId", id)
+        }
+        items.getValue("half").put("standardAmount", 50_000L)
+        items.getValue("disabled").put("isEnabled", false)
+        rows["DailyPlanMealItemSnapshotEntity"] = items
+        rows["DailyPlanFoodSnapshotEntity"] = foods
+        val plan = snapshot(rows).boards().single().plans.single()
+        val drink = plan.meals.single { it.slot == 9 }
+        assertEquals(4, drink.items.size)
+        assertEquals(1, drink.items.count { !it.sourceEnabled })
+        assertDecimal("62.5", drink.nutrition.kcal)
+        assertDecimal("337.5", plan.nutrition.kcal)
+    }
+
+    @Test
+    fun `legacy dedicated drink slot is visible and counted three times`() {
+        val rows = mutableRows(fixture(0))
+        rows.getValue("DailyPlanMealSnapshotEntity").getValue("drink").put("slot", 6)
+        rows.getValue("DailyPlanMealItemSnapshotEntity").getValue("drink-item").remove("isPreMealDrink")
+        val plan = snapshot(rows).boards().single().plans.single()
+        assertEquals(listOf(0, 9), plan.meals.map { it.slot })
+        assertDecimal("225", plan.nutrition.kcal)
+    }
+
     private fun fixture(mode: Int, includeFood: Boolean = true): PfcSyncSnapshot {
         fun row(vararg values: Pair<String, Any?>) = JSONObject().apply {
             values.forEach { (key, value) -> put(key, value ?: JSONObject.NULL) }
