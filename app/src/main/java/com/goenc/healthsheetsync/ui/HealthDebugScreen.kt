@@ -113,6 +113,7 @@ fun HealthDebugScreen(
     var showManualInput by remember { mutableStateOf(false) }
     var showPfcBoard by remember { mutableStateOf(false) }
     var showLabResults by remember { mutableStateOf(false) }
+    var showIndices by remember { mutableStateOf(false) }
     var currentLocalDate by remember { mutableStateOf(LocalDate.now(ZoneId.systemDefault())) }
     var selectedChartRange by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var selectedChartDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -163,8 +164,10 @@ fun HealthDebugScreen(
         }
     }
 
-    BackHandler(enabled = showSettings || showManualInput || showLabResults || showPfcBoard) {
-        if (showPfcBoard) {
+    BackHandler(enabled = showSettings || showManualInput || showLabResults || showPfcBoard || showIndices) {
+        if (showIndices) {
+            showIndices = false
+        } else if (showPfcBoard) {
             showPfcBoard = false
         } else if (showLabResults) {
             showLabResults = false
@@ -176,7 +179,7 @@ fun HealthDebugScreen(
         }
     }
 
-    if (!showPfcBoard && !showLabResults && state.isLoading && state.availability == HealthConnectAvailability.Checking) {
+    if (!showPfcBoard && !showLabResults && !showIndices && state.isLoading && state.availability == HealthConnectAvailability.Checking) {
         LoadingScreen(modifier = modifier)
         return
     }
@@ -195,6 +198,10 @@ fun HealthDebugScreen(
             },
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
+            if (showIndices) {
+                IndicesScreen(state.weightRecords, state.dailyBodySettings, onBack = { showIndices = false })
+                return@CompositionLocalProvider
+            }
             if (showPfcBoard) {
                 PfcBoardScreen(pfcBoardState, onRefreshPfcBoard, { showPfcBoard = false })
                 return@CompositionLocalProvider
@@ -371,6 +378,12 @@ fun HealthDebugScreen(
                         modifier = Modifier.weight(1f),
                     )
                     MainDestinationButton(
+                        label = "指数",
+                        icon = R.drawable.ic_indices_24,
+                        onClick = { showIndices = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                    MainDestinationButton(
                         label = "メニュー",
                         icon = R.drawable.ic_restaurant_24,
                         onClick = { showPfcBoard = true },
@@ -390,9 +403,9 @@ private fun MainDestinationButton(label: String, icon: Int, onClick: () -> Unit,
             modifier = modifier.height(38.dp),
             shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(containerColor = AppPrimary, contentColor = Color.White),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(painterResource(icon), contentDescription = null, tint = Color(0xFFCEDBEF), modifier = Modifier.size(20.dp))
                 Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
