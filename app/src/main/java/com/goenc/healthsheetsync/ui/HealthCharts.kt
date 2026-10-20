@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.data.ChartAxisRange
@@ -177,7 +179,7 @@ internal fun WeightTrendChart(
     val missingPointColor = ChartMissingPoint
     val movingAverageLineColor = ChartMovingAverage
 
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+    Column(modifier = Modifier.offset { IntOffset(0, -5) }, verticalArrangement = Arrangement.spacedBy(0.dp)) {
         Spacer(modifier = Modifier.height(6.dp))
         Box(
             modifier = Modifier
