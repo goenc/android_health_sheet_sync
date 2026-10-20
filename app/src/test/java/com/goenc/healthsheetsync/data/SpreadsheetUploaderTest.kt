@@ -10,6 +10,26 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SpreadsheetUploaderTest {
+    @Test fun exportsIndependentBodyHistoryWithoutVirtualBaselineDate() {
+        val date = LocalDate.of(2026, 10, 20)
+        val height = ManualHealthRecord("height", ManualRecordType.Height, date.atStartOfDay(), "170 cm", null)
+        val intake = ManualHealthRecord("intake", ManualRecordType.AverageIntake, date.atStartOfDay(), "1800 kcal/日", null)
+        val records = listOf(height, intake)
+        val tables = SpreadsheetUploader().uploadTables(
+            weightRecords = emptyList(), glucoseRecords = emptyList(), stepDailyRecords = emptyList(),
+            a1cDailyRecords = emptyList(), manualRecords = records,
+            dailyBodySettings = com.goenc.healthsheetsync.health.BodySettingHistory.timeline(emptyList(), records),
+            dailyEnergySnapshots = emptyList(),
+        )
+        assertEquals(1, tables.single { it.sheetName == "dailyBodySettings" }.values.size)
+        assertEquals(listOf(date.toString(), 170.0, 1800, date.atStartOfDay().toString()),
+            tables.single { it.sheetName == "dailyBodySettings" }.values.single())
+        assertEquals(listOf(
+            listOf(date.atStartOfDay().toString(), "Height", 170.0, "height"),
+            listOf(date.atStartOfDay().toString(), "AverageIntake", 1800.0, "intake")),
+            tables.single { it.sheetName == "bodySettingRecords" }.values)
+    }
+
     @Test
     fun exportsBasalMetabolicRateHistoryAndRecalculatedEnergyWithoutCreatingSteps() {
         val date = LocalDate.of(2026, 7, 23)

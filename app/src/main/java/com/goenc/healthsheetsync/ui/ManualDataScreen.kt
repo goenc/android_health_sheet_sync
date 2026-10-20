@@ -60,6 +60,8 @@ private val manualRecordTypeDisplayOrder = listOf(
     ManualRecordType.A1c,
     ManualRecordType.Steps,
     ManualRecordType.BasalMetabolicRate,
+    ManualRecordType.Height,
+    ManualRecordType.AverageIntake,
 )
 
 @Composable
@@ -77,6 +79,7 @@ internal fun ManualDataScreen(
     onRestore: (String, String) -> Unit,
     onDelete: (String, String) -> Unit,
     onBack: () -> Unit,
+    dailyBodySettings: List<com.goenc.healthsheetsync.health.DailyBodySetting> = emptyList(),
     initialBasalMetabolicRate: Int = DailyEnergyCalculator.DEFAULT_BASAL_METABOLIC_RATE,
 ) {
     var selectedType by remember { mutableStateOf(ManualRecordType.BloodPressure) }
@@ -194,12 +197,22 @@ internal fun ManualDataScreen(
                 style = MaterialTheme.typography.bodySmall)
             Text("この日から次の記録の前日まで適用。同じ日付の再登録は上書き。", style = MaterialTheme.typography.bodySmall)
         }
+        if (selectedType == ManualRecordType.Height || selectedType == ManualRecordType.AverageIntake) {
+            val effective = dailyBodySettings.filter { !it.targetDate.isAfter(selectedDate) }.maxByOrNull { it.targetDate }
+            val height = selectedType == ManualRecordType.Height
+            val initial = if (height) "168.2 cm" else "1600 kcal/日"
+            val current = if (height) "${formatDecimal(effective?.heightCm ?: 168.2)} cm"
+                else "${effective?.averageIntakeKcal ?: 1600} kcal/日"
+            Text("初期値（全履歴より前）：$initial", style = MaterialTheme.typography.bodySmall)
+            Text("選択日に適用：$current", style = MaterialTheme.typography.bodySmall)
+            Text("この日から次の記録の前日まで適用。同じ日付の再登録は上書き。", style = MaterialTheme.typography.bodySmall)
+        }
         OutlinedTextField(
             value = primaryValue,
             onValueChange = { primaryValue = it },
             label = { Text(labels.first) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = if (selectedType == ManualRecordType.BasalMetabolicRate) KeyboardType.Number else KeyboardType.Decimal),
+            keyboardOptions = KeyboardOptions(keyboardType = if (selectedType == ManualRecordType.BasalMetabolicRate || selectedType == ManualRecordType.AverageIntake) KeyboardType.Number else KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
         labels.second?.let { secondaryLabel ->

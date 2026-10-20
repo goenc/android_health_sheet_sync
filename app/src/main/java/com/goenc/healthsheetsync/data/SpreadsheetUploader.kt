@@ -97,6 +97,7 @@ class SpreadsheetUploader {
                 sheetName = "dailyBodySettings",
                 headers = listOf("targetDate", "heightCm", "averageIntakeKcal", "updatedAt"),
                 values = dailyBodySettings
+                    .filter { it.targetDate != java.time.LocalDate.MIN }
                     .sortedBy { it.targetDate }
                     .map { setting ->
                         listOf(
@@ -219,6 +220,14 @@ class SpreadsheetUploader {
                     .map { record ->
                         listOf(record.measuredAt.toString(), record.valueText, record.id)
                     },
+            ),
+            SpreadsheetUploadTable(
+                sheetName = "bodySettingRecords",
+                headers = listOf("measuredAt", "type", "value", "manualId"),
+                values = manualRecords.filter {
+                    it.invalidatedAt == null && (it.type == ManualRecordType.Height || it.type == ManualRecordType.AverageIntake)
+                }.map { record -> listOf(record.measuredAt.toString(), record.type.name,
+                    record.valueText.removeSuffix(" cm").removeSuffix(" kcal/日").trim().toDoubleOrNull() ?: "", record.id) },
             ),
             SpreadsheetUploadTable(
                 sheetName = "basalMetabolicRateRecords",

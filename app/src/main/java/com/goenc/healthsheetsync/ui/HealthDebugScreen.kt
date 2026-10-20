@@ -230,6 +230,7 @@ fun HealthDebugScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         ManualDataScreen(
+                            dailyBodySettings = dailyBodySettings,
                             initialBasalMetabolicRate = basalMetabolicRate,
                             weightRecords = state.weightRecords,
                             dailySteps = state.stepDailyRecords,
@@ -481,6 +482,7 @@ internal fun bmiForSummary(
         ?.weightKg
         ?: return null
     val heightCm = dailyBodySettings
+        .filter { !it.targetDate.isAfter(LocalDate.now()) }
         .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
         ?.heightCm
         ?: return null
@@ -506,6 +508,7 @@ internal fun navyBodyFatForSummary(
         ?.toDoubleOrNull()
         ?: return null
     val heightCm = dailyBodySettings
+        .filter { !it.targetDate.isAfter(LocalDate.now()) }
         .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
         ?.heightCm
         ?: return null
@@ -524,6 +527,7 @@ internal fun ffmiForSummary(
     val weightKg = weightRecords.maxByOrNull { it.measuredAt }?.weightKg ?: return null
     val bodyFatPercent = navyBodyFatForSummary(manualRecords, dailyBodySettings) ?: return null
     val heightCm = dailyBodySettings
+        .filter { !it.targetDate.isAfter(LocalDate.now()) }
         .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
         ?.heightCm
         ?: return null

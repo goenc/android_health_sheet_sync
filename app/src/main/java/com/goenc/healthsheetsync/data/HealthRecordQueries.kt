@@ -29,7 +29,7 @@ internal class HealthRecordQueries(
             dailyEnergySnapshots = DailyEnergySnapshotStore(db).load().map {
                 DailyEnergyCalculator.applyBasalMetabolicRateHistory(it, manualRecords)
             },
-            dailyBodySettings = loadDailyBodySettings(),
+            dailyBodySettings = com.goenc.healthsheetsync.health.BodySettingHistory.timeline(loadDailyBodySettings(), manualRecords),
         )
     }
 

@@ -11,6 +11,34 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class BasalMetabolicRateHistoryStoreTest {
+    @Test fun independentBodyFieldsOverwriteAndRestoreWithoutCreatingMeasurements() {
+        SQLiteDatabase.create(null).use { db ->
+            db.createHealthConnectTables()
+            db.createManualRecordsTable()
+            db.createA1cDailyRecordsTable()
+            db.createDailyBodySettingsTable()
+            val repository = ManualRecordRepository(db)
+            val date = LocalDate.of(2026, 10, 20)
+            fun save(type: ManualRecordType, text: String) = repository.save(
+                ManualHealthRecordDraft(type, date.atStartOfDay(), text))
+            save(ManualRecordType.Height, "170 cm")
+            save(ManualRecordType.Height, "171 cm")
+            save(ManualRecordType.AverageIntake, "1800 kcal/日")
+            val data = HealthRecordQueries(db).load()
+            assertEquals(2, data.manualRecords.size)
+            assertEquals(171.0, data.dailyBodySettings.first().heightCm, 0.0)
+            assertEquals(1800, data.dailyBodySettings.first().averageIntakeKcal)
+            assertTrue(data.weightRecords.isEmpty())
+            assertTrue(data.stepDailyRecords.isEmpty())
+            assertTrue(data.dailyEnergySnapshots.isEmpty())
+            db.execSQL("UPDATE $TABLE_MANUAL SET invalidated_at = '2026-10-20T12:00' WHERE type = 'Height'")
+            assertEquals(168.2, HealthRecordQueries(db).load().dailyBodySettings.first().heightCm, 0.0)
+            assertEquals(1800, HealthRecordQueries(db).load().dailyBodySettings.first().averageIntakeKcal)
+            db.execSQL("DELETE FROM $TABLE_MANUAL")
+            assertEquals(1600, HealthRecordQueries(db).load().dailyBodySettings.single().averageIntakeKcal)
+        }
+    }
+
     @Test fun historyUpdatesDoNotCreateDaysOrOverwriteSnapshotOriginals() {
         // All operations use an isolated in-memory DB, never the user's database.
         SQLiteDatabase.create(null).use { db ->

@@ -77,7 +77,7 @@ internal fun SettingsScreen(
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
     var weightMovingAverageError by remember { mutableStateOf<String?>(null) }
-    val latestDailyBodySetting = dailyBodySettings.maxWithOrNull(
+    val latestDailyBodySetting = dailyBodySettings.filter { !it.targetDate.isAfter(LocalDate.now()) }.maxWithOrNull(
         compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt },
     )
     var heightInput by remember(latestDailyBodySetting) {
@@ -180,7 +180,7 @@ internal fun SettingsScreen(
     DebugSection(title = "身体設定") {
         latestDailyBodySetting?.let { setting ->
             Text(
-                text = "最新保存日: ${setting.targetDate}",
+                text = if (setting.targetDate == LocalDate.MIN) "初期値（全履歴より前）" else "適用中の記録日: ${setting.targetDate}",
                 style = MaterialTheme.typography.bodySmall,
                 color = AppMutedBlue,
             )

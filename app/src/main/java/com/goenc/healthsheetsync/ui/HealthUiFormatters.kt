@@ -92,6 +92,8 @@ internal fun ManualRecordType.inputLabels(): Pair<String, String?> {
         ManualRecordType.Weight -> "体重 kg" to null
         ManualRecordType.Steps -> "歩数" to null
         ManualRecordType.BasalMetabolicRate -> "基礎代謝 kcal/日" to null
+        ManualRecordType.Height -> "身長 cm" to null
+        ManualRecordType.AverageIntake -> "平均摂取カロリー kcal/日" to null
         ManualRecordType.BloodGlucose -> "血糖値 mg/dL" to null
         ManualRecordType.BloodPressure -> "収縮期 mmHg" to "拡張期 mmHg"
         ManualRecordType.Waist -> "腹囲 cm" to null
@@ -108,6 +110,9 @@ internal fun ManualRecordType.formatManualValue(primaryValue: String, secondaryV
             primary.toDoubleOrNull()?.let { "${formatDecimal(it)} kg" }
         ManualRecordType.Steps ->
             primary.toLongOrNull()?.let { "${it}歩" }
+        ManualRecordType.Height ->
+            primary.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }?.let { "${formatDecimal(it)} cm" }
+        ManualRecordType.AverageIntake,
         ManualRecordType.BasalMetabolicRate ->
             primary.toIntOrNull()?.takeIf { it > 0 }?.let { "$it kcal/日" }
         ManualRecordType.BloodGlucose ->
@@ -130,6 +135,8 @@ internal fun ManualRecordType.manualInputTimeBandOptions(): List<String> {
     return when (this) {
         ManualRecordType.Steps,
         ManualRecordType.BasalMetabolicRate,
+        ManualRecordType.Height,
+        ManualRecordType.AverageIntake,
         ManualRecordType.BloodGlucose,
         ManualRecordType.Waist,
         ManualRecordType.Neck,
@@ -158,6 +165,8 @@ internal fun ManualRecordType.defaultManualTimeBand(currentTime: LocalTime): Str
 
 internal fun ManualRecordType.manualInputTime(timeBand: String): LocalTime {
     return when (this) {
+        ManualRecordType.Height,
+        ManualRecordType.AverageIntake,
         ManualRecordType.BasalMetabolicRate -> LocalTime.MIDNIGHT
         ManualRecordType.Steps,
         ManualRecordType.BloodGlucose -> LocalTime.of(7, 0)
@@ -215,6 +224,8 @@ internal fun ManualRecordType.toGraphDataItems(
             }
         ManualRecordType.BloodPressure,
         ManualRecordType.BasalMetabolicRate,
+        ManualRecordType.Height,
+        ManualRecordType.AverageIntake,
         ManualRecordType.Waist,
         ManualRecordType.Neck,
         ManualRecordType.A1c -> manualRecords

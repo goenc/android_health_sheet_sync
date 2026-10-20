@@ -7,6 +7,18 @@ import java.time.Instant
 import java.time.LocalTime
 
 class HealthUiFormattersTest {
+    @Test fun formatsBodyHistoryWithPositiveValuesAndNoTimeBand() {
+        assertEquals("168.2 cm", ManualRecordType.Height.formatManualValue("168.2", ""))
+        assertEquals("1600 kcal/日", ManualRecordType.AverageIntake.formatManualValue("1600", ""))
+        assertEquals(null, ManualRecordType.Height.formatManualValue("NaN", ""))
+        assertEquals(null, ManualRecordType.AverageIntake.formatManualValue("0", ""))
+        assertEquals(null, ManualRecordType.AverageIntake.formatManualValue("1600.5", ""))
+        listOf(ManualRecordType.Height, ManualRecordType.AverageIntake).forEach {
+            assertEquals(emptyList<String>(), it.manualInputTimeBandOptions())
+            assertEquals(LocalTime.MIDNIGHT, it.manualInputTime("朝"))
+        }
+    }
+
     @Test
     fun basalMetabolicRateInputUsesPositiveIntegerAndNoTimeBand() {
         val type = ManualRecordType.BasalMetabolicRate

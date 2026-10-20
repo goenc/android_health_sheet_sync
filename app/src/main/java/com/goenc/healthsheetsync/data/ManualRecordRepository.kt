@@ -21,9 +21,12 @@ internal class ManualRecordRepository(
                 "基礎代謝量は0より大きい整数で指定してください"
             }
         }
+        if (draft.type == ManualRecordType.Height || draft.type == ManualRecordType.AverageIntake) {
+            require(com.goenc.healthsheetsync.health.BodySettingHistory.numericValue(draft.type, draft.valueText) != null)
+        }
         val now = LocalDateTime.now().toString()
-        val manualId = if (draft.type == ManualRecordType.BasalMetabolicRate) {
-            "manual|BasalMetabolicRate|${draft.measuredAt.toLocalDate()}"
+        val manualId = if (draft.type in listOf(ManualRecordType.BasalMetabolicRate, ManualRecordType.Height, ManualRecordType.AverageIntake)) {
+            "manual|${draft.type.name}|${draft.measuredAt.toLocalDate()}"
         } else "manual|${UUID.randomUUID()}"
         db.runInTransaction {
             replace(
@@ -138,6 +141,8 @@ internal class ManualRecordRepository(
                 }
                 ManualRecordType.BloodPressure,
                 ManualRecordType.BasalMetabolicRate,
+                ManualRecordType.Height,
+                ManualRecordType.AverageIntake,
                 ManualRecordType.Waist,
                 ManualRecordType.Neck -> Unit
             }

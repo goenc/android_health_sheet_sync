@@ -1065,6 +1065,7 @@ private fun selectedDayBmiText(
 ): String? {
     val morningWeightKg = day?.morning?.weightKg ?: return null
     val heightCm = dailyBodySettings
+        .filter { !it.targetDate.isAfter(day.date) }
         .maxWithOrNull(compareBy<DailyBodySetting> { it.targetDate }.thenBy { it.updatedAt })
         ?.heightCm
         ?: return null

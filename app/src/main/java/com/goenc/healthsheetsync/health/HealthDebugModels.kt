@@ -113,6 +113,8 @@ enum class ManualRecordType(
     Weight("体重"),
     Steps("歩数"),
     BasalMetabolicRate("基礎代謝"),
+    Height("身長"),
+    AverageIntake("平均摂取カロリー"),
     BloodGlucose("血糖値"),
     BloodPressure("血圧"),
     Waist("腹囲"),

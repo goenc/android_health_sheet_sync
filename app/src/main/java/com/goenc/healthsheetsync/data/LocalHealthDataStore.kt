@@ -129,17 +129,17 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             return false
         }
         return runCatching {
-            val rowId = writableDatabase.replace(
-                TABLE_DAILY_BODY_SETTINGS,
-                null,
-                ContentValues().apply {
-                    put("target_date", targetDate.toString())
-                    put("height_cm", heightCm)
-                    put("average_intake_kcal", averageIntakeKcal)
-                    put("updated_at", LocalDateTime.now().toString())
-                },
-            )
-            rowId != -1L
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val repository = ManualRecordRepository(db)
+                repository.save(ManualHealthRecordDraft(ManualRecordType.Height, targetDate.atStartOfDay(), "$heightCm cm"))
+                repository.save(ManualHealthRecordDraft(ManualRecordType.AverageIntake, targetDate.atStartOfDay(), "$averageIntakeKcal kcal/日"))
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+            true
         }.getOrDefault(false)
     }
 

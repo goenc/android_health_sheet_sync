@@ -83,6 +83,13 @@ class HealthCsvShareExporter(
 
     private fun exportManualRecord(record: ManualHealthRecord): String? {
         return when (record.type) {
+            ManualRecordType.Height, ManualRecordType.AverageIntake -> csvRow(
+                recordType = if (record.type == ManualRecordType.Height) "height" else "averageIntake",
+                targetDate = record.measuredAt.toLocalDate().toString(),
+                measuredAt = record.measuredAt.toString(),
+                value1 = record.valueText.removeSuffix(" cm").removeSuffix(" kcal/日").trim(),
+                manualId = record.id,
+            )
             ManualRecordType.BasalMetabolicRate -> csvRow(
                 recordType = "basalMetabolicRate",
                 targetDate = record.measuredAt.toLocalDate().toString(),
