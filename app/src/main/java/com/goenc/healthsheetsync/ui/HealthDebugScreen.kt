@@ -199,7 +199,8 @@ fun HealthDebugScreen(
     ) {
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
             if (showIndices) {
-                IndicesScreen(state.weightRecords, state.dailyBodySettings, onBack = { showIndices = false })
+                IndicesScreen(state.weightRecords, state.dailyBodySettings, state.manualRecords,
+                    onBack = { showIndices = false })
                 return@CompositionLocalProvider
             }
             if (showPfcBoard) {

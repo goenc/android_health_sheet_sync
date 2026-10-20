@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -35,17 +36,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DebugWeightRecord
+import com.goenc.healthsheetsync.health.ManualHealthRecord
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
+import java.util.Locale
+
+private val FfmiColor = Color(0xFF248064)
+private val RatioColor = Color(0xFFB56B19)
+private fun ratioText(value: Double): String = String.format(Locale.ROOT, "%.2f", value)
 
 @Composable
 internal fun IndicesScreen(
     records: List<DebugWeightRecord>,
     dailyBodySettings: List<DailyBodySetting>,
+    manualRecords: List<ManualHealthRecord>,
     onBack: () -> Unit,
 ) {
-    val points = remember(records, dailyBodySettings) { dailyBmiPoints(records, dailyBodySettings) }
+    val points = remember(records, dailyBodySettings, manualRecords) {
+        dailyIndexPoints(records, dailyBodySettings, manualRecords)
+    }
     var range by remember { mutableStateOf(WeightChartRange.OneMonth) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     val end = points.lastOrNull()?.date
@@ -67,8 +77,10 @@ internal fun IndicesScreen(
             BackIconButton(onBack)
             Text("指数", style = MaterialTheme.typography.titleLarge, color = AppText)
         }
-        Text("BMIの推移", style = MaterialTheme.typography.titleMedium, color = AppText)
+        Text("BMI・FFMI・ウエスト身長比の推移", style = MaterialTheme.typography.titleMedium, color = AppText)
         Text("朝と夜の平均体重で算出。片方だけの日はその体重を使用。", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+        Text("FFMIは腹囲・首回りから体脂肪率を推定して算出。腹囲・首回りは各日以前の最新記録を使用。",
+            style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(WeightChartRange.TwoWeeks, WeightChartRange.OneMonth, WeightChartRange.ThreeMonths, WeightChartRange.All).forEach { option ->
                 FilterChip(selected = range == option, onClick = { range = option; selectedDate = null },
@@ -76,38 +88,52 @@ internal fun IndicesScreen(
             }
         }
         if (selected == null || start == null) {
-            Text("BMIを表示できるデータがありません。体重と、その日以前の身長設定を確認してください。", color = AppMutedBlue)
+            Text("指数を表示できるデータがありません。体重・腹囲・首回りと、その日以前の身長設定を確認してください。", color = AppMutedBlue)
         } else {
-            Text("${selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d"))}　BMI ${formatDecimal(selected.value)}",
-                color = ChartBlue, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            BmiTrendChart(visiblePoints, start, end, selected, onSelect = { selectedDate = it.date })
-            Text("グラフをタップすると、その日のBMIを表示。", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+            Text(selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d")), color = AppText,
+                fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("BMI ${selected.bmi?.let(::formatDecimal) ?: "—"}", color = ChartBlue)
+                Text("FFMI ${selected.ffmi?.let(::formatDecimal) ?: "—"}", color = FfmiColor)
+            }
+            Text("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}", color = RatioColor)
+            Text("左軸：BMI・FFMI　右軸：WHtR", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+            IndexTrendChart(visiblePoints, start, end, selected, onSelect = { selectedDate = it.date })
+            Text("グラフをタップすると、その日の指数を表示。— は算出に必要な記録なし。",
+                style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
         }
     }
 }
 
 @Composable
-private fun BmiTrendChart(
-    points: List<BmiChartPoint>,
+private fun IndexTrendChart(
+    points: List<IndexChartPoint>,
     start: LocalDate,
     end: LocalDate,
-    selected: BmiChartPoint,
-    onSelect: (BmiChartPoint) -> Unit,
+    selected: IndexChartPoint,
+    onSelect: (IndexChartPoint) -> Unit,
 ) {
-    val minimum = points.minOf { it.value }
-    val maximum = points.maxOf { it.value }
-    val padding = ((maximum - minimum) * 0.15).coerceAtLeast(0.5)
-    val lower = (minimum - padding).coerceAtLeast(0.0)
-    val upper = maximum + padding
+    fun bounds(values: List<Double>, minimumPadding: Double): Pair<Double, Double> {
+        if (values.isEmpty()) return 0.0 to 1.0
+        val minimum = values.min()
+        val maximum = values.max()
+        val padding = ((maximum - minimum) * 0.15).coerceAtLeast(minimumPadding)
+        return (minimum - padding).coerceAtLeast(0.0) to maximum + padding
+    }
+    val leftValues = points.flatMap { listOfNotNull(it.bmi, it.ffmi) }
+    val rightValues = points.mapNotNull { it.waistHeightRatio }
+    val (lower, upper) = bounds(leftValues, 0.5)
+    val (ratioLower, ratioUpper) = bounds(rightValues, 0.02)
     val firstDay = start.toEpochDay()
     val daySpan = (end.toEpochDay() - firstDay).coerceAtLeast(1)
-    val description = "BMIの推移。${selected.date}、BMI ${formatDecimal(selected.value)}"
+    val description = "指数の推移。${selected.date}、BMI ${selected.bmi?.let(::formatDecimal) ?: "記録なし"}、" +
+        "FFMI ${selected.ffmi?.let(::formatDecimal) ?: "記録なし"}、WHtR ${selected.waistHeightRatio?.let(::ratioText) ?: "記録なし"}"
     Canvas(Modifier.fillMaxWidth().height(320.dp)
         .semantics { contentDescription = description }
         .pointerInput(points, start, end) {
             detectTapGestures { touch ->
                 val left = 48.dp.toPx()
-                val width = size.width - left - 12.dp.toPx()
+                val width = size.width - left - 48.dp.toPx()
                 points.minByOrNull {
                     val x = left + width * (it.date.toEpochDay() - firstDay).toFloat() / daySpan
                     abs(touch.x - x)
@@ -115,7 +141,7 @@ private fun BmiTrendChart(
             }
         }) {
         val left = 48.dp.toPx()
-        val right = size.width - 12.dp.toPx()
+        val right = size.width - 48.dp.toPx()
         val top = 16.dp.toPx()
         val bottom = size.height - 32.dp.toPx()
         val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -127,25 +153,46 @@ private fun BmiTrendChart(
             val ratio = index / 4f
             val y = bottom - (bottom - top) * ratio
             drawLine(ChartGrid, Offset(left, y), Offset(right, y), 1.dp.toPx())
-            drawContext.canvas.nativeCanvas.drawText(formatDecimal(lower + (upper - lower) * ratio),
-                left - 6.dp.toPx(), y + labelPaint.textSize / 3, labelPaint)
+            if (leftValues.isNotEmpty()) {
+                labelPaint.textAlign = Paint.Align.RIGHT
+                labelPaint.color = AppMutedBlue.toArgb()
+                drawContext.canvas.nativeCanvas.drawText(formatDecimal(lower + (upper - lower) * ratio),
+                    left - 6.dp.toPx(), y + labelPaint.textSize / 3, labelPaint)
+            }
+            if (rightValues.isNotEmpty()) {
+                labelPaint.textAlign = Paint.Align.LEFT
+                labelPaint.color = RatioColor.toArgb()
+                drawContext.canvas.nativeCanvas.drawText(ratioText(ratioLower + (ratioUpper - ratioLower) * ratio),
+                    right + 6.dp.toPx(), y + labelPaint.textSize / 3, labelPaint)
+            }
         }
-        val offsets = points.map { point ->
-            Offset(
-                left + (right - left) * (point.date.toEpochDay() - firstDay).toFloat() / daySpan,
-                bottom - (bottom - top) * ((point.value - lower) / (upper - lower)).toFloat(),
-            )
-        }
-        val path = Path().apply {
-            moveTo(offsets.first().x, offsets.first().y)
-            offsets.drop(1).forEach { lineTo(it.x, it.y) }
-        }
-        drawPath(path, ChartBlue, style = Stroke(2.dp.toPx()))
-        points.forEachIndexed { index, point ->
-            if (point == selected) drawCircle(AppPrimary.copy(alpha = 0.25f), 9.dp.toPx(), offsets[index])
-            drawCircle(ChartBlue, 3.dp.toPx(), offsets[index])
+        val series = listOf<Pair<Color, (IndexChartPoint) -> Double?>>(
+            ChartBlue to { it.bmi }, FfmiColor to { it.ffmi }, RatioColor to { it.waistHeightRatio },
+        )
+        series.forEachIndexed { seriesIndex, (color, valueOf) ->
+            val min = if (seriesIndex == 2) ratioLower else lower
+            val max = if (seriesIndex == 2) ratioUpper else upper
+            val path = Path()
+            var connected = false
+            points.forEach { point ->
+                val value = valueOf(point)
+                if (value == null) {
+                    connected = false
+                } else {
+                    val offset = Offset(
+                        left + (right - left) * (point.date.toEpochDay() - firstDay).toFloat() / daySpan,
+                        bottom - (bottom - top) * ((value - min) / (max - min)).toFloat(),
+                    )
+                    if (connected) path.lineTo(offset.x, offset.y) else path.moveTo(offset.x, offset.y)
+                    connected = true
+                    if (point == selected) drawCircle(color.copy(alpha = 0.25f), 9.dp.toPx(), offset)
+                    drawCircle(color, 3.dp.toPx(), offset)
+                }
+            }
+            drawPath(path, color, style = Stroke(2.dp.toPx()))
         }
         val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d")
+        labelPaint.color = AppMutedBlue.toArgb()
         labelPaint.textAlign = Paint.Align.LEFT
         drawContext.canvas.nativeCanvas.drawText(start.format(dateFormat), left, size.height - 8.dp.toPx(), labelPaint)
         if (start != end) {
