@@ -59,6 +59,9 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
             db.execSQL("ALTER TABLE $TABLE_STEPS ADD COLUMN distance_meters REAL")
             db.createHealthConnectDistanceRecordsTable()
         }
+        if (oldVersion < 10) {
+            db.migrateLegacyBodySettingsToManualHistory()
+        }
     }
 
     fun save(

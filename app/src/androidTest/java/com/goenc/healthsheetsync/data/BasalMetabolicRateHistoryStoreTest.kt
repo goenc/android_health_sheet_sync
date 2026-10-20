@@ -11,6 +11,41 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class BasalMetabolicRateHistoryStoreTest {
+    @Test fun migratesLegacyValuesIntoVisibleHistoryWithoutShadowFallback() {
+        SQLiteDatabase.create(null).use { db ->
+            db.createHealthConnectTables()
+            db.createManualRecordsTable()
+            db.createA1cDailyRecordsTable()
+            db.createDailyBodySettingsTable()
+            val date = LocalDate.of(2026, 7, 23)
+            db.execSQL("INSERT INTO daily_body_settings VALUES (?, ?, ?, ?)",
+                arrayOf<Any>(date.toString(), 168.2, 1900, "2026-07-23T12:00"))
+            // An existing manual entry takes precedence over the same legacy date.
+            ManualRecordRepository(db).save(ManualHealthRecordDraft(
+                ManualRecordType.Height, date.atStartOfDay(), "170 cm"))
+            db.migrateLegacyBodySettingsToManualHistory()
+            val migrated = HealthRecordQueries(db).load()
+            assertEquals(2, migrated.manualRecords.size)
+            val intake = migrated.manualRecords.single { it.type == ManualRecordType.AverageIntake }
+            assertEquals("1900 kcal/日", intake.valueText)
+            assertEquals(date.atStartOfDay(), intake.measuredAt)
+            assertEquals(1900, migrated.dailyBodySettings.first().averageIntakeKcal)
+            assertEquals(170.0, migrated.dailyBodySettings.first().heightCm, 0.0)
+            db.execSQL("UPDATE $TABLE_MANUAL SET invalidated_at = '2026-07-24T12:00' WHERE type = 'AverageIntake'")
+            assertEquals(1600, HealthRecordQueries(db).load().dailyBodySettings.first().averageIntakeKcal)
+            // Migration must not restore an invalidated existing record.
+            db.migrateLegacyBodySettingsToManualHistory()
+            assertEquals(1600, HealthRecordQueries(db).load().dailyBodySettings.first().averageIntakeKcal)
+            db.execSQL("DELETE FROM $TABLE_MANUAL WHERE type = 'AverageIntake'")
+            assertEquals(1600, HealthRecordQueries(db).load().dailyBodySettings.first().averageIntakeKcal)
+            assertTrue(HealthRecordQueries(db).load().stepDailyRecords.isEmpty())
+            db.rawQuery("SELECT COUNT(*) FROM daily_body_settings", null).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(1, it.getInt(0))
+            }
+        }
+    }
+
     @Test fun independentBodyFieldsOverwriteAndRestoreWithoutCreatingMeasurements() {
         SQLiteDatabase.create(null).use { db ->
             db.createHealthConnectTables()

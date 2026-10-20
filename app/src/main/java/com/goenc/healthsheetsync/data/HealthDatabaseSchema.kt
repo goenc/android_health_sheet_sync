@@ -3,7 +3,7 @@ package com.goenc.healthsheetsync.data
 import android.database.sqlite.SQLiteDatabase
 
 internal const val DATABASE_NAME = "health_sheet_sync.db"
-internal const val DATABASE_VERSION = 9
+internal const val DATABASE_VERSION = 10
 internal const val TABLE_WEIGHT = "weight_records"
 internal const val TABLE_GLUCOSE = "glucose_records"
 internal const val TABLE_STEPS = "step_daily_records"
@@ -192,4 +192,23 @@ internal fun SQLiteDatabase.createDailyBodySettingsTable() {
         )
         """.trimIndent(),
     )
+}
+
+/** Retain legacy storage for preservation; manual history becomes the active source. */
+internal fun SQLiteDatabase.migrateLegacyBodySettingsToManualHistory() {
+    listOf(
+        Triple("Height", "height_cm", " cm"),
+        Triple("AverageIntake", "average_intake_kcal", " kcal/日"),
+    ).forEach { (type, column, suffix) ->
+        execSQL(
+            """
+            INSERT OR IGNORE INTO manual_records
+                (id, type, measured_at, value_text, created_at, updated_at, invalidated_at)
+            SELECT 'manual|$type|' || target_date, '$type', target_date || 'T00:00',
+                CAST($column AS TEXT) || '$suffix', updated_at, updated_at, NULL
+            FROM daily_body_settings
+            WHERE $column > 0
+            """.trimIndent(),
+        )
+    }
 }
