@@ -1013,8 +1013,8 @@ private fun SelectedDaySummary(
             ) {
                 SummaryInfoLine("血圧 ${graphValues?.bloodPressureText ?: "-"}", modifier = Modifier.weight(1f))
                 SummaryInfoLine(
-                    text = "腹囲 ${graphValues?.waistText ?: "-"}  WHtR " +
-                        (selectedDayWaistHeightRatioText(day?.date, graphValues?.waistCm, dailyBodySettings) ?: "-"),
+                    text = "腹囲 ${graphValues?.waistText ?: "-"} (" +
+                        (selectedDayWaistHeightRatioText(day?.date, graphValues?.waistCm, dailyBodySettings) ?: "-") + ")",
                     modifier = Modifier.weight(1.6f),
                 )
             }
