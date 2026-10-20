@@ -85,7 +85,17 @@ internal fun IndicesScreen(
             Text("指数", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, color = AppText)
             TextButton(onClick = { showExplanation = true }) { Text("説明") }
         }
-        Text("BMI・FFMI・ウエスト身長比の推移", style = MaterialTheme.typography.titleMedium, color = AppText)
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("最新データ", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+            IndexValues(
+                bmiPoint = points.lastOrNull { it.bmi != null },
+                ffmiPoint = points.lastOrNull { it.ffmi != null },
+                ratioPoint = points.lastOrNull { it.waistHeightRatio != null },
+            )
+        }
         Text("BMI・FFMI：左軸　WHtR：右軸", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
         if (window != null) {
             IndexTrendChart(visiblePoints, window, range, selected, chartEndAt, earliestEndAt, latestEndAt,
@@ -102,20 +112,7 @@ internal fun IndicesScreen(
             } else {
                 Text(selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d")), color = AppText,
                     fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    IndexValueWithInputs("BMI", selected.bmi, selected.weightKg?.let { "${formatDecimal(it)}kg" },
-                        ChartBlue, Modifier.weight(1f))
-                    val ffmiInputs = if (selected.ffmi != null) {
-                        "${selected.weightKg?.let(::formatDecimal)}kg・${selected.waistCm?.let(::formatDecimal)}cm"
-                    } else null
-                    IndexValueWithInputs("FFMI", selected.ffmi, ffmiInputs, FfmiColor, Modifier.weight(1f))
-                }
-                Text(buildAnnotatedString {
-                    append("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}")
-                    selected.waistCm?.takeIf { selected.waistHeightRatio != null }?.let { waist ->
-                        withStyle(SpanStyle(fontSize = 11.sp)) { append(" (${formatDecimal(waist)}cm)") }
-                    }
-                }, color = RatioColor)
+                IndexValues(selected, selected, selected)
             }
         }
     }
@@ -133,6 +130,26 @@ internal fun IndicesScreen(
             },
             confirmButton = { TextButton(onClick = { showExplanation = false }) { Text("閉じる") } },
         )
+    }
+}
+
+@Composable
+private fun IndexValues(bmiPoint: IndexChartPoint?, ffmiPoint: IndexChartPoint?, ratioPoint: IndexChartPoint?) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            IndexValueWithInputs("BMI", bmiPoint?.bmi, bmiPoint?.weightKg?.let { "${formatDecimal(it)}kg" },
+                ChartBlue, Modifier.weight(1f))
+            val ffmiInputs = if (ffmiPoint?.ffmi != null) {
+                "${ffmiPoint.weightKg?.let(::formatDecimal)}kg・${ffmiPoint.waistCm?.let(::formatDecimal)}cm"
+            } else null
+            IndexValueWithInputs("FFMI", ffmiPoint?.ffmi, ffmiInputs, FfmiColor, Modifier.weight(1f))
+        }
+        Text(buildAnnotatedString {
+            append("ウエスト身長比（WHtR） ${ratioPoint?.waistHeightRatio?.let(::ratioText) ?: "—"}")
+            ratioPoint?.waistCm?.takeIf { ratioPoint.waistHeightRatio != null }?.let { waist ->
+                withStyle(SpanStyle(fontSize = 11.sp)) { append(" (${formatDecimal(waist)}cm)") }
+            }
+        }, color = RatioColor)
     }
 }
 
