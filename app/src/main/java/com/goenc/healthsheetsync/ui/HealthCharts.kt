@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -936,6 +937,7 @@ private fun SelectedDaySummary(
     dailyBodySettings: List<DailyBodySetting>,
     onAddManualRecord: () -> Unit,
 ) {
+    val rightColumnIndent = with(LocalDensity.current) { MaterialTheme.typography.bodySmall.fontSize.toDp() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -959,7 +961,7 @@ private fun SelectedDaySummary(
                     text = "推定総消費 ${day?.dailyEnergy?.estimatedTotalKcal?.let(::formatIntegerWithGrouping) ?: "-"} kcal",
                     color = ChartSummary,
                     bold = true,
-                    modifier = Modifier.weight(1.6f),
+                    modifier = Modifier.weight(1.6f).padding(start = rightColumnIndent),
                 )
             }
             Row(
@@ -993,7 +995,7 @@ private fun SelectedDaySummary(
                 )
                 SummaryInfoLine(
                     text = "距離 ${formatDistanceMeters(day?.steps?.distanceMeters)}",
-                    modifier = Modifier.weight(1.6f),
+                    modifier = Modifier.weight(1.6f).padding(start = rightColumnIndent),
                 )
             }
             Row(
@@ -1006,7 +1008,7 @@ private fun SelectedDaySummary(
                 )
                 SummaryInfoLine(
                     text = "A1c ${graphValues?.a1cText ?: "-"}",
-                    modifier = Modifier.weight(1.6f),
+                    modifier = Modifier.weight(1.6f).padding(start = rightColumnIndent),
                 )
             }
             Row(
@@ -1017,7 +1019,7 @@ private fun SelectedDaySummary(
                 SummaryInfoLine(
                     text = "腹囲 ${graphValues?.waistText ?: "-"} (" +
                         (selectedDayWaistHeightRatioText(day?.date, graphValues?.waistCm, dailyBodySettings) ?: "-") + ")",
-                    modifier = Modifier.weight(1.6f),
+                    modifier = Modifier.weight(1.6f).padding(start = rightColumnIndent),
                 )
             }
             Row(
@@ -1030,7 +1032,7 @@ private fun SelectedDaySummary(
                 )
                 SummaryInfoLine(
                     text = "FFMI ${selectedDayFfmiText(day, manualRecords, dailyBodySettings) ?: "-"}",
-                    modifier = Modifier.weight(1.6f),
+                    modifier = Modifier.weight(1.6f).padding(start = rightColumnIndent),
                 )
             }
         }
