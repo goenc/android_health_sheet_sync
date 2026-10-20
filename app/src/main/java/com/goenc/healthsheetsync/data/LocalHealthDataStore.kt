@@ -120,29 +120,6 @@ class LocalHealthDataStore(context: Context) : SQLiteOpenHelper(
 
     fun load(): StoredHealthData = HealthRecordQueries(readableDatabase).load()
 
-    fun saveDailyBodySetting(
-        targetDate: LocalDate,
-        heightCm: Double,
-        averageIntakeKcal: Int,
-    ): Boolean {
-        if (!heightCm.isFinite() || heightCm <= 0.0 || averageIntakeKcal <= 0) {
-            return false
-        }
-        return runCatching {
-            val db = writableDatabase
-            db.beginTransaction()
-            try {
-                val repository = ManualRecordRepository(db)
-                repository.save(ManualHealthRecordDraft(ManualRecordType.Height, targetDate.atStartOfDay(), "$heightCm cm"))
-                repository.save(ManualHealthRecordDraft(ManualRecordType.AverageIntake, targetDate.atStartOfDay(), "$averageIntakeKcal kcal/日"))
-                db.setTransactionSuccessful()
-            } finally {
-                db.endTransaction()
-            }
-            true
-        }.getOrDefault(false)
-    }
-
     fun finalizeHealthConnectDailyEnergySnapshotsAfterSync(basalMetabolicRate: Int) {
         DailyEnergySnapshotStore(writableDatabase).finalizeHealthConnectPastDays(basalMetabolicRate)
     }

@@ -158,9 +158,6 @@ class MainActivity : ComponentActivity() {
                         onLoadLabResults = { spreadsheetSyncCoordinator.loadLocalLabResults() },
                         onLabItemSettingsSaved = { spreadsheetSyncCoordinator.backupLabSettings() },
                         onImportLabResults = { records, onResult -> spreadsheetSyncCoordinator.importLabResults(records, onResult) },
-                        onSaveDailyBodySetting = { heightCm, averageIntakeKcal, onResult ->
-                            saveDailyBodySetting(heightCm, averageIntakeKcal, onResult)
-                        },
                         modifier = Modifier.padding(contentPadding),
                     )
                 }
@@ -353,34 +350,6 @@ class MainActivity : ComponentActivity() {
                 weightMovingAverageMode = mode
             }
             onResult(errorMessage)
-        }
-    }
-
-    private fun saveDailyBodySetting(
-        heightCm: Double,
-        averageIntakeKcal: Int,
-        onResult: (String?) -> Unit,
-    ) {
-        lifecycleScope.launch {
-            val errorMessage = withContext(Dispatchers.IO) {
-                runCatching {
-                    check(
-                        localStore.saveDailyBodySetting(
-                            targetDate = LocalDate.now(ZoneId.systemDefault()),
-                            heightCm = heightCm,
-                            averageIntakeKcal = averageIntakeKcal,
-                        ),
-                    )
-                    null
-                }.getOrElse { "身長・平均摂取カロリーを保存できませんでした" }
-            }
-            if (errorMessage == null) {
-                onResult(null)
-                refreshLocalHealthData()
-                spreadsheetSyncCoordinator.requestImmediateAutomaticSync()
-            } else {
-                onResult(errorMessage)
-            }
         }
     }
 
