@@ -973,16 +973,19 @@ private fun SelectedDaySummary(
                     text = "朝 ${day?.morning.weightText() ?: "-"}",
                     color = ChartBlue,
                     bold = true,
+                    modifier = Modifier.weight(1f),
                 )
                 SummaryInfoLine(
                     text = "夜 ${day?.night.weightText() ?: "-"}",
                     color = ChartBlue,
                     bold = true,
+                    modifier = Modifier.weight(1f),
                 )
                 SummaryInfoLine(
                     text = "差 ${day?.weightDifferenceText() ?: "-"}",
                     color = ChartBlue,
                     bold = true,
+                    modifier = Modifier.weight(1f),
                 )
             }
             Row(
