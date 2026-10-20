@@ -26,6 +26,8 @@ class IndexChartCalculationsTest {
         val bodyFat = requireNotNull(navyMaleBodyFatPercent(180.0, 90.0, 40.0))
         assertEquals(requireNotNull(ffmi(72.0, 180.0, bodyFat)), requireNotNull(point.ffmi), 0.00001)
         assertEquals(0.5, requireNotNull(point.waistHeightRatio), 0.00001)
+        assertEquals(72.0, requireNotNull(point.weightKg), 0.00001)
+        assertEquals(90.0, requireNotNull(point.waistCm), 0.00001)
     }
 
     @Test
@@ -39,6 +41,8 @@ class IndexChartCalculationsTest {
         assertEquals(0.45, requireNotNull(points[1].waistHeightRatio), 0.00001)
         assertNull(points[1].bmi)
         assertNull(points[1].ffmi)
+        assertNull(points[1].weightKg)
+        assertEquals(90.0, requireNotNull(points[1].waistCm), 0.00001)
     }
 
     @Test
@@ -51,6 +55,7 @@ class IndexChartCalculationsTest {
         assertEquals(1, points.size)
         assertNull(points.single().ffmi)
         assertNull(points.single().waistHeightRatio)
+        assertNull(points.single().waistCm)
         listOf("0 cm", "NaN cm", "Infinity cm", "不明").forEach { text ->
             val point = dailyIndexPoints(records, listOf(height), listOf(
                 measurement(ManualRecordType.Waist, day, text),

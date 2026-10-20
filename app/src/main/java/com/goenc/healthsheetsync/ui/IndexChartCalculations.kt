@@ -12,6 +12,8 @@ internal data class IndexChartPoint(
     val bmi: Double?,
     val ffmi: Double?,
     val waistHeightRatio: Double?,
+    val weightKg: Double?,
+    val waistCm: Double?,
 )
 
 internal fun dailyIndexPoints(
@@ -43,6 +45,8 @@ internal fun dailyIndexPoints(
             (bmi * (1.0 - bodyFat / 100.0)).takeIf { it.isFinite() && it > 0.0 }
         } else null
         val ratio = waist?.let { it / height }?.takeIf { it.isFinite() && it > 0.0 }
-        if (bmi == null && ffmi == null && ratio == null) null else IndexChartPoint(date, bmi, ffmi, ratio)
+        if (bmi == null && ffmi == null && ratio == null) null else IndexChartPoint(
+            date, bmi, ffmi, ratio, bmiByDate[date]?.weightKg, waist,
+        )
     }
 }

@@ -4,7 +4,7 @@ import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import java.time.LocalDate
 
-internal data class BmiChartPoint(val date: LocalDate, val value: Double)
+internal data class BmiChartPoint(val date: LocalDate, val value: Double, val weightKg: Double)
 
 internal fun dailyBmiPoints(
     records: List<DebugWeightRecord>,
@@ -22,6 +22,6 @@ internal fun dailyBmiPoints(
             val weight = points.map { it.weightKg }.average()
             val heightM = heightCm / 100.0
             val bmi = weight / (heightM * heightM)
-            bmi.takeIf { it.isFinite() && it > 0.0 }?.let { BmiChartPoint(date, it) }
+            bmi.takeIf { it.isFinite() && it > 0.0 }?.let { BmiChartPoint(date, it, weight) }
         }.sortedBy { it.date }
 }

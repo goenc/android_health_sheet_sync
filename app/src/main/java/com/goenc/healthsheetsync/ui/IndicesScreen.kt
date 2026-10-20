@@ -32,6 +32,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -100,12 +103,19 @@ internal fun IndicesScreen(
                 Text(selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d")), color = AppText,
                     fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("BMI ${selected.bmi?.let(::formatDecimal) ?: "—"}", color = ChartBlue,
-                        modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("FFMI ${selected.ffmi?.let(::formatDecimal) ?: "—"}", color = FfmiColor,
-                        modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    IndexValueWithInputs("BMI", selected.bmi, selected.weightKg?.let { "${formatDecimal(it)}kg" },
+                        ChartBlue, Modifier.weight(1f))
+                    val ffmiInputs = if (selected.ffmi != null) {
+                        "${selected.weightKg?.let(::formatDecimal)}kg・${selected.waistCm?.let(::formatDecimal)}cm"
+                    } else null
+                    IndexValueWithInputs("FFMI", selected.ffmi, ffmiInputs, FfmiColor, Modifier.weight(1f))
                 }
-                Text("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}", color = RatioColor)
+                Text(buildAnnotatedString {
+                    append("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}")
+                    selected.waistCm?.takeIf { selected.waistHeightRatio != null }?.let { waist ->
+                        withStyle(SpanStyle(fontSize = 11.sp)) { append(" (${formatDecimal(waist)}cm)") }
+                    }
+                }, color = RatioColor)
             }
         }
     }
@@ -123,6 +133,16 @@ internal fun IndicesScreen(
             },
             confirmButton = { TextButton(onClick = { showExplanation = false }) { Text("閉じる") } },
         )
+    }
+}
+
+@Composable
+private fun IndexValueWithInputs(label: String, value: Double?, inputs: String?, color: Color, modifier: Modifier) {
+    Column(modifier = modifier) {
+        Text("$label ${value?.let(::formatDecimal) ?: "—"}", color = color,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("(${inputs ?: "—"})", color = color, fontSize = 11.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
