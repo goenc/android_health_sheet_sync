@@ -6,6 +6,7 @@ import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.health.BasalMetabolicRateHistory
 import com.goenc.healthsheetsync.health.healthRecordUniqueKey
 import com.goenc.healthsheetsync.health.toHealthTimeBand
 import java.time.LocalDateTime
@@ -15,8 +16,15 @@ internal class ManualRecordRepository(
     private val db: SQLiteDatabase,
 ) {
     fun save(draft: ManualHealthRecordDraft) {
+        if (draft.type == ManualRecordType.BasalMetabolicRate) {
+            require(draft.valueText.removeSuffix(BasalMetabolicRateHistory.VALUE_SUFFIX).trim().toIntOrNull()?.let { it > 0 } == true) {
+                "基礎代謝量は0より大きい整数で指定してください"
+            }
+        }
         val now = LocalDateTime.now().toString()
-        val manualId = "manual|${UUID.randomUUID()}"
+        val manualId = if (draft.type == ManualRecordType.BasalMetabolicRate) {
+            "manual|BasalMetabolicRate|${draft.measuredAt.toLocalDate()}"
+        } else "manual|${UUID.randomUUID()}"
         db.runInTransaction {
             replace(
                 TABLE_MANUAL,
@@ -129,6 +137,7 @@ internal class ManualRecordRepository(
                     )
                 }
                 ManualRecordType.BloodPressure,
+                ManualRecordType.BasalMetabolicRate,
                 ManualRecordType.Waist,
                 ManualRecordType.Neck -> Unit
             }

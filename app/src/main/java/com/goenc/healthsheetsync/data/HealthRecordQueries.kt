@@ -7,6 +7,7 @@ import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.DailyBodySetting
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
@@ -17,14 +18,17 @@ internal class HealthRecordQueries(
     private val db: SQLiteDatabase,
 ) {
     fun load(): StoredHealthData {
+        val manualRecords = loadManualRecords()
         return StoredHealthData(
             weightRecords = loadWeightRecords(),
             glucoseRecords = loadGlucoseRecords(),
             stepDailyRecords = loadStepDailyRecords(),
-            manualRecords = loadManualRecords(),
+            manualRecords = manualRecords,
             a1cDailyRecords = loadA1cDailyRecords(),
             invalidatedGraphRecords = loadInvalidatedGraphRecords(),
-            dailyEnergySnapshots = DailyEnergySnapshotStore(db).load(),
+            dailyEnergySnapshots = DailyEnergySnapshotStore(db).load().map {
+                DailyEnergyCalculator.applyBasalMetabolicRateHistory(it, manualRecords)
+            },
             dailyBodySettings = loadDailyBodySettings(),
         )
     }

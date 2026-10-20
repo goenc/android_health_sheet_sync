@@ -37,11 +37,13 @@ object DailyEnergyCalculator {
         currentSteps: Long?,
         currentBasalMetabolicRate: Int,
         snapshot: DailyEnergySnapshot?,
+        manualRecords: List<ManualHealthRecord> = emptyList(),
     ): DailyEnergyDisplay? {
         if (targetDate.isAfter(today)) return null
         if (targetDate.isBefore(today)) {
             return snapshot
                 ?.takeIf { it.targetDate == targetDate }
+                ?.let { applyBasalMetabolicRateHistory(it, manualRecords) }
                 ?.let {
                     DailyEnergyDisplay(
                         steps = it.steps,
@@ -52,13 +54,22 @@ object DailyEnergyCalculator {
                 }
         }
         return currentSteps?.let { steps ->
-            val calculation = calculate(steps, currentBasalMetabolicRate)
+            val effectiveBasalMetabolicRate = BasalMetabolicRateHistory.resolve(targetDate, currentBasalMetabolicRate, manualRecords)
+            val calculation = calculate(steps, effectiveBasalMetabolicRate)
             DailyEnergyDisplay(
                 steps = steps,
-                basalMetabolicRate = currentBasalMetabolicRate,
+                basalMetabolicRate = effectiveBasalMetabolicRate,
                 pal = calculation.pal,
                 estimatedTotalKcal = calculation.estimatedTotalKcal,
             )
         }
+    }
+
+    /** Keep the stored steps and original snapshot intact, so removing history restores the original value. */
+    fun applyBasalMetabolicRateHistory(snapshot: DailyEnergySnapshot, records: List<ManualHealthRecord>): DailyEnergySnapshot {
+        val value = BasalMetabolicRateHistory.latestOnOrBefore(snapshot.targetDate, records) ?: return snapshot
+        if (value == snapshot.basalMetabolicRate) return snapshot
+        val calculation = calculate(snapshot.steps, value)
+        return snapshot.copy(basalMetabolicRate = value, pal = calculation.pal, estimatedTotalKcal = calculation.estimatedTotalKcal)
     }
 }

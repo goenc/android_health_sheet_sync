@@ -8,6 +8,18 @@ import java.time.LocalTime
 
 class HealthUiFormattersTest {
     @Test
+    fun basalMetabolicRateInputUsesPositiveIntegerAndNoTimeBand() {
+        val type = ManualRecordType.BasalMetabolicRate
+        assertEquals("基礎代謝 kcal/日", type.inputLabels().first)
+        assertEquals("1500 kcal/日", type.formatManualValue("1500", ""))
+        assertEquals(null, type.formatManualValue("0", ""))
+        assertEquals(null, type.formatManualValue("-1", ""))
+        assertEquals(null, type.formatManualValue("1500.5", ""))
+        assertEquals(emptyList<String>(), type.manualInputTimeBandOptions())
+        assertEquals(LocalTime.MIDNIGHT, type.manualInputTime("朝"))
+    }
+
+    @Test
     fun formatsEnergyValuesWithFixedLocaleAndGrouping() {
         assertEquals("8,000", formatIntegerWithGrouping(8_000L))
         assertEquals("1,371", formatIntegerWithGrouping(1_371))

@@ -316,21 +316,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun saveBasalMetabolicRate(value: Int, onResult: (String?) -> Unit) {
-        val previousBasalMetabolicRate = basalMetabolicRate
         lifecycleScope.launch {
             val errorMessage = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (!localStore.finalizeManualOnlyPastDaysIfSafe(previousBasalMetabolicRate)) {
-                        return@runCatching UNSYNCED_PAST_STEPS_MESSAGE
-                    }
-                    check(basalMetabolicRateSettingsStore.save(value))
+                    require(value > 0)
+                    localStore.saveManualRecord(ManualHealthRecordDraft(
+                        type = ManualRecordType.BasalMetabolicRate,
+                        measuredAt = LocalDate.now(ZoneId.systemDefault()).atStartOfDay(),
+                        valueText = "$value kcal/日",
+                    ))
                     null
                 }.getOrElse { "基礎代謝量を保存できませんでした" }
             }
             if (errorMessage == null) {
-                basalMetabolicRate = value
                 onResult(null)
                 refreshLocalHealthData()
+                spreadsheetSyncCoordinator.requestImmediateAutomaticSync()
             } else {
                 onResult(errorMessage)
             }
@@ -460,4 +461,3 @@ private const val TAG = "HealthSheetSync"
 private const val UNKNOWN = "不明"
 private const val HEALTH_PERMISSION_REQUEST_PREFERENCES = "health_permission_request"
 private const val HEALTH_PERMISSION_REQUEST_SIGNATURE_KEY = "automatically_requested_signature"
-private const val UNSYNCED_PAST_STEPS_MESSAGE = "未同期の過去日の歩数があります。先にHealth Connectを更新してください"

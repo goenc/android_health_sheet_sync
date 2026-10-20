@@ -7,6 +7,7 @@ import com.goenc.healthsheetsync.health.DebugStepDaily
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
 import kotlinx.coroutines.Dispatchers
@@ -88,7 +89,9 @@ class SpreadsheetUploader {
         dailyBodySettings: List<DailyBodySetting>,
         dailyEnergySnapshots: List<DailyEnergySnapshot>,
     ): List<SpreadsheetUploadTable> {
-        val dailyEnergyByDate = dailyEnergySnapshots.associateBy { it.targetDate }
+        val dailyEnergyByDate = dailyEnergySnapshots.map {
+            DailyEnergyCalculator.applyBasalMetabolicRateHistory(it, manualRecords)
+        }.associateBy { it.targetDate }
         return listOf(
             SpreadsheetUploadTable(
                 sheetName = "dailyBodySettings",
@@ -216,6 +219,13 @@ class SpreadsheetUploader {
                     .map { record ->
                         listOf(record.measuredAt.toString(), record.valueText, record.id)
                     },
+            ),
+            SpreadsheetUploadTable(
+                sheetName = "basalMetabolicRateRecords",
+                headers = listOf("measuredAt", "basalMetabolicRate", "manualId"),
+                values = manualRecords.filter { it.type == ManualRecordType.BasalMetabolicRate && it.invalidatedAt == null }
+                    .map { record -> listOf(record.measuredAt.toString(),
+                        record.valueText.removeSuffix(" kcal/日").trim().toIntOrNull() ?: "", record.id) },
             ),
         )
     }

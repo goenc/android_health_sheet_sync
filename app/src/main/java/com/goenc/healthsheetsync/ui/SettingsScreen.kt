@@ -42,6 +42,7 @@ import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import com.goenc.healthsheetsync.health.DailyEnergySnapshot
+import com.goenc.healthsheetsync.health.BasalMetabolicRateHistory
 import com.goenc.healthsheetsync.health.HealthDebugUiState
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualRecordType
@@ -366,6 +367,7 @@ internal fun SettingsScreen(
             RecordListType.Weight -> WeightDailySummary(state.weightRecords)
             RecordListType.Glucose -> GlucoseRecordSummary(state.glucoseRecords)
             RecordListType.Steps -> StepDailySummary(
+                manualRecords = state.manualRecords,
                 dailySteps = state.stepDailyRecords,
                 basalMetabolicRate = basalMetabolicRate,
                 onSaveBasalMetabolicRate = onSaveBasalMetabolicRate,
@@ -555,20 +557,25 @@ private fun WeightDailySummary(records: List<DebugWeightRecord>) {
 
 @Composable
 private fun StepDailySummary(
+    manualRecords: List<ManualHealthRecord>,
     dailySteps: List<DebugStepDaily>,
     basalMetabolicRate: Int,
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     dailyEnergySnapshots: List<DailyEnergySnapshot>,
 ) {
-    var inputValue by remember(basalMetabolicRate) { mutableStateOf(basalMetabolicRate.toString()) }
+    val currentBasalMetabolicRate = BasalMetabolicRateHistory.resolve(
+        LocalDate.now(ZoneId.systemDefault()), basalMetabolicRate, manualRecords)
+    var inputValue by remember(currentBasalMetabolicRate) { mutableStateOf(currentBasalMetabolicRate.toString()) }
     var inputError by remember { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "現在の基礎代謝：${formatIntegerWithGrouping(basalMetabolicRate)} kcal/日",
+            text = "現在の基礎代謝：${formatIntegerWithGrouping(currentBasalMetabolicRate)} kcal/日",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
         )
+        Text("保存すると今日からの履歴を登録。過去日・将来日は手入力の「基礎代謝」から登録。",
+            style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(
             value = inputValue,
             onValueChange = {
@@ -621,6 +628,7 @@ private fun StepDailySummary(
                 currentSteps = steps.steps,
                 currentBasalMetabolicRate = basalMetabolicRate,
                 snapshot = dailyEnergySnapshots.firstOrNull { it.targetDate == steps.targetDate },
+                manualRecords = manualRecords,
             )
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(

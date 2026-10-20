@@ -83,6 +83,13 @@ class HealthCsvShareExporter(
 
     private fun exportManualRecord(record: ManualHealthRecord): String? {
         return when (record.type) {
+            ManualRecordType.BasalMetabolicRate -> csvRow(
+                recordType = "basalMetabolicRate",
+                targetDate = record.measuredAt.toLocalDate().toString(),
+                measuredAt = record.measuredAt.toString(),
+                value1 = record.valueText.removeSuffix(" kcal/日").trim(),
+                manualId = record.id,
+            )
             ManualRecordType.BloodPressure -> {
                 val values = record.valueText.removeSuffix(" mmHg").split("/")
                 if (values.size != 2) return null

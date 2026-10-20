@@ -91,6 +91,7 @@ internal fun ManualRecordType.inputLabels(): Pair<String, String?> {
     return when (this) {
         ManualRecordType.Weight -> "体重 kg" to null
         ManualRecordType.Steps -> "歩数" to null
+        ManualRecordType.BasalMetabolicRate -> "基礎代謝 kcal/日" to null
         ManualRecordType.BloodGlucose -> "血糖値 mg/dL" to null
         ManualRecordType.BloodPressure -> "収縮期 mmHg" to "拡張期 mmHg"
         ManualRecordType.Waist -> "腹囲 cm" to null
@@ -107,6 +108,8 @@ internal fun ManualRecordType.formatManualValue(primaryValue: String, secondaryV
             primary.toDoubleOrNull()?.let { "${formatDecimal(it)} kg" }
         ManualRecordType.Steps ->
             primary.toLongOrNull()?.let { "${it}歩" }
+        ManualRecordType.BasalMetabolicRate ->
+            primary.toIntOrNull()?.takeIf { it > 0 }?.let { "$it kcal/日" }
         ManualRecordType.BloodGlucose ->
             primary.toDoubleOrNull()?.let { "${formatDecimal(it)} mg/dL" }
         ManualRecordType.BloodPressure -> {
@@ -126,6 +129,7 @@ internal fun ManualRecordType.formatManualValue(primaryValue: String, secondaryV
 internal fun ManualRecordType.manualInputTimeBandOptions(): List<String> {
     return when (this) {
         ManualRecordType.Steps,
+        ManualRecordType.BasalMetabolicRate,
         ManualRecordType.BloodGlucose,
         ManualRecordType.Waist,
         ManualRecordType.Neck,
@@ -154,6 +158,7 @@ internal fun ManualRecordType.defaultManualTimeBand(currentTime: LocalTime): Str
 
 internal fun ManualRecordType.manualInputTime(timeBand: String): LocalTime {
     return when (this) {
+        ManualRecordType.BasalMetabolicRate -> LocalTime.MIDNIGHT
         ManualRecordType.Steps,
         ManualRecordType.BloodGlucose -> LocalTime.of(7, 0)
         ManualRecordType.Waist,
@@ -209,6 +214,7 @@ internal fun ManualRecordType.toGraphDataItems(
                 )
             }
         ManualRecordType.BloodPressure,
+        ManualRecordType.BasalMetabolicRate,
         ManualRecordType.Waist,
         ManualRecordType.Neck,
         ManualRecordType.A1c -> manualRecords

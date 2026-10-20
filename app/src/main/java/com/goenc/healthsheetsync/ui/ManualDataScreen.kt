@@ -47,6 +47,8 @@ import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
 import java.time.LocalDate
+import com.goenc.healthsheetsync.health.BasalMetabolicRateHistory
+import com.goenc.healthsheetsync.health.DailyEnergyCalculator
 import kotlinx.coroutines.withTimeoutOrNull
 
 private val manualRecordTypeDisplayOrder = listOf(
@@ -57,6 +59,7 @@ private val manualRecordTypeDisplayOrder = listOf(
     ManualRecordType.Weight,
     ManualRecordType.A1c,
     ManualRecordType.Steps,
+    ManualRecordType.BasalMetabolicRate,
 )
 
 @Composable
@@ -74,6 +77,7 @@ internal fun ManualDataScreen(
     onRestore: (String, String) -> Unit,
     onDelete: (String, String) -> Unit,
     onBack: () -> Unit,
+    initialBasalMetabolicRate: Int = DailyEnergyCalculator.DEFAULT_BASAL_METABOLIC_RATE,
 ) {
     var selectedType by remember { mutableStateOf(ManualRecordType.BloodPressure) }
     var lastSavedTypeLabel by remember { mutableStateOf(ManualRecordType.BloodPressure.label) }
@@ -184,12 +188,18 @@ internal fun ManualDataScreen(
                 }
             }
         }
+        if (selectedType == ManualRecordType.BasalMetabolicRate) {
+            Text("初期値（全履歴より前）：$initialBasalMetabolicRate kcal/日", style = MaterialTheme.typography.bodySmall)
+            Text("選択日に適用：${BasalMetabolicRateHistory.resolve(selectedDate, initialBasalMetabolicRate, manualRecords)} kcal/日",
+                style = MaterialTheme.typography.bodySmall)
+            Text("この日から次の記録の前日まで適用。同じ日付の再登録は上書き。", style = MaterialTheme.typography.bodySmall)
+        }
         OutlinedTextField(
             value = primaryValue,
             onValueChange = { primaryValue = it },
             label = { Text(labels.first) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            keyboardOptions = KeyboardOptions(keyboardType = if (selectedType == ManualRecordType.BasalMetabolicRate) KeyboardType.Number else KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
         labels.second?.let { secondaryLabel ->

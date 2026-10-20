@@ -230,6 +230,7 @@ fun HealthDebugScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         ManualDataScreen(
+                            initialBasalMetabolicRate = basalMetabolicRate,
                             weightRecords = state.weightRecords,
                             dailySteps = state.stepDailyRecords,
                             glucoseRecords = state.glucoseRecords,

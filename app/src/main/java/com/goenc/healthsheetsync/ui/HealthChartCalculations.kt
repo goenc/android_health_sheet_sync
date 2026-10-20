@@ -483,6 +483,7 @@ internal fun calculateAverageEstimatedTotalKcal(
     basalMetabolicRate: Int,
     window: ChartTimeWindow,
     today: LocalDate,
+    manualRecords: List<ManualHealthRecord> = emptyList(),
 ): Int? {
     val candidateDates = (dailySteps.map { it.targetDate } + dailyEnergySnapshots.map { it.targetDate })
         .distinct()
@@ -494,6 +495,7 @@ internal fun calculateAverageEstimatedTotalKcal(
             currentSteps = dailySteps.firstOrNull { it.targetDate == targetDate }?.steps,
             currentBasalMetabolicRate = basalMetabolicRate,
             snapshot = dailyEnergySnapshots.firstOrNull { it.targetDate == targetDate },
+            manualRecords = manualRecords,
         )?.estimatedTotalKcal
     }
     if (estimatedTotals.isEmpty()) return null

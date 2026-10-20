@@ -119,6 +119,7 @@ internal fun WeightTrendChart(
         dailySteps,
         dailyEnergySnapshots,
         basalMetabolicRate,
+        manualRecords,
         selectedDate,
     ) {
         selectedDate?.let { date ->
@@ -137,6 +138,7 @@ internal fun WeightTrendChart(
                         currentSteps = dailySteps.firstOrNull { it.targetDate == date }?.steps,
                         currentBasalMetabolicRate = basalMetabolicRate,
                         snapshot = dailyEnergySnapshots.firstOrNull { it.targetDate == date },
+                        manualRecords = manualRecords,
                     ),
                 )
             }
@@ -244,6 +246,7 @@ internal fun WeightTrendChart(
                 val trendLine = calculateTrendLine(chartPoints)
                 val averageSteps = calculateAverageSteps(dailySteps, visibleWindow)
                 val averageEstimatedTotalKcal = calculateAverageEstimatedTotalKcal(
+                    manualRecords = manualRecords,
                     dailySteps = dailySteps,
                     dailyEnergySnapshots = dailyEnergySnapshots,
                     basalMetabolicRate = basalMetabolicRate,
