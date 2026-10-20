@@ -316,7 +316,7 @@ fun HealthDebugScreen(
                             manualRecords = state.manualRecords,
                             dailyBodySettings = state.dailyBodySettings,
                             modifier = Modifier
-                                .padding(start = 8.dp, end = 44.dp)
+                                .padding(start = 8.dp, end = 28.dp)
                                 .offset(y = 12.dp),
                         )
 
@@ -425,7 +425,7 @@ private fun MainSummaryValues(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -544,7 +544,7 @@ private fun SummaryValue(
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.SemiBold,
         color = color,
-        fontSize = 13.sp * 1.05f,
+        fontSize = 13.sp * 1.05f * 1.10f,
     )
 }
 
