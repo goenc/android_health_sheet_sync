@@ -74,7 +74,7 @@ internal fun IndicesScreen(
     }
     val selected = visiblePoints.firstOrNull { it.date == selectedDate } ?: visiblePoints.lastOrNull()
     Column(
-        modifier = Modifier.fillMaxSize().padding(12.dp),
+        modifier = Modifier.fillMaxSize().padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -90,18 +90,23 @@ internal fun IndicesScreen(
                 modifier = Modifier.weight(1f))
         }
         ChartRangeControls(range) { range = it; selectedDate = null }
-        if (selected == null) {
-            Text("指数を表示できるデータがありません。体重・腹囲・首回りと、その日以前の身長設定を確認してください。", color = AppMutedBlue)
-        } else {
-            Text(selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d")), color = AppText,
-                fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("BMI ${selected.bmi?.let(::formatDecimal) ?: "—"}", color = ChartBlue,
-                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("FFMI ${selected.ffmi?.let(::formatDecimal) ?: "—"}", color = FfmiColor,
-                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (selected == null) {
+                Text("指数を表示できるデータがありません。体重・腹囲・首回りと、その日以前の身長設定を確認してください。", color = AppMutedBlue)
+            } else {
+                Text(selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d")), color = AppText,
+                    fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("BMI ${selected.bmi?.let(::formatDecimal) ?: "—"}", color = ChartBlue,
+                        modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("FFMI ${selected.ffmi?.let(::formatDecimal) ?: "—"}", color = FfmiColor,
+                        modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}", color = RatioColor)
             }
-            Text("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}", color = RatioColor)
         }
     }
     if (showExplanation) {
