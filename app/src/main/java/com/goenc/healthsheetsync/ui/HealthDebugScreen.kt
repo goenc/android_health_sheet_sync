@@ -373,15 +373,15 @@ fun HealthDebugScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     MainDestinationButton(
-                        label = "検査結果",
-                        icon = R.drawable.ic_lab_results_24,
-                        onClick = { showLabResults = true },
-                        modifier = Modifier.weight(1f),
-                    )
-                    MainDestinationButton(
                         label = "指数",
                         icon = R.drawable.ic_indices_24,
                         onClick = { showIndices = true },
+                        modifier = Modifier.weight(1f),
+                    )
+                    MainDestinationButton(
+                        label = "検査結果",
+                        icon = R.drawable.ic_lab_results_24,
+                        onClick = { showLabResults = true },
                         modifier = Modifier.weight(1f),
                     )
                     MainDestinationButton(
