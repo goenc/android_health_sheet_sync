@@ -3,6 +3,7 @@ package com.goenc.healthsheetsync.ui
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,13 +13,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +39,9 @@ import com.goenc.healthsheetsync.health.DailyBodySetting
 import com.goenc.healthsheetsync.health.DebugWeightRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.Duration
+import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import java.util.Locale
@@ -56,18 +60,17 @@ internal fun IndicesScreen(
     val points = remember(records, dailyBodySettings, manualRecords) {
         dailyIndexPoints(records, dailyBodySettings, manualRecords)
     }
-    var range by remember { mutableStateOf(WeightChartRange.OneMonth) }
+    var range by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-    val end = points.lastOrNull()?.date
-    val start = end?.let {
-        when (range) {
-            WeightChartRange.TwoWeeks -> it.minusWeeks(2)
-            WeightChartRange.OneMonth -> it.minusMonths(1)
-            WeightChartRange.ThreeMonths -> it.minusMonths(3)
-            else -> points.first().date
-        }
+    val dates = remember(points) { points.map { it.date } }
+    val latestEndAt = dates.lastOrNull()?.atStartOfDay()
+    val earliestEndAt = remember(dates, range) { range.minimumEndAtForDates(dates) }
+    var chartEndAt by remember(dates, range) { mutableStateOf(latestEndAt) }
+    val window = remember(dates, range, chartEndAt) { range.windowForDates(dates, chartEndAt) }
+    val visiblePoints = remember(points, window) {
+        points.filter { point -> window != null && !point.date.atTime(12, 0).isBefore(window.startAt) &&
+            !point.date.atTime(12, 0).isAfter(window.endAt) }
     }
-    val visiblePoints = remember(points, start) { points.filter { start == null || !it.date.isBefore(start) } }
     val selected = visiblePoints.firstOrNull { it.date == selectedDate } ?: visiblePoints.lastOrNull()
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -78,16 +81,13 @@ internal fun IndicesScreen(
             Text("指数", style = MaterialTheme.typography.titleLarge, color = AppText)
         }
         Text("BMI・FFMI・ウエスト身長比の推移", style = MaterialTheme.typography.titleMedium, color = AppText)
-        Text("朝と夜の平均体重で算出。片方だけの日はその体重を使用。", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
-        Text("FFMIは腹囲・首回りから体脂肪率を推定して算出。腹囲・首回りは各日以前の最新記録を使用。",
-            style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(WeightChartRange.TwoWeeks, WeightChartRange.OneMonth, WeightChartRange.ThreeMonths, WeightChartRange.All).forEach { option ->
-                FilterChip(selected = range == option, onClick = { range = option; selectedDate = null },
-                    label = { Text(option.label) })
-            }
+        Text("BMI・FFMI：左軸　WHtR：右軸", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+        if (window != null) {
+            IndexTrendChart(visiblePoints, window, range, selected, chartEndAt, earliestEndAt, latestEndAt,
+                onEndAtChange = { chartEndAt = it }, onSelect = { selectedDate = it.date })
         }
-        if (selected == null || start == null) {
+        ChartRangeControls(range) { range = it; selectedDate = null }
+        if (selected == null) {
             Text("指数を表示できるデータがありません。体重・腹囲・首回りと、その日以前の身長設定を確認してください。", color = AppMutedBlue)
         } else {
             Text(selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d")), color = AppText,
@@ -97,20 +97,25 @@ internal fun IndicesScreen(
                 Text("FFMI ${selected.ffmi?.let(::formatDecimal) ?: "—"}", color = FfmiColor)
             }
             Text("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}", color = RatioColor)
-            Text("左軸：BMI・FFMI　右軸：WHtR", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
-            IndexTrendChart(visiblePoints, start, end, selected, onSelect = { selectedDate = it.date })
             Text("グラフをタップすると、その日の指数を表示。— は算出に必要な記録なし。",
                 style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
         }
+        Text("朝と夜の平均体重で算出。片方だけの日はその体重を使用。", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+        Text("FFMIは腹囲・首回りから体脂肪率を推定して算出。腹囲・首回りは各日以前の最新記録を使用。",
+            style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
     }
 }
 
 @Composable
 private fun IndexTrendChart(
     points: List<IndexChartPoint>,
-    start: LocalDate,
-    end: LocalDate,
-    selected: IndexChartPoint,
+    window: ChartTimeWindow,
+    range: WeightChartRange,
+    selected: IndexChartPoint?,
+    chartEndAt: LocalDateTime?,
+    earliestEndAt: LocalDateTime?,
+    latestEndAt: LocalDateTime?,
+    onEndAtChange: (LocalDateTime?) -> Unit,
     onSelect: (IndexChartPoint) -> Unit,
 ) {
     fun bounds(values: List<Double>, minimumPadding: Double): Pair<Double, Double> {
@@ -124,18 +129,28 @@ private fun IndexTrendChart(
     val rightValues = points.mapNotNull { it.waistHeightRatio }
     val (lower, upper) = bounds(leftValues, 0.5)
     val (ratioLower, ratioUpper) = bounds(rightValues, 0.02)
-    val firstDay = start.toEpochDay()
-    val daySpan = (end.toEpochDay() - firstDay).coerceAtLeast(1)
-    val description = "指数の推移。${selected.date}、BMI ${selected.bmi?.let(::formatDecimal) ?: "記録なし"}、" +
-        "FFMI ${selected.ffmi?.let(::formatDecimal) ?: "記録なし"}、WHtR ${selected.waistHeightRatio?.let(::ratioText) ?: "記録なし"}"
-    Canvas(Modifier.fillMaxWidth().height(320.dp)
+    val totalMillis = Duration.between(window.startAt, window.endAt).toMillis().coerceAtLeast(1)
+    fun fractionAt(time: LocalDateTime): Float = Duration.between(window.startAt, time).toMillis().toFloat() / totalMillis
+    val currentEndAt by rememberUpdatedState(chartEndAt)
+    val currentOnEndAtChange by rememberUpdatedState(onEndAtChange)
+    val description = "指数の推移。表示期間 ${window.startAt.toLocalDate()}～${window.endAt.toLocalDate()}。" +
+        "${selected?.date ?: "選択なし"}、BMI ${selected?.bmi?.let(::formatDecimal) ?: "記録なし"}、" +
+        "FFMI ${selected?.ffmi?.let(::formatDecimal) ?: "記録なし"}、WHtR ${selected?.waistHeightRatio?.let(::ratioText) ?: "記録なし"}"
+    Canvas(Modifier.fillMaxWidth().height(432.dp)
         .semantics { contentDescription = description }
-        .pointerInput(points, start, end) {
+        .pointerInput(earliestEndAt, latestEndAt) {
+            detectHorizontalDragGestures { _, dragAmount ->
+                currentOnEndAtChange(chartEndAtAfterHorizontalDrag(
+                    currentEndAt, earliestEndAt, latestEndAt, dragAmount, size.width.toFloat(),
+                ))
+            }
+        }
+        .pointerInput(points, window) {
             detectTapGestures { touch ->
                 val left = 48.dp.toPx()
                 val width = size.width - left - 48.dp.toPx()
                 points.minByOrNull {
-                    val x = left + width * (it.date.toEpochDay() - firstDay).toFloat() / daySpan
+                    val x = left + width * fractionAt(it.date.atTime(12, 0))
                     abs(touch.x - x)
                 }?.let(onSelect)
             }
@@ -144,6 +159,7 @@ private fun IndexTrendChart(
         val right = size.width - 48.dp.toPx()
         val top = 16.dp.toPx()
         val bottom = size.height - 32.dp.toPx()
+        fun xAt(time: LocalDateTime): Float = left + (right - left) * fractionAt(time)
         val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = AppMutedBlue.toArgb()
             textSize = 11.sp.toPx()
@@ -180,7 +196,7 @@ private fun IndexTrendChart(
                     connected = false
                 } else {
                     val offset = Offset(
-                        left + (right - left) * (point.date.toEpochDay() - firstDay).toFloat() / daySpan,
+                        xAt(point.date.atTime(12, 0)),
                         bottom - (bottom - top) * ((value - min) / (max - min)).toFloat(),
                     )
                     if (connected) path.lineTo(offset.x, offset.y) else path.moveTo(offset.x, offset.y)
@@ -191,13 +207,16 @@ private fun IndexTrendChart(
             }
             drawPath(path, color, style = Stroke(2.dp.toPx()))
         }
-        val dateFormat = DateTimeFormatter.ofPattern("yyyy/M/d")
-        labelPaint.color = AppMutedBlue.toArgb()
-        labelPaint.textAlign = Paint.Align.LEFT
-        drawContext.canvas.nativeCanvas.drawText(start.format(dateFormat), left, size.height - 8.dp.toPx(), labelPaint)
-        if (start != end) {
-            labelPaint.textAlign = Paint.Align.RIGHT
-            drawContext.canvas.nativeCanvas.drawText(end.format(dateFormat), right, size.height - 8.dp.toPx(), labelPaint)
+        selected?.let { point ->
+            val x = xAt(point.date.atTime(12, 0))
+            drawLine(AppPrimary, Offset(x, top), Offset(x, bottom), 1.dp.toPx())
         }
+        val visibleDates = generateSequence(window.startAt.toLocalDate()) { it.plusDays(1) }
+            .takeWhile { !it.isAfter(window.endAt.toLocalDate()) }.toList()
+        visibleDates.filter { it.dayOfWeek == DayOfWeek.MONDAY }.forEach { date ->
+            val x = xAt(date.atStartOfDay())
+            drawLine(ChartGrid, Offset(x, top), Offset(x, bottom), 1.dp.toPx())
+        }
+        drawChartDateAxis(window, range, left, right, bottom)
     }
 }

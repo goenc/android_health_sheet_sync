@@ -40,15 +40,19 @@ internal enum class WeightChartRange(
     OneWeek("1週間", { latestAt -> latestAt.minusWeeks(1) }, { startAt -> startAt.plusWeeks(1) });
 
     fun window(records: List<DebugWeightRecord>, visibleEndAt: LocalDateTime?): ChartTimeWindow? {
+        return windowForDates(records.map { it.measuredAt.toLocalDate() }, visibleEndAt)
+    }
+
+    fun windowForDates(dates: List<LocalDate>, visibleEndAt: LocalDateTime?): ChartTimeWindow? {
         if (this == All) {
-            val firstAt = records.firstOrNull()?.measuredAt?.toLocalDate()?.atStartOfDay() ?: return null
-            val latestAt = maximumEndAt(records) ?: return null
+            val firstAt = dates.firstOrNull()?.atStartOfDay() ?: return null
+            val latestAt = dates.lastOrNull()?.atStartOfDay() ?: return null
             return ChartTimeWindow(
                 startAt = firstAt.minusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
                 endAt = latestAt.plusDays(CHART_EMPTY_EDGE_PADDING_DAYS),
             )
         }
-        val rangeEndAt = visibleEndAt ?: maximumEndAt(records) ?: return null
+        val rangeEndAt = visibleEndAt ?: dates.lastOrNull()?.atStartOfDay() ?: return null
         val rangeStartAt = startAt(rangeEndAt)
         val leftPaddingDays = if (this == OneWeek || this == TwoWeeks) 0L else CHART_EMPTY_EDGE_PADDING_DAYS
         return ChartTimeWindow(
@@ -66,11 +70,15 @@ internal enum class WeightChartRange(
         records.lastOrNull()?.measuredAt?.toLocalDate()?.atStartOfDay()
 
     fun minimumEndAt(records: List<DebugWeightRecord>): LocalDateTime? {
+        return minimumEndAtForDates(records.map { it.measuredAt.toLocalDate() })
+    }
+
+    fun minimumEndAtForDates(dates: List<LocalDate>): LocalDateTime? {
         if (this == All) {
-            return maximumEndAt(records)
+            return dates.lastOrNull()?.atStartOfDay()
         }
-        val firstAt = records.firstOrNull()?.measuredAt?.toLocalDate()?.atStartOfDay() ?: return null
-        val latestAt = maximumEndAt(records) ?: return null
+        val firstAt = dates.firstOrNull()?.atStartOfDay() ?: return null
+        val latestAt = dates.lastOrNull()?.atStartOfDay() ?: return null
         val endForFirstRecord = endAt(firstAt)
         return if (endForFirstRecord.isAfter(latestAt)) latestAt else endForFirstRecord
     }

@@ -96,7 +96,6 @@ internal fun WeightTrendChart(
     onSelectedDateChange: (LocalDate?) -> Unit,
     onAddManualRecord: () -> Unit,
 ) {
-    var longRange by remember { mutableStateOf(selectedRange.takeIf { it.isLongRange } ?: WeightChartRange.TwoMonths) }
     val sortedRecords = remember(records) { records.sortedBy { it.measuredAt } }
     var chartEndAt by remember(sortedRecords, selectedRange) {
         mutableStateOf(selectedRange.maximumEndAt(sortedRecords))
@@ -264,10 +263,6 @@ internal fun WeightTrendChart(
                 val halfWeightLines = if (customWeight != null) emptyList() else generateSequence(maxWeight - 0.5) { it - 1.0 }
                     .takeWhile { it > minWeight }
                     .toList()
-                val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = axisColor.toArgb()
-                    textSize = 12.sp.toPx()
-                }
                 val weightLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = lineColor.toArgb()
                     textSize = 12.sp.toPx()
@@ -275,10 +270,6 @@ internal fun WeightTrendChart(
                 val stepLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = ChartStepText.toArgb()
                     textSize = 12.sp.toPx()
-                }
-                val monthLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = axisColor.toArgb()
-                    textSize = 9.sp.toPx()
                 }
                 val trendSummaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = ChartSummary.toArgb()
@@ -452,62 +443,7 @@ internal fun WeightTrendChart(
                         bloodPressurePaint,
                     )
                 }
-                labelPaint.textAlign = Paint.Align.CENTER
-                monthLabelPaint.textAlign = Paint.Align.LEFT
-                val visibleStartDate = visibleWindow.startAt.toLocalDate()
-                val visibleStartMonthText = "${visibleStartDate.monthValue}月"
-                val isDotOnlyRange = selectedRange.isLongRange
-                drawText(
-                    visibleStartMonthText,
-                    chartLeft,
-                    chartBottom + 11.dp.toPx(),
-                    monthLabelPaint,
-                )
-                val monthLabelMinX = chartLeft + monthLabelPaint.measureText(visibleStartMonthText) + 8.dp.toPx()
-                val visibleDates = generateSequence(visibleWindow.startAt.toLocalDate()) { it.plusDays(1) }
-                    .takeWhile { !it.isAfter(visibleWindow.endAt.toLocalDate()) }
-                    .toList()
-                val dateLabelPositions = visibleDates
-                    .filter { it.shouldShowChartDateNumber() }
-                    .map { date ->
-                        val x = xAtTime(date.atStartOfDay().plusHours(12))
-                            .coerceIn(chartLeft + 6.dp.toPx(), chartRight - 6.dp.toPx())
-                        val text = date.dayOfMonth.toString()
-                        ChartDateLabel(date, x, labelPaint.measureText(text))
-                    }
-                val hiddenDateLabels = dateLabelPositions
-                    .zipWithNext()
-                    .mapNotNull { (previous, current) ->
-                        if (previous.right + 4.dp.toPx() > current.left) previous.date else null
-                    }
-                    .toSet()
-                visibleDates.forEach { date ->
-                        val x = xAtTime(date.atStartOfDay().plusHours(12))
-                            .coerceIn(chartLeft + 6.dp.toPx(), chartRight - 6.dp.toPx())
-                        if (date.dayOfMonth == 1 && date != visibleStartDate && x >= monthLabelMinX) {
-                            drawText(
-                                "${date.monthValue}月",
-                                x,
-                                chartBottom + 11.dp.toPx(),
-                                monthLabelPaint,
-                            )
-                        }
-                        if (!isDotOnlyRange && date.shouldShowChartDateNumber() && date !in hiddenDateLabels) {
-                            drawText(
-                                date.dayOfMonth.toString(),
-                                x,
-                                chartBottom + 22.dp.toPx(),
-                                labelPaint,
-                            )
-                        } else {
-                            drawCircle(
-                                x,
-                                chartBottom + 17.dp.toPx(),
-                                if (isDotOnlyRange) 0.8.dp.toPx() else 1.dp.toPx(),
-                                labelPaint,
-                            )
-                        }
-                }
+                drawChartDateAxis(visibleWindow, selectedRange, chartLeft, chartRight, chartBottom)
                 val trendText = trendLine?.let { formatTrendChange(it, selectedRange, trendDuration) }
                 val averageStepsText = "平均歩数 ${averageSteps?.let { "%,d歩".format(it) } ?: "-"}"
                 val averageEstimatedTotalText =
@@ -901,28 +837,7 @@ internal fun WeightTrendChart(
                 }
             }
         }
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-            ) {
-                WeightChartRangeButton(
-                    range = selectedRange.takeIf { it.isLongRange } ?: longRange,
-                    selected = selectedRange.isLongRange,
-                    onClick = {
-                        longRange = if (selectedRange.isLongRange) selectedRange.nextLongRange() else longRange
-                        onSelectedRangeChange(longRange)
-                    },
-                )
-                listOf(WeightChartRange.OneMonth, WeightChartRange.TwoWeeks, WeightChartRange.OneWeek).forEach { range ->
-                    WeightChartRangeButton(
-                        range = range,
-                        selected = range == selectedRange,
-                        onClick = { onSelectedRangeChange(range) },
-                    )
-                }
-            }
-        }
+        ChartRangeControls(selectedRange, onSelectedRangeChange)
         Spacer(modifier = Modifier.height(6.dp))
         SelectedDaySummary(
             day = selectedDay,
@@ -1159,6 +1074,29 @@ private fun SummaryInfoLine(
         textAlign = textAlign,
         maxLines = 1,
     )
+}
+
+@Composable
+internal fun ChartRangeControls(selectedRange: WeightChartRange, onSelectedRangeChange: (WeightChartRange) -> Unit) {
+    var longRange by remember { mutableStateOf(selectedRange.takeIf { it.isLongRange } ?: WeightChartRange.TwoMonths) }
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 32.dp) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        ) {
+            WeightChartRangeButton(
+                range = selectedRange.takeIf { it.isLongRange } ?: longRange,
+                selected = selectedRange.isLongRange,
+                onClick = {
+                    longRange = if (selectedRange.isLongRange) selectedRange.nextLongRange() else longRange
+                    onSelectedRangeChange(longRange)
+                },
+            )
+            listOf(WeightChartRange.OneMonth, WeightChartRange.TwoWeeks, WeightChartRange.OneWeek).forEach { range ->
+                WeightChartRangeButton(range, range == selectedRange, onClick = { onSelectedRangeChange(range) })
+            }
+        }
+    }
 }
 
 @Composable
