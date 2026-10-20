@@ -9,12 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.health.DailyBodySetting
@@ -62,6 +62,7 @@ internal fun IndicesScreen(
     }
     var range by remember { mutableStateOf(WeightChartRange.TwoWeeks) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showExplanation by remember { mutableStateOf(false) }
     val dates = remember(points) { points.map { it.date } }
     val latestEndAt = dates.lastOrNull()?.atStartOfDay()
     val earliestEndAt = remember(dates, range) { range.minimumEndAtForDates(dates) }
@@ -73,18 +74,20 @@ internal fun IndicesScreen(
     }
     val selected = visiblePoints.firstOrNull { it.date == selectedDate } ?: visiblePoints.lastOrNull()
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize().padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BackIconButton(onBack)
-            Text("指数", style = MaterialTheme.typography.titleLarge, color = AppText)
+            Text("指数", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, color = AppText)
+            TextButton(onClick = { showExplanation = true }) { Text("説明") }
         }
         Text("BMI・FFMI・ウエスト身長比の推移", style = MaterialTheme.typography.titleMedium, color = AppText)
         Text("BMI・FFMI：左軸　WHtR：右軸", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
         if (window != null) {
             IndexTrendChart(visiblePoints, window, range, selected, chartEndAt, earliestEndAt, latestEndAt,
-                onEndAtChange = { chartEndAt = it }, onSelect = { selectedDate = it.date })
+                onEndAtChange = { chartEndAt = it }, onSelect = { selectedDate = it.date },
+                modifier = Modifier.weight(1f))
         }
         ChartRangeControls(range) { range = it; selectedDate = null }
         if (selected == null) {
@@ -92,17 +95,29 @@ internal fun IndicesScreen(
         } else {
             Text(selected.date.format(DateTimeFormatter.ofPattern("yyyy/M/d")), color = AppText,
                 fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("BMI ${selected.bmi?.let(::formatDecimal) ?: "—"}", color = ChartBlue)
-                Text("FFMI ${selected.ffmi?.let(::formatDecimal) ?: "—"}", color = FfmiColor)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("BMI ${selected.bmi?.let(::formatDecimal) ?: "—"}", color = ChartBlue,
+                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("FFMI ${selected.ffmi?.let(::formatDecimal) ?: "—"}", color = FfmiColor,
+                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text("ウエスト身長比（WHtR） ${selected.waistHeightRatio?.let(::ratioText) ?: "—"}", color = RatioColor)
-            Text("グラフをタップすると、その日の指数を表示。— は算出に必要な記録なし。",
-                style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
         }
-        Text("朝と夜の平均体重で算出。片方だけの日はその体重を使用。", style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
-        Text("FFMIは腹囲・首回りから体脂肪率を推定して算出。腹囲・首回りは各日以前の最新記録を使用。",
-            style = MaterialTheme.typography.bodySmall, color = AppMutedBlue)
+    }
+    if (showExplanation) {
+        AlertDialog(
+            onDismissRequest = { showExplanation = false },
+            title = { Text("指数の説明") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("BMI・FFMIは朝と夜の平均体重で算出。片方だけの日はその体重を使用。")
+                    Text("FFMIは腹囲・首回りから体脂肪率を推定して算出。腹囲・首回りは各日以前の最新記録を使用。")
+                    Text("ウエスト身長比（WHtR）は腹囲÷身長。")
+                    Text("横ドラッグで期間を移動。タップでその日の指数を表示。— は算出に必要な記録なし。")
+                }
+            },
+            confirmButton = { TextButton(onClick = { showExplanation = false }) { Text("閉じる") } },
+        )
     }
 }
 
@@ -117,6 +132,7 @@ private fun IndexTrendChart(
     latestEndAt: LocalDateTime?,
     onEndAtChange: (LocalDateTime?) -> Unit,
     onSelect: (IndexChartPoint) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     fun bounds(values: List<Double>, minimumPadding: Double): Pair<Double, Double> {
         if (values.isEmpty()) return 0.0 to 1.0
@@ -136,7 +152,7 @@ private fun IndexTrendChart(
     val description = "指数の推移。表示期間 ${window.startAt.toLocalDate()}～${window.endAt.toLocalDate()}。" +
         "${selected?.date ?: "選択なし"}、BMI ${selected?.bmi?.let(::formatDecimal) ?: "記録なし"}、" +
         "FFMI ${selected?.ffmi?.let(::formatDecimal) ?: "記録なし"}、WHtR ${selected?.waistHeightRatio?.let(::ratioText) ?: "記録なし"}"
-    Canvas(Modifier.fillMaxWidth().height(432.dp)
+    Canvas(modifier.fillMaxWidth()
         .semantics { contentDescription = description }
         .pointerInput(earliestEndAt, latestEndAt) {
             detectHorizontalDragGestures { _, dragAmount ->
