@@ -544,7 +544,7 @@ private fun SummaryValue(
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.SemiBold,
         color = color,
-        fontSize = 13.sp,
+        fontSize = 13.sp * 1.05f,
     )
 }
 
