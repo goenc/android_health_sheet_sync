@@ -953,11 +953,13 @@ private fun SelectedDaySummary(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SummaryInfoLine(day?.let { it.date.formatMonthDayWithWeekday() } ?: "日付 -", ChartBlue, true)
+                SummaryInfoLine(day?.let { it.date.formatMonthDayWithWeekday() } ?: "日付 -", ChartBlue, true,
+                    modifier = Modifier.weight(1f))
                 SummaryInfoLine(
                     text = "推定総消費 ${day?.dailyEnergy?.estimatedTotalKcal?.let(::formatIntegerWithGrouping) ?: "-"} kcal",
                     color = ChartSummary,
                     bold = true,
+                    modifier = Modifier.weight(1.6f),
                 )
             }
             Row(
@@ -991,7 +993,7 @@ private fun SelectedDaySummary(
                 )
                 SummaryInfoLine(
                     text = "距離 ${formatDistanceMeters(day?.steps?.distanceMeters)}",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1.6f),
                 )
             }
             Row(
@@ -1020,14 +1022,15 @@ private fun SelectedDaySummary(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SummaryInfoLine(
                     text = "BMI ${selectedDayBmiText(day, dailyBodySettings) ?: "-"}",
+                    modifier = Modifier.weight(1f),
                 )
                 SummaryInfoLine(
                     text = "FFMI ${selectedDayFfmiText(day, manualRecords, dailyBodySettings) ?: "-"}",
+                    modifier = Modifier.weight(1.6f),
                 )
             }
         }
