@@ -182,7 +182,7 @@ internal fun WeightTrendChart(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(420.dp),
+                .height(432.dp),
         ) {
             Canvas(
                 modifier = Modifier
@@ -918,7 +918,7 @@ internal fun WeightTrendChart(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         SelectedDaySummary(
             day = selectedDay,
             graphValues = selectedGraphValues,
