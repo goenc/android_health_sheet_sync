@@ -105,6 +105,7 @@ internal fun LabResultsScreen(
     var selectedUnit by rememberSaveable(selectedItem) { mutableStateOf<String?>(null) }
     var selectedPlotRecord by remember(selectedItem) { mutableStateOf<LabResult?>(null) }
     var showReferenceRange by remember { mutableStateOf(false) }
+    LaunchedEffect(referenceState.loadRevision) { showReferenceRange = false }
     val dates = remember(state.records) {
         state.records.map { it.targetDate }.distinct().sortedDescending()
     }
@@ -144,7 +145,7 @@ internal fun LabResultsScreen(
             }, onRefresh = onRefresh, onImport = onImport, onBack = { showSettings = false }, modifier = modifier)
         return
     }
-    if (showReferenceRange) selectedItem?.let { name ->
+    if (showReferenceRange && referenceState.isLoaded) selectedItem?.let { name ->
         LabReferenceRangeDialog(name, referenceSettings[name], itemUnits[name].orEmpty(), { showReferenceRange = false }) { range, unit, onResult ->
             onSaveReferenceRange(name, range, unit) { error ->
                 if (error == null) selectedPlotRecord = null
@@ -175,10 +176,12 @@ internal fun LabResultsScreen(
                     selectedItem?.let { LabItemGuidancePanel(it, effectiveUnit.orEmpty()) }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(referenceSettings[selectedItem]?.let { "共通基準: ${it.displayText}" }
+                    Text(if (!referenceState.isLoaded) {
+                        if (referenceError == null) "項目設定を読み込み中" else "項目設定を読み込めませんでした"
+                    } else referenceSettings[selectedItem]?.let { "共通基準: ${it.displayText}" }
                         ?: if (selectedItem in referenceSettings) "高低判定なし" else "共通基準は未設定",
                         modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = { showReferenceRange = true }) { Text("項目設定") }
+                    TextButton(onClick = { showReferenceRange = true }, enabled = referenceState.isLoaded) { Text("項目設定") }
                 }
                 referenceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (units.size > 1) {
