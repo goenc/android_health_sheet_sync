@@ -52,8 +52,9 @@ import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabDisplaySettingsStore
-import com.goenc.healthsheetsync.data.LabReferenceSettingsStore
+import com.goenc.healthsheetsync.data.LabReferenceRange
 import com.goenc.healthsheetsync.data.applyLabReferenceRanges
+import com.goenc.healthsheetsync.sync.LabReferenceUiState
 
 private const val LabItemColumnWeight = 2.4f
 private const val LabValueColumnWeight = 1f
@@ -69,24 +70,23 @@ private fun Modifier.labMonthDividers(comparisonCount: Int): Modifier = drawBehi
 }
 
 @Composable
-fun LabResultsScreen(
+internal fun LabResultsScreen(
     state: LabResultsUiState,
+    referenceState: LabReferenceUiState,
     onRefresh: () -> Unit,
+    onInitializeReferenceSettings: (List<LabResult>) -> Unit,
+    onSaveReferenceRange: (String, LabReferenceRange?, String, (String?) -> Unit) -> Unit,
     onImport: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
-    onItemSettingsSaved: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val displaySettings = remember(context) { LabDisplaySettingsStore(context.applicationContext) }
-    val referenceStore = remember(context) { LabReferenceSettingsStore(context.applicationContext) }
-    var referenceSettings by remember { mutableStateOf(referenceStore.load()) }
-    var itemUnits by remember { mutableStateOf(referenceStore.units()) }
-    var referenceError by remember { mutableStateOf<String?>(null) }
+    val referenceSettings = referenceState.settings
+    val itemUnits = referenceState.units
+    val referenceError = referenceState.error
     LaunchedEffect(state.records) {
-        runCatching { referenceStore.initializeMissing(state.records) }
-            .onSuccess { referenceSettings = it; itemUnits = referenceStore.units(); referenceError = null }
-            .onFailure { referenceError = it.message }
+        onInitializeReferenceSettings(state.records)
     }
     val displayRecords = remember(state.records, referenceSettings, itemUnits) {
         applyLabReferenceRanges(state.records.map { it.copy(unit = itemUnits[it.itemName] ?: it.unit) }, referenceSettings,
@@ -145,14 +145,11 @@ fun LabResultsScreen(
         return
     }
     if (showReferenceRange) selectedItem?.let { name ->
-        LabReferenceRangeDialog(name, referenceSettings[name], itemUnits[name].orEmpty(), { showReferenceRange = false }) { range, unit ->
-            runCatching {
-                referenceSettings = referenceStore.save(name, range, unit)
-                itemUnits = referenceStore.units()
-                onItemSettingsSaved()
-                referenceError = null
-                selectedPlotRecord = null
-            }.exceptionOrNull()?.let { it.message ?: "基準範囲を保存できませんでした" }
+        LabReferenceRangeDialog(name, referenceSettings[name], itemUnits[name].orEmpty(), { showReferenceRange = false }) { range, unit, onResult ->
+            onSaveReferenceRange(name, range, unit) { error ->
+                if (error == null) selectedPlotRecord = null
+                onResult(error)
+            }
         }
     }
     Column(modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

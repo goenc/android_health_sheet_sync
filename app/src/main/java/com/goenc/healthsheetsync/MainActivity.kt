@@ -18,7 +18,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.goenc.healthsheetsync.data.LocalHealthDataStore
+import com.goenc.healthsheetsync.data.ManualRecordSaveResult
+import com.goenc.healthsheetsync.data.ManualRecordSaveUseCase
 import com.goenc.healthsheetsync.data.BasalMetabolicRateSettingsStore
+import com.goenc.healthsheetsync.data.ChartAxisRange
+import com.goenc.healthsheetsync.data.ChartAxisSettingsStore
+import com.goenc.healthsheetsync.data.ChartMetric
 import com.goenc.healthsheetsync.data.StoredHealthData
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
 import com.goenc.healthsheetsync.data.WeightMovingAverageSettingsStore
@@ -34,6 +39,8 @@ import com.goenc.healthsheetsync.health.PermissionState
 import com.goenc.healthsheetsync.share.SharedTextImporter
 import com.goenc.healthsheetsync.sync.SpreadsheetSyncCoordinator
 import com.goenc.healthsheetsync.sync.SpreadsheetSyncUiState
+import com.goenc.healthsheetsync.sync.LabReferenceSettingsCoordinator
+import com.goenc.healthsheetsync.sync.LabReferenceUiState
 import com.goenc.healthsheetsync.ui.HealthDebugScreen
 import com.goenc.healthsheetsync.ui.theme.HealthSheetSyncTheme
 import com.goenc.healthsheetsync.widget.HealthGraphWidgetUpdater
@@ -47,16 +54,21 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     private lateinit var healthReader: HealthConnectDebugReader
     private lateinit var localStore: LocalHealthDataStore
+    private lateinit var manualRecordSaveUseCase: ManualRecordSaveUseCase
     private lateinit var basalMetabolicRateSettingsStore: BasalMetabolicRateSettingsStore
     private lateinit var weightMovingAverageSettingsStore: WeightMovingAverageSettingsStore
+    private lateinit var chartAxisSettingsStore: ChartAxisSettingsStore
     private lateinit var sharedTextImporter: SharedTextImporter
     private lateinit var healthCsvShareExporter: HealthCsvShareExporter
     private lateinit var spreadsheetSyncCoordinator: SpreadsheetSyncCoordinator
+    private lateinit var labReferenceSettingsCoordinator: LabReferenceSettingsCoordinator
     private var healthState by mutableStateOf(HealthDebugUiState())
     private var basalMetabolicRate by mutableStateOf(DailyEnergyCalculator.DEFAULT_BASAL_METABOLIC_RATE)
     private var weightMovingAverageMode by mutableStateOf(WeightMovingAverageMode.All)
+    private var chartAxisRanges by mutableStateOf<Map<ChartMetric, ChartAxisRange>>(emptyMap())
     private var csvShareStatus by mutableStateOf<String?>(null)
     private var spreadsheetSyncState by mutableStateOf(SpreadsheetSyncUiState())
+    private var labReferenceState by mutableStateOf(LabReferenceUiState())
     private var sharedText by mutableStateOf<String?>(null)
     private var sharedTextImportStatus by mutableStateOf<String?>(null)
     private var healthRefreshJob: Job? = null
@@ -80,10 +92,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         healthReader = HealthConnectDebugReader(applicationContext)
         localStore = LocalHealthDataStore(applicationContext)
+        manualRecordSaveUseCase = ManualRecordSaveUseCase(localStore)
         basalMetabolicRateSettingsStore = BasalMetabolicRateSettingsStore(applicationContext)
         basalMetabolicRate = basalMetabolicRateSettingsStore.load()
         weightMovingAverageSettingsStore = WeightMovingAverageSettingsStore(applicationContext)
         weightMovingAverageMode = weightMovingAverageSettingsStore.load()
+        chartAxisSettingsStore = ChartAxisSettingsStore(applicationContext)
+        chartAxisRanges = chartAxisSettingsStore.load()
         sharedTextImporter = SharedTextImporter(applicationContext, localStore)
         healthCsvShareExporter = HealthCsvShareExporter(applicationContext)
         spreadsheetSyncCoordinator = SpreadsheetSyncCoordinator(
@@ -91,6 +106,11 @@ class MainActivity : ComponentActivity() {
             scope = lifecycleScope,
             localStore = localStore,
             onStateChanged = { spreadsheetSyncState = it },
+        )
+        labReferenceSettingsCoordinator = LabReferenceSettingsCoordinator(
+            context = applicationContext,
+            scope = lifecycleScope,
+            onStateChanged = { labReferenceState = it },
         )
         handleSharedText(intent)
         enableEdgeToEdge()
@@ -128,7 +148,7 @@ class MainActivity : ComponentActivity() {
                         isSpreadsheetUploading = spreadsheetSyncState.isSpreadsheetUploading,
                         sharedText = sharedText,
                         sharedTextImportStatus = sharedTextImportStatus,
-                        onSaveManualRecord = { draft -> saveManualRecord(draft) },
+                        onSaveManualRecord = { draft, onResult -> saveManualRecord(draft, onResult) },
                         onInvalidateManualRecord = { id -> invalidateManualRecord(id) },
                         onRestoreManualRecord = { id -> restoreManualRecord(id) },
                         onDeleteManualRecord = { id -> deleteManualRecord(id) },
@@ -146,6 +166,10 @@ class MainActivity : ComponentActivity() {
                             saveBasalMetabolicRate(value, onResult)
                         },
                         weightMovingAverageMode = weightMovingAverageMode,
+                        chartAxisRanges = chartAxisRanges,
+                        onSaveChartAxisRange = { metric, range, onResult ->
+                            saveChartAxisRange(metric, range, onResult)
+                        },
                         onSaveWeightMovingAverageMode = { mode, onResult ->
                             saveWeightMovingAverageMode(mode, onResult)
                         },
@@ -154,9 +178,18 @@ class MainActivity : ComponentActivity() {
                         onRefreshPfcBoard = { spreadsheetSyncCoordinator.refreshPfcBoard() },
                         onLoadPfcBoard = { spreadsheetSyncCoordinator.loadLocalPfcBoard() },
                         labResultsState = spreadsheetSyncState.labResults,
+                        labReferenceState = labReferenceState,
                         onRefreshLabResults = { spreadsheetSyncCoordinator.refreshLabResults() },
                         onLoadLabResults = { spreadsheetSyncCoordinator.loadLocalLabResults() },
-                        onLabItemSettingsSaved = { spreadsheetSyncCoordinator.backupLabSettings() },
+                        onInitializeLabReferenceSettings = { records ->
+                            labReferenceSettingsCoordinator.initializeMissing(records)
+                        },
+                        onSaveLabReferenceRange = { itemName, range, unit, onResult ->
+                            labReferenceSettingsCoordinator.save(itemName, range, unit) { error ->
+                                if (error == null) spreadsheetSyncCoordinator.backupLabSettings()
+                                onResult(error)
+                            }
+                        },
                         onImportLabResults = { records, onResult -> spreadsheetSyncCoordinator.importLabResults(records, onResult) },
                         modifier = Modifier.padding(contentPadding),
                     )
@@ -251,30 +284,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun saveManualRecord(draft: ManualHealthRecordDraft) {
+    private fun saveManualRecord(
+        draft: ManualHealthRecordDraft,
+        onResult: (ManualRecordSaveResult) -> Unit,
+    ) {
         lifecycleScope.launch {
-            val saved = withContext(Dispatchers.IO) {
-                runCatching {
-                    localStore.saveManualRecord(draft)
-                    true
-                }.getOrDefault(false)
-            }
-            if (saved && draft.type == ManualRecordType.Steps) {
-                val steps = draft.valueText.removeSuffix("歩").toLongOrNull()
-                if (steps != null) {
-                    withContext(Dispatchers.IO) {
-                        localStore.finalizeManualStepsForDate(
-                            targetDate = draft.measuredAt.toLocalDate(),
-                            steps = steps,
-                            basalMetabolicRate = basalMetabolicRate,
-                        )
-                    }
-                }
-            }
-            refreshLocalHealthData()
-            if (saved) {
+            val result = manualRecordSaveUseCase.save(draft, basalMetabolicRate)
+            if (result !is ManualRecordSaveResult.Failed) {
+                refreshLocalHealthData()
                 spreadsheetSyncCoordinator.requestImmediateAutomaticSync()
             }
+            onResult(result)
         }
     }
 
@@ -350,6 +370,22 @@ class MainActivity : ComponentActivity() {
                 weightMovingAverageMode = mode
             }
             onResult(errorMessage)
+        }
+    }
+
+    private fun saveChartAxisRange(
+        metric: ChartMetric,
+        range: ChartAxisRange?,
+        onResult: (Boolean) -> Unit,
+    ) {
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching { chartAxisSettingsStore.save(metric, range) }.getOrDefault(false)
+            }
+            if (saved) {
+                chartAxisRanges = if (range == null) chartAxisRanges - metric else chartAxisRanges + (metric to range)
+            }
+            onResult(saved)
         }
     }
 

@@ -46,6 +46,7 @@ import com.goenc.healthsheetsync.health.InvalidatedGraphRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecord
 import com.goenc.healthsheetsync.health.ManualHealthRecordDraft
 import com.goenc.healthsheetsync.health.ManualRecordType
+import com.goenc.healthsheetsync.data.ManualRecordSaveResult
 import java.time.LocalDate
 import com.goenc.healthsheetsync.health.BasalMetabolicRateHistory
 import com.goenc.healthsheetsync.health.DailyEnergyCalculator
@@ -71,7 +72,7 @@ internal fun ManualDataScreen(
     glucoseRecords: List<DebugGlucoseRecord>,
     manualRecords: List<ManualHealthRecord>,
     invalidatedRecords: List<InvalidatedGraphRecord>,
-    onSave: (ManualHealthRecordDraft) -> Unit,
+    onSave: (ManualHealthRecordDraft, (ManualRecordSaveResult) -> Unit) -> Unit,
     onInvalidateManual: (String) -> Unit,
     onRestoreManual: (String) -> Unit,
     onDeleteManual: (String) -> Unit,
@@ -88,6 +89,8 @@ internal fun ManualDataScreen(
     var selectedTimeBand by remember { mutableStateOf(selectedType.defaultManualTimeBand()) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showSaveCompleteDialog by remember { mutableStateOf(false) }
+    var saveWarning by remember { mutableStateOf<String?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
     var primaryValue by remember { mutableStateOf("") }
     var secondaryValue by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
@@ -238,7 +241,11 @@ internal fun ManualDataScreen(
                 val valueText = selectedType.formatManualValue(primaryValue, secondaryValue)
                 if (valueText == null) {
                     inputError = "値を確認してください"
-                } else {
+                } else if (!isSaving) {
+                    val savedType = selectedType
+                    val savedPrimaryValue = primaryValue
+                    val savedSecondaryValue = secondaryValue
+                    isSaving = true
                     lastSavedTypeLabel = selectedType.label
                     onSave(
                         ManualHealthRecordDraft(
@@ -246,13 +253,37 @@ internal fun ManualDataScreen(
                             measuredAt = measuredAt,
                             valueText = valueText,
                         ),
-                    )
-                    primaryValue = ""
-                    secondaryValue = ""
-                    inputError = null
-                    showSaveCompleteDialog = true
+                    ) { result ->
+                        isSaving = false
+                        when (result) {
+                            ManualRecordSaveResult.Saved -> {
+                                if (selectedType == savedType && primaryValue == savedPrimaryValue &&
+                                    secondaryValue == savedSecondaryValue
+                                ) {
+                                    primaryValue = ""
+                                    secondaryValue = ""
+                                }
+                                inputError = null
+                                saveWarning = null
+                                showSaveCompleteDialog = true
+                            }
+                            is ManualRecordSaveResult.SavedWithWarning -> {
+                                if (selectedType == savedType && primaryValue == savedPrimaryValue &&
+                                    secondaryValue == savedSecondaryValue
+                                ) {
+                                    primaryValue = ""
+                                    secondaryValue = ""
+                                }
+                                inputError = null
+                                saveWarning = result.message
+                                showSaveCompleteDialog = true
+                            }
+                            is ManualRecordSaveResult.Failed -> inputError = result.message
+                        }
+                    }
                 }
             },
+            enabled = !isSaving,
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(containerColor = AppPrimary),
         ) {
@@ -272,7 +303,7 @@ internal fun ManualDataScreen(
             },
             text = {
                 Text(
-                    text = "${lastSavedTypeLabel}のデータを登録しました。",
+                    text = saveWarning ?: "${lastSavedTypeLabel}のデータを登録しました。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = AppText,
                 )

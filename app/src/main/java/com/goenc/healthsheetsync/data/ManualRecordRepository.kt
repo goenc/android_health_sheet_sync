@@ -29,7 +29,7 @@ internal class ManualRecordRepository(
             "manual|${draft.type.name}|${draft.measuredAt.toLocalDate()}"
         } else "manual|${UUID.randomUUID()}"
         db.runInTransaction {
-            replace(
+            replaceOrThrow(
                 TABLE_MANUAL,
                 null,
                 ContentValues().apply {
@@ -44,7 +44,7 @@ internal class ManualRecordRepository(
             )
             when (draft.type) {
                 ManualRecordType.Weight -> {
-                    val weightKg = draft.valueText.removeSuffix(" kg").toDoubleOrNull() ?: return@runInTransaction
+                    val weightKg = requireNotNull(draft.valueText.removeSuffix(" kg").toDoubleOrNull())
                     val record = DebugWeightRecord(
                         measuredAt = draft.measuredAt,
                         targetDate = draft.measuredAt.toLocalDate(),
@@ -54,7 +54,7 @@ internal class ManualRecordRepository(
                         sourceAppName = MANUAL_SOURCE,
                         sourcePackageName = MANUAL_PACKAGE,
                     )
-                    replace(
+                    replaceOrThrow(
                         TABLE_WEIGHT,
                         null,
                         ContentValues().apply {
@@ -71,7 +71,7 @@ internal class ManualRecordRepository(
                     )
                 }
                 ManualRecordType.Steps -> {
-                    val steps = draft.valueText.removeSuffix("歩").toLongOrNull() ?: return@runInTransaction
+                    val steps = requireNotNull(draft.valueText.removeSuffix("歩").toLongOrNull())
                     val targetDate = draft.measuredAt.toLocalDate()
                     val distanceMeters = db.rawQuery(
                         "SELECT distance_meters FROM $TABLE_STEPS WHERE target_date = ?",
@@ -79,7 +79,7 @@ internal class ManualRecordRepository(
                     ).use { cursor ->
                         if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getDouble(0) else null
                     }
-                    replace(
+                    replaceOrThrow(
                         TABLE_STEPS,
                         null,
                         ContentValues().apply {
@@ -97,7 +97,7 @@ internal class ManualRecordRepository(
                     )
                 }
                 ManualRecordType.BloodGlucose -> {
-                    val glucose = draft.valueText.removeSuffix(" mg/dL").toDoubleOrNull() ?: return@runInTransaction
+                    val glucose = requireNotNull(draft.valueText.removeSuffix(" mg/dL").toDoubleOrNull())
                     val record = DebugGlucoseRecord(
                         measuredAt = draft.measuredAt,
                         targetDate = draft.measuredAt.toLocalDate(),
@@ -108,7 +108,7 @@ internal class ManualRecordRepository(
                         sourceAppName = MANUAL_SOURCE,
                         sourcePackageName = MANUAL_PACKAGE,
                     )
-                    replace(
+                    replaceOrThrow(
                         TABLE_GLUCOSE,
                         null,
                         ContentValues().apply {
@@ -126,8 +126,8 @@ internal class ManualRecordRepository(
                     )
                 }
                 ManualRecordType.A1c -> {
-                    val a1cPercent = draft.valueText.removeSuffix(" %").toDoubleOrNull() ?: return@runInTransaction
-                    replace(
+                    val a1cPercent = requireNotNull(draft.valueText.removeSuffix(" %").toDoubleOrNull())
+                    replaceOrThrow(
                         TABLE_A1C_DAILY,
                         null,
                         ContentValues().apply {

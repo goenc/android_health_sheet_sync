@@ -70,7 +70,7 @@ internal fun SettingsScreen(
     onBack: () -> Unit,
     labResultsState: LabResultsUiState = LabResultsUiState(),
     chartAxisRanges: Map<ChartMetric, ChartAxisRange> = emptyMap(),
-    onSaveChartAxisRange: (ChartMetric, ChartAxisRange?) -> Boolean = { _, _ -> false },
+    onSaveChartAxisRange: (ChartMetric, ChartAxisRange?, (Boolean) -> Unit) -> Unit = { _, _, onResult -> onResult(false) },
 ) {
     var selectedRecordList by remember { mutableStateOf<RecordListType?>(null) }
     var weightMovingAverageError by remember { mutableStateOf<String?>(null) }

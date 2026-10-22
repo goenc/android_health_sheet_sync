@@ -42,7 +42,7 @@ class LabResultsTest {
 
     @Test
     fun phoneMirrorNeverUploadsOrClearsChatGptLabResults() {
-        val tables = SpreadsheetUploader().uploadTables(
+        val tables = SpreadsheetUploadTableBuilder.build(
             emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
         )
         assertFalse(tables.any { it.sheetName == "labResults" })

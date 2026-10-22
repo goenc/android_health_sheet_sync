@@ -9,13 +9,13 @@ import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class SpreadsheetUploaderTest {
+class SpreadsheetUploadTableBuilderTest {
     @Test fun exportsIndependentBodyHistoryWithoutVirtualBaselineDate() {
         val date = LocalDate.of(2026, 10, 20)
         val height = ManualHealthRecord("height", ManualRecordType.Height, date.atStartOfDay(), "170 cm", null)
         val intake = ManualHealthRecord("intake", ManualRecordType.AverageIntake, date.atStartOfDay(), "1800 kcal/日", null)
         val records = listOf(height, intake)
-        val tables = SpreadsheetUploader().uploadTables(
+        val tables = SpreadsheetUploadTableBuilder.build(
             weightRecords = emptyList(), glucoseRecords = emptyList(), stepDailyRecords = emptyList(),
             a1cDailyRecords = emptyList(), manualRecords = records,
             dailyBodySettings = com.goenc.healthsheetsync.health.BodySettingHistory.timeline(emptyList(), records),
@@ -35,7 +35,7 @@ class SpreadsheetUploaderTest {
         val date = LocalDate.of(2026, 7, 23)
         val record = ManualHealthRecord("bmr", ManualRecordType.BasalMetabolicRate,
             date.atStartOfDay(), "1500 kcal/日", null)
-        val tables = SpreadsheetUploader().uploadTables(
+        val tables = SpreadsheetUploadTableBuilder.build(
             weightRecords = emptyList(), glucoseRecords = emptyList(),
             stepDailyRecords = listOf(DebugStepDaily(date, 8000, aggregationStartAt = date.atStartOfDay(),
                 aggregationEndAt = date.plusDays(1).atStartOfDay())),
@@ -118,8 +118,7 @@ class SpreadsheetUploaderTest {
         stepDailyRecords: List<DebugStepDaily>,
         dailyEnergySnapshots: List<DailyEnergySnapshot> = emptyList(),
     ): SpreadsheetUploadTable {
-        return SpreadsheetUploader()
-            .uploadTables(
+        return SpreadsheetUploadTableBuilder.build(
                 weightRecords = emptyList(),
                 glucoseRecords = emptyList(),
                 stepDailyRecords = stepDailyRecords,

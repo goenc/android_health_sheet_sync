@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,9 +48,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import com.goenc.healthsheetsync.R
 import com.goenc.healthsheetsync.data.WeightMovingAverageMode
-import com.goenc.healthsheetsync.data.ChartAxisSettingsStore
+import com.goenc.healthsheetsync.data.ChartAxisRange
+import com.goenc.healthsheetsync.data.ChartMetric
+import com.goenc.healthsheetsync.data.ManualRecordSaveResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabResult
+import com.goenc.healthsheetsync.data.LabReferenceRange
+import com.goenc.healthsheetsync.sync.LabReferenceUiState
 import com.goenc.healthsheetsync.health.DebugA1cDaily
 import com.goenc.healthsheetsync.health.DebugGlucoseRecord
 import com.goenc.healthsheetsync.health.DebugStepDaily
@@ -70,7 +73,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 
 @Composable
-fun HealthDebugScreen(
+internal fun HealthDebugScreen(
     state: HealthDebugUiState,
     onRequestPermissions: () -> Unit,
     onRefresh: () -> Unit,
@@ -84,7 +87,7 @@ fun HealthDebugScreen(
     isSpreadsheetUploading: Boolean,
     sharedText: String?,
     sharedTextImportStatus: String?,
-    onSaveManualRecord: (ManualHealthRecordDraft) -> Unit,
+    onSaveManualRecord: (ManualHealthRecordDraft, (ManualRecordSaveResult) -> Unit) -> Unit,
     onInvalidateManualRecord: (String) -> Unit,
     onRestoreManualRecord: (String) -> Unit,
     onDeleteManualRecord: (String) -> Unit,
@@ -95,20 +98,22 @@ fun HealthDebugScreen(
     onSaveBasalMetabolicRate: (Int, (String?) -> Unit) -> Unit,
     weightMovingAverageMode: WeightMovingAverageMode,
     onSaveWeightMovingAverageMode: (WeightMovingAverageMode, (String?) -> Unit) -> Unit,
+    chartAxisRanges: Map<ChartMetric, ChartAxisRange>,
+    onSaveChartAxisRange: (ChartMetric, ChartAxisRange?, (Boolean) -> Unit) -> Unit,
     dailyBodySettings: List<DailyBodySetting>,
     pfcBoardState: PfcBoardState = PfcBoardState(),
     onRefreshPfcBoard: () -> Unit = {},
     onLoadPfcBoard: () -> Unit = {},
     labResultsState: LabResultsUiState = LabResultsUiState(),
+    labReferenceState: LabReferenceUiState = LabReferenceUiState(),
     onRefreshLabResults: () -> Unit = {},
     onLoadLabResults: () -> Unit = {},
-    onLabItemSettingsSaved: () -> Unit = {},
+    onInitializeLabReferenceSettings: (List<LabResult>) -> Unit = {},
+    onSaveLabReferenceRange: (String, LabReferenceRange?, String, (String?) -> Unit) -> Unit =
+        { _, _, _, onResult -> onResult("保存処理がありません") },
     onImportLabResults: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val chartAxisStore = remember(context) { ChartAxisSettingsStore(context.applicationContext) }
-    var chartAxisRanges by remember { mutableStateOf(chartAxisStore.load()) }
     var showSettings by remember { mutableStateOf(false) }
     var showManualInput by remember { mutableStateOf(false) }
     var showPfcBoard by remember { mutableStateOf(false) }
@@ -208,8 +213,10 @@ fun HealthDebugScreen(
                 return@CompositionLocalProvider
             }
             if (showLabResults) {
-                LabResultsScreen(state = labResultsState, onRefresh = onRefreshLabResults,
-                    onItemSettingsSaved = onLabItemSettingsSaved,
+                LabResultsScreen(state = labResultsState, referenceState = labReferenceState,
+                    onRefresh = onRefreshLabResults,
+                    onInitializeReferenceSettings = onInitializeLabReferenceSettings,
+                    onSaveReferenceRange = onSaveLabReferenceRange,
                     onImport = onImportLabResults, onBack = { showLabResults = false })
                 return@CompositionLocalProvider
             }
@@ -285,11 +292,7 @@ fun HealthDebugScreen(
                             dailyEnergySnapshots = state.dailyEnergySnapshots,
                             labResultsState = labResultsState,
                             chartAxisRanges = chartAxisRanges,
-                            onSaveChartAxisRange = { metric, range ->
-                                val saved = chartAxisStore.save(metric, range)
-                                if (saved) chartAxisRanges = if (range == null) chartAxisRanges - metric else chartAxisRanges + (metric to range)
-                                saved
-                            },
+                            onSaveChartAxisRange = onSaveChartAxisRange,
                         )
                     }
                     return@Column

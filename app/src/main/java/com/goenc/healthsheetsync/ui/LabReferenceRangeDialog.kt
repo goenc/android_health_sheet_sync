@@ -29,7 +29,7 @@ internal fun LabReferenceRangeDialog(
     range: LabReferenceRange?,
     unit: String,
     onDismiss: () -> Unit,
-    onSave: (LabReferenceRange?, String) -> String?,
+    onSave: (LabReferenceRange?, String, (String?) -> Unit) -> Unit,
 ) {
     var minimum by remember(itemName) { mutableStateOf(range?.minimum?.toPlainString().orEmpty()) }
     var maximum by remember(itemName) { mutableStateOf(range?.maximum?.toPlainString().orEmpty()) }
@@ -37,11 +37,16 @@ internal fun LabReferenceRangeDialog(
     var maximumInclusive by remember(itemName) { mutableStateOf(range?.maximumInclusive ?: true) }
     var error by remember { mutableStateOf<String?>(null) }
     var unitText by remember(itemName) { mutableStateOf(unit) }
+    var saving by remember { mutableStateOf(false) }
     fun save(value: LabReferenceRange?) {
-        val failure = onSave(value, unitText)
-        if (failure == null) onDismiss() else error = failure
+        if (saving) return
+        saving = true
+        onSave(value, unitText) { failure ->
+            saving = false
+            if (failure == null) onDismiss() else error = failure
+        }
     }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("$itemName の項目設定") }, text = {
+    AlertDialog(onDismissRequest = { if (!saving) onDismiss() }, title = { Text("$itemName の項目設定") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("この項目の全日付に共通で適用する。今後の取り込みにも使用する。")
             OutlinedTextField(unitText, { unitText = it }, label = { Text("単位（なしは空欄）") }, singleLine = true)
@@ -58,7 +63,7 @@ internal fun LabReferenceRangeDialog(
                 Text("上限と同じ値を正常範囲に含む")
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            TextButton(onClick = { save(null) }) { Text("この項目の高低判定を使わない") }
+            TextButton(onClick = { save(null) }, enabled = !saving) { Text("この項目の高低判定を使わない") }
         }
     }, confirmButton = {
         TextButton(onClick = {
@@ -73,6 +78,6 @@ internal fun LabReferenceRangeDialog(
             candidate.onSuccess { save(it) }.onFailure {
                 error = if (it is NumberFormatException) "下限・上限は数値で入力してください" else it.message
             }
-        }) { Text("保存") }
-    }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
+        }, enabled = !saving) { Text("保存") }
+    }, dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("キャンセル") } })
 }
