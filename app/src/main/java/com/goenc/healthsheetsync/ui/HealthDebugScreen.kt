@@ -53,6 +53,7 @@ import com.goenc.healthsheetsync.data.ChartMetric
 import com.goenc.healthsheetsync.data.ManualRecordSaveResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabResult
+import com.goenc.healthsheetsync.data.BodyCompositionMeasurement
 import com.goenc.healthsheetsync.data.LabReferenceRange
 import com.goenc.healthsheetsync.sync.LabReferenceUiState
 import com.goenc.healthsheetsync.health.DebugA1cDaily
@@ -112,6 +113,7 @@ internal fun HealthDebugScreen(
     onSaveLabReferenceRange: (String, LabReferenceRange?, String, (String?) -> Unit) -> Unit =
         { _, _, _, onResult -> onResult("保存処理がありません") },
     onImportLabResults: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
+    onImportBodyComposition: (List<BodyCompositionMeasurement>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
     modifier: Modifier = Modifier,
 ) {
     var showSettings by remember { mutableStateOf(false) }
@@ -217,7 +219,7 @@ internal fun HealthDebugScreen(
                     onRefresh = onRefreshLabResults,
                     onInitializeReferenceSettings = onInitializeLabReferenceSettings,
                     onSaveReferenceRange = onSaveLabReferenceRange,
-                    onImport = onImportLabResults, onBack = { showLabResults = false })
+                    onImport = onImportLabResults, onImportBodyComposition = onImportBodyComposition, onBack = { showLabResults = false })
                 return@CompositionLocalProvider
             }
             LaunchedEffect(state.isLoading, showSettings, showManualInput) {

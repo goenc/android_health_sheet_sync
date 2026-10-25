@@ -23,11 +23,20 @@ import com.goenc.healthsheetsync.data.buildLabResultsPrompt
 
 @Composable
 internal fun LabResultsPhotoShareButton(itemNames: List<String>, enabled: Boolean) {
+    PhotoShareButton(prompt = buildLabResultsPrompt(itemNames), buttonLabel = "写真をChatGPTで解析", enabled = enabled)
+}
+
+@Composable
+internal fun BodyCompositionPhotoShareButton(enabled: Boolean) {
+    PhotoShareButton(prompt = buildBodyCompositionPrompt(), buttonLabel = "体組成の写真をChatGPTで解析", enabled = enabled)
+}
+
+@Composable
+private fun PhotoShareButton(prompt: String, buttonLabel: String, enabled: Boolean) {
     val context = LocalContext.current
     var status by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { images ->
         if (images.isNotEmpty()) {
-            val prompt = buildLabResultsPrompt(itemNames)
             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                 .setPrimaryClip(ClipData.newPlainText("検査票の解析指示", prompt))
             val intent = Intent(if (images.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
@@ -60,7 +69,7 @@ internal fun LabResultsPhotoShareButton(itemNames: List<String>, enabled: Boolea
     }
     Column {
         OutlinedButton(onClick = { picker.launch("image/*") }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
-            Text("写真をChatGPTで解析")
+            Text(buttonLabel)
         }
         status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }

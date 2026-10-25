@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.goenc.healthsheetsync.R
+import com.goenc.healthsheetsync.data.BodyCompositionMeasurement
 import com.goenc.healthsheetsync.data.LabResult
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabDisplaySettingsStore
@@ -77,8 +79,39 @@ internal fun LabResultsScreen(
     onInitializeReferenceSettings: (List<LabResult>) -> Unit,
     onSaveReferenceRange: (String, LabReferenceRange?, String, (String?) -> Unit) -> Unit,
     onImport: (List<LabResult>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
+    onImportBodyComposition: (List<BodyCompositionMeasurement>, (String?) -> Unit) -> Unit = { _, onResult -> onResult("保存処理がありません") },
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+) {
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val stateHolder = rememberSaveableStateHolder()
+    if (selectedTab == 0) {
+        stateHolder.SaveableStateProvider(key = "blood-results") {
+            BloodLabResultsScreen(state, referenceState, onRefresh, onInitializeReferenceSettings,
+                onSaveReferenceRange, onImport, onBack, modifier) {
+                selectedTab = it
+            }
+        }
+    } else {
+        stateHolder.SaveableStateProvider(key = "body-composition") {
+            BodyCompositionScreen(state, onRefresh, onImportBodyComposition, onBack, modifier) {
+                selectedTab = it
+            }
+        }
+    }
+}
+
+@Composable
+private fun BloodLabResultsScreen(
+    state: LabResultsUiState,
+    referenceState: LabReferenceUiState,
+    onRefresh: () -> Unit,
+    onInitializeReferenceSettings: (List<LabResult>) -> Unit,
+    onSaveReferenceRange: (String, LabReferenceRange?, String, (String?) -> Unit) -> Unit,
+    onImport: (List<LabResult>, (String?) -> Unit) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    onSelectTab: (Int) -> Unit,
 ) {
     val context = LocalContext.current
     val displaySettings = remember(context) { LabDisplaySettingsStore(context.applicationContext) }
@@ -161,9 +194,13 @@ internal fun LabResultsScreen(
                 Icon(painterResource(R.drawable.ic_settings_24), contentDescription = "検査結果の設定")
             }
         }
+        LabResultsTabRow(selectedTab = 0, onSelectTab = onSelectTab)
         if (state.isLoading) CircularProgressIndicator()
         // 通常の取得状況は設定へ移し、対処が必要なエラーだけをここに残す。
-        state.status?.takeIf { !state.isLoading && it != "${state.records.size}件を取得" }?.let {
+        state.status?.takeIf {
+            !state.isLoading && it != "${state.records.size}件を取得" &&
+                it != "${state.records.size}件の検査結果・体組成${state.bodyMeasurements.size}回を取得"
+        }?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
         if (state.records.isEmpty()) {
@@ -255,6 +292,16 @@ internal fun LabResultsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun LabResultsTabRow(selectedTab: Int, onSelectTab: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = selectedTab == 0, onClick = { onSelectTab(0) },
+            label = { Text("血液検査") }, modifier = Modifier.weight(1f))
+        FilterChip(selected = selectedTab == 1, onClick = { onSelectTab(1) },
+            label = { Text("体組成") }, modifier = Modifier.weight(1f))
     }
 }
 

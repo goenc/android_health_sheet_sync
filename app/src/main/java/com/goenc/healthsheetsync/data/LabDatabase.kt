@@ -8,7 +8,7 @@ import java.time.Instant
 
 /** 検査項目と結果を主キー・外部キーで結ぶ端末内データベース。 */
 internal class LabDatabase private constructor(context: Context) : SQLiteOpenHelper(
-    context, "lab_results.db", null, 2,
+    context, "lab_results.db", null, 3,
 ) {
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
 
@@ -38,13 +38,16 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
             CHECK(disabled = 1 OR minimum IS NOT NULL OR maximum IS NOT NULL)
         )""")
         db.execSQL("CREATE TABLE lab_metadata (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")
+        createBodyCompositionTables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion == 1 && newVersion == 2) {
+        require(oldVersion in 1..2 && newVersion == 3) { "検査データベースの未対応バージョン: $oldVersion → $newVersion" }
+        if (oldVersion < 2) {
             db.execSQL("ALTER TABLE lab_items ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0")
             db.execSQL("UPDATE lab_items SET display_order=rowid")
-        } else error("検査データベースの未対応バージョン: $oldVersion → $newVersion")
+        }
+        createBodyCompositionTables(db)
     }
 
     @Synchronized fun load(): LabResultsUiState {
@@ -52,7 +55,8 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
         val pending = backupRevision() > backedUpRevision()
         return LabResultsUiState(tables.results,
             status = if (pending) "端末内DBに保存済み。Sheetsへの未反映データあり" else null,
-            lastUpdatedAt = metadata("updated_at")?.let(Instant::parse))
+            lastUpdatedAt = metadata("updated_at")?.let(Instant::parse),
+            bodyMeasurements = readBodyCompositionMeasurements(readableDatabase))
     }
 
     @Synchronized fun tables(): LabTables {
@@ -97,7 +101,7 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
         readableDatabase.rawQuery("SELECT item_id,minimum,maximum,minimum_inclusive,maximum_inclusive,disabled FROM lab_reference_ranges ORDER BY item_id", null).use { cursor ->
             while (cursor.moveToNext()) rows += (0..5).map { cursor.getString(it).orEmpty() }
         }
-        return LabBackupSnapshot(tables(), rows, backupRevision(), backedUpRevision())
+        return LabBackupSnapshot(tables(), rows, backupRevision(), backedUpRevision(), readBodyCompositionMeasurements(readableDatabase))
     }
 
     private fun backupRevision() = metadata("backup_revision")?.toLong() ?: 0L
@@ -108,11 +112,12 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
         putMetadata(writableDatabase, "backed_up_revision", maxOf(revision, backedUpRevision()).toString())
     }
 
-    @Synchronized fun replace(tables: LabTables, updatedAt: Instant) {
+    @Synchronized fun replace(tables: LabTables, updatedAt: Instant, bodyMeasurements: List<BodyCompositionMeasurement>? = null) {
         // 参照、重複、値形式を検証してから1トランザクションで入れ替える。
         val itemRows = labItemRows(tables.items)
         val rows = labResultRows(tables.results, tables.items)
         parseLabRelationalTables(itemRows, rows)
+        bodyMeasurements?.let { parseBodyCompositionTables(bodyMeasurementRows(it), bodyValueRows(it)) }
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -123,9 +128,25 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
                     put("target_date", row[0]); put("item_id", row[1]); put("value", row[2]); put("value_qualifier", row[3])
                 })
             }
+            bodyMeasurements?.let { replaceBodyCompositionMeasurements(db, it) }
             putMetadata(db, "updated_at", updatedAt.toString())
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
+    }
+
+    @Synchronized fun appendBodyMeasurements(incoming: List<BodyCompositionMeasurement>): LabResultsSaveResult {
+        val plan = planBodyCompositionImport(incoming, readBodyCompositionMeasurements(readableDatabase))
+        require(plan.conflicts.isEmpty()) { "既存の体組成測定と相違があります。日時・機器・値を確認してください" }
+        if (plan.additions.isEmpty()) return LabResultsSaveResult(0, plan.duplicates.size)
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            plan.additions.forEach { insertBodyCompositionMeasurement(db, it) }
+            putMetadata(db, "updated_at", Instant.now().toString())
+            incrementBackupRevision(db)
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return LabResultsSaveResult(plan.additions.size, plan.duplicates.size)
     }
 
     @Synchronized fun ensureItems(records: List<LabResult>) {

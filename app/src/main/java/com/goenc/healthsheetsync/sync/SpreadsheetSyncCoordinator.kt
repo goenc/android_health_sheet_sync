@@ -18,6 +18,7 @@ import com.goenc.healthsheetsync.data.LocalHealthDataStore
 import com.goenc.healthsheetsync.data.LabResultsReader
 import com.goenc.healthsheetsync.data.LabResultsUiState
 import com.goenc.healthsheetsync.data.LabResult
+import com.goenc.healthsheetsync.data.BodyCompositionMeasurement
 import com.goenc.healthsheetsync.data.LabResultsWriter
 import com.goenc.healthsheetsync.data.LabResultsSaveResult
 import com.goenc.healthsheetsync.data.SpreadsheetUploadResult
@@ -326,11 +327,21 @@ internal class SpreadsheetSyncCoordinator(
     }
 
     fun importLabResults(records: List<LabResult>, onResult: (String?) -> Unit) {
+        importExaminationResults(records.isEmpty(), onResult) { labResultsWriter.saveLocal(records) }
+    }
+
+    fun importBodyComposition(records: List<BodyCompositionMeasurement>, onResult: (String?) -> Unit) {
+        importExaminationResults(records.isEmpty(), onResult) {
+            withContext(Dispatchers.IO) { labResultsReader.saveLocalBodyMeasurements(records) }
+        }
+    }
+
+    private fun importExaminationResults(empty: Boolean, onResult: (String?) -> Unit, saveLocal: suspend () -> LabResultsSaveResult) {
         if (state.labResults.isLoading || state.pfcBoard.loading || state.isGoogleDriveAuthorizing || state.isSpreadsheetUploading) {
             onResult("取得・認証・同期が完了してから保存してください")
             return
         }
-        if (records.isEmpty()) {
+        if (empty) {
             onResult("取り込む検査結果がありません")
             return
         }
@@ -338,7 +349,7 @@ internal class SpreadsheetSyncCoordinator(
         updateState { copy(labResults = labResults.copy(isLoading = true, status = "端末内DBへ保存中")) }
         scope.launch {
             try {
-                pendingLabSaveResult = labResultsWriter.saveLocal(records)
+                pendingLabSaveResult = saveLocal()
                 val loaded = withContext(Dispatchers.IO) { labResultsReader.loadCached() }
                 updateState { copy(labResults = loaded.copy(isLoading = true, status = "DB保存済み。Sheetsへ反映中")) }
                 pendingGoogleAuthorizationAction = GoogleAuthorizationAction.ImportLabResults

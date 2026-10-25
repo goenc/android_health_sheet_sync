@@ -14,6 +14,7 @@ internal data class LabBackupSnapshot(
     val references: List<List<String>>,
     val revision: Long,
     val backedUpRevision: Long,
+    val bodyMeasurements: List<BodyCompositionMeasurement> = emptyList(),
 )
 
 /**
@@ -52,6 +53,12 @@ internal class LabResultsWriter(
 
 /** 検査用の正規化テーブル全体を、同じ世代のままSheetsへ上書きする。 */
 internal suspend fun postLabBackup(accessToken: String, snapshot: LabBackupSnapshot) {
+    val sheets = labSheetsRequest(accessToken, "?fields=sheets(properties(sheetId,title,gridProperties))")
+    labSheetsRequest(accessToken, ":batchUpdate", buildLabBackupRequest(snapshot, sheets))
+}
+
+/** 全表を同時に更新。行数が減った場合も古い末尾の値を残さない。 */
+internal fun buildLabBackupRequest(snapshot: LabBackupSnapshot, spreadsheet: JSONObject): JSONObject {
     val itemRows = labItemRows(snapshot.tables.items)
     val resultRows = labResultRows(snapshot.tables.results, snapshot.tables.items)
     val referenceRows = snapshot.references
@@ -59,20 +66,38 @@ internal suspend fun postLabBackup(accessToken: String, snapshot: LabBackupSnaps
         "labReferenceRangesのヘッダーを確認してください"
     }
 
-    val request = JSONObject()
-        .put("valueInputOption", "RAW")
-        .put("data", JSONArray().apply {
-            put(valueRange("labItems!A1:D${itemRows.size}", itemRows))
-            put(valueRange("labResults!A1:D${resultRows.size}", resultRows))
-            put(valueRange("labReferenceRanges!A1:F${referenceRows.size}", referenceRows))
-        })
-    // values:batchUpdateは既存行の同じ範囲を置き換えるため、再送しても重複しない。
-    labSheetsRequest(accessToken, "/values:batchUpdate", request)
+    parseBodyCompositionTables(bodyMeasurementRows(snapshot.bodyMeasurements), bodyValueRows(snapshot.bodyMeasurements))
+    val sheets = spreadsheet.getJSONArray("sheets")
+    val properties = (0 until sheets.length()).map { sheets.getJSONObject(it).getJSONObject("properties") }.associateBy { it.getString("title") }
+    val tables = linkedMapOf("labItems" to itemRows, "labResults" to resultRows, "labReferenceRanges" to referenceRows)
+    if (snapshot.bodyMeasurements.isNotEmpty() || "bodyMeasurements" in properties || "bodyValues" in properties) {
+        tables["bodyMeasurements"] = bodyMeasurementRows(snapshot.bodyMeasurements)
+        tables["bodyValues"] = bodyValueRows(snapshot.bodyMeasurements)
+    }
+    val usedIds = properties.values.map { it.getInt("sheetId") }.toMutableSet()
+    val requests = JSONArray()
+    tables.forEach { (title, rows) ->
+        val old = properties[title]
+        require(old != null || title.startsWith("body")) { "検査結果のシートがありません: $title" }
+        val id = old?.getInt("sheetId") ?: generateSequence(0) { it + 1 }.first { it !in usedIds }.also { usedIds += it }
+        val oldGrid = old?.optJSONObject("gridProperties")
+        val rowCount = maxOf(rows.size, oldGrid?.optInt("rowCount", 1000) ?: 1000)
+        val columnCount = maxOf(rows.first().size, oldGrid?.optInt("columnCount", 26) ?: 26)
+        val grid = JSONObject().put("rowCount", rowCount).put("columnCount", columnCount)
+        if (old == null) requests.put(JSONObject().put("addSheet", JSONObject().put("properties",
+            JSONObject().put("sheetId", id).put("title", title).put("gridProperties", grid))))
+        else if (rowCount > oldGrid!!.getInt("rowCount") || columnCount > oldGrid.getInt("columnCount")) {
+            requests.put(JSONObject().put("updateSheetProperties", JSONObject()
+                .put("properties", JSONObject().put("sheetId", id).put("gridProperties", grid))
+                .put("fields", "gridProperties.rowCount,gridProperties.columnCount")))
+        }
+        requests.put(JSONObject().put("updateCells", JSONObject()
+            .put("range", JSONObject().put("sheetId", id).put("startRowIndex", 0).put("startColumnIndex", 0)
+                .put("endRowIndex", rowCount).put("endColumnIndex", rows.first().size))
+            .put("fields", "userEnteredValue")
+            .put("rows", JSONArray().apply { rows.forEach { row -> put(JSONObject().put("values", JSONArray().apply {
+                row.forEach { cell -> put(JSONObject().put("userEnteredValue", JSONObject().put("stringValue", cell))) }
+            })) } })))
+    }
+    return JSONObject().put("requests", requests)
 }
-
-private fun valueRange(range: String, rows: List<List<String>>): JSONObject = JSONObject()
-    .put("range", range)
-    .put("majorDimension", "ROWS")
-    .put("values", JSONArray().apply {
-        rows.forEach { row -> put(JSONArray().apply { row.forEach(::put) }) }
-    })

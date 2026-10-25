@@ -17,6 +17,7 @@ data class LabResultsUiState(
     val isLoading: Boolean = false,
     val status: String? = null,
     val lastUpdatedAt: Instant? = null,
+    val bodyMeasurements: List<BodyCompositionMeasurement> = emptyList(),
 )
 
 /** Sheetsを正本とする。列順の変更と任意列の省略を許容する。 */

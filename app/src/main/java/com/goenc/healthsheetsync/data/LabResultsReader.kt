@@ -32,23 +32,34 @@ internal class LabResultsReader(context: Context) {
     }.getOrElse { LabResultsUiState(status = "検査データの読み込みに失敗: ${it.message}") }
 
     suspend fun read(accessToken: String): LabResultsUiState = withContext(Dispatchers.IO) {
+        val sheetInfo = labSheetsRequest(accessToken, "?fields=sheets(properties(title))").getJSONArray("sheets")
+        val titles = (0 until sheetInfo.length()).map { sheetInfo.getJSONObject(it).getJSONObject("properties").getString("title") }.toSet()
+        val hasBody = "bodyMeasurements" in titles && "bodyValues" in titles
+        check(hasBody || ("bodyMeasurements" !in titles && "bodyValues" !in titles)) { "体組成シートが片方だけ存在します。bodyMeasurementsとbodyValuesを確認してください" }
+        val bodyRanges = if (hasBody) "&ranges=bodyMeasurements!A:E&ranges=bodyValues!A:D" else ""
         val response = labSheetsRequest(accessToken,
-            "/values:batchGet?ranges=labItems!A:D&ranges=labResults!A:D&ranges=labReferenceRanges!A:F&valueRenderOption=UNFORMATTED_VALUE")
+            "/values:batchGet?ranges=labItems!A:D&ranges=labResults!A:D&ranges=labReferenceRanges!A:F$bodyRanges&valueRenderOption=UNFORMATTED_VALUE")
         val ranges = response.getJSONArray("valueRanges")
         val tables = parseLabRelationalTables(
             ranges.getJSONObject(0).optJSONArray("values")?.toRows().orEmpty(),
             ranges.getJSONObject(1).optJSONArray("values")?.toRows().orEmpty(),
         )
         val references = parseLabReferenceBackup(ranges.getJSONObject(2).optJSONArray("values")?.toRows().orEmpty(), tables.items)
+        val body = if (hasBody) parseBodyCompositionTables(
+            ranges.getJSONObject(3).optJSONArray("values")?.toRows().orEmpty(),
+            ranges.getJSONObject(4).optJSONArray("values")?.toRows().orEmpty(),
+        ) else null
         check(database.backupSnapshot().let { it.revision <= it.backedUpRevision }) { "Sheets未反映の検査データがあります。先に反映してください" }
-        database.replace(tables, Instant.now())
+        database.replace(tables, Instant.now(), body)
         val currentReferences = referenceSettings.load()
         references.filterKeys { it !in currentReferences }.forEach { (name, range) -> database.saveReference(name, range) }
         referenceSettings.initializeMissing(tables.results)
-        database.load().copy(status = "${tables.results.size}件を取得")
+        val loaded = database.load()
+        loaded.copy(status = "${tables.results.size}件の検査結果・体組成${loaded.bodyMeasurements.size}回を取得")
     }
 
     internal fun saveLocalRecords(records: List<LabResult>): LabResultsSaveResult = database.appendRecords(records)
+    internal fun saveLocalBodyMeasurements(records: List<BodyCompositionMeasurement>): LabResultsSaveResult = database.appendBodyMeasurements(records)
     internal fun backupSnapshot(): LabBackupSnapshot = database.backupSnapshot()
     internal fun markBackedUp(revision: Long) = database.markBackedUp(revision)
 }
@@ -71,7 +82,7 @@ internal fun labSheetsRequest(accessToken: String, suffix: String, body: JSONObj
         val code = connection.responseCode
         check(code in 200..299) {
             if (code == 401 || code == 403) "検査データにアクセスできません。Googleアカウントを再認証してください（HTTP $code）"
-            else "検査データの取得・保存に失敗しました（HTTP $code）。labItemsとlabResultsを確認してください"
+            else "検査データの取得・保存に失敗しました（HTTP $code）。検査結果・体組成のシートを確認してください"
         }
         return connection.inputStream.bufferedReader().use { JSONObject(it.readText()) }
     } finally { connection.disconnect() }

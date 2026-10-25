@@ -191,6 +191,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onImportLabResults = { records, onResult -> spreadsheetSyncCoordinator.importLabResults(records, onResult) },
+                        onImportBodyComposition = { records, onResult -> spreadsheetSyncCoordinator.importBodyComposition(records, onResult) },
                         modifier = Modifier.padding(contentPadding),
                     )
                 }
