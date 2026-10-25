@@ -230,13 +230,13 @@ private fun BloodLabResultsScreen(
                     }
                 }
             } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { selectedDate = dates[dateIndex - 1].toString() }, enabled = dateIndex > 0) { Text("前へ") }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("${comparisonDates.first().year}年", fontWeight = FontWeight.Bold)
-                    }
-                    TextButton(onClick = { selectedDate = dates[dateIndex + 1].toString() }, enabled = dateIndex < maxDateIndex) { Text("次へ") }
-                }
+                LabResultsDateNavigation(
+                    year = comparisonDates.first().year,
+                    onPrevious = { selectedDate = dates[dateIndex - 1].toString() },
+                    onNext = { selectedDate = dates[dateIndex + 1].toString() },
+                    canPrevious = dateIndex > 0,
+                    canNext = dateIndex < maxDateIndex,
+                )
                 Row(Modifier.fillMaxWidth().labMonthDividers(comparisonCount), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(LabItemColumnWeight), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(selected = !showTargetOnly, onClick = {
@@ -292,6 +292,21 @@ private fun BloodLabResultsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun LabResultsDateNavigation(
+    year: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    canPrevious: Boolean,
+    canNext: Boolean,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onPrevious, enabled = canPrevious) { Text("前へ") }
+        Text("${year}年", fontWeight = FontWeight.Bold)
+        TextButton(onClick = onNext, enabled = canNext) { Text("次へ") }
     }
 }
 

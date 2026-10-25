@@ -97,7 +97,7 @@ internal fun BodyCompositionImportScreen(
                         }, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
                         measurement.values.forEach { value ->
                             val metricName = BODY_COMPOSITION_METRICS.firstOrNull { it.id == value.metricId }?.name ?: value.metricId
-                            Text("$metricName: ${value.value}${value.unit.takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()}",
+                            Text("$metricName: ${value.value}${bodyCompositionDisplayUnit(value.unit).takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()}",
                                 style = MaterialTheme.typography.bodySmall)
                         }
                         plan?.conflicts?.firstOrNull { it.incoming == measurement }?.let { conflict ->
@@ -156,7 +156,7 @@ private fun EditBodyCompositionMeasurement(
     var measuredTime by remember(measurement) { mutableStateOf(measurement.measuredTime?.toString().orEmpty()) }
     var deviceModel by remember(measurement) { mutableStateOf(measurement.deviceModel) }
     var drafts by remember(measurement) {
-        mutableStateOf(measurement.values.map { BodyCompositionValueDraft(it.metricId, it.value, it.unit) })
+        mutableStateOf(measurement.values.map { BodyCompositionValueDraft(it.metricId, it.value, bodyCompositionDisplayUnit(it.unit)) })
     }
     var error by remember(measurement) { mutableStateOf<String?>(null) }
     val labels = remember(drafts) { drafts.map { draft -> BODY_COMPOSITION_METRICS.firstOrNull { it.id == draft.metricId }?.name ?: draft.metricId } }

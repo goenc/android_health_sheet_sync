@@ -173,17 +173,17 @@ internal fun BodyCompositionScreen(
                 androidx.compose.runtime.LaunchedEffect(measurements, comparisonCount, windowStart) {
                     selectedMeasurementWindowAnchor = measurements.getOrNull(windowStart)?.id
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = {
-                        selectedMeasurementWindowAnchor = measurements.getOrNull((windowStart + 1).coerceAtMost(maximumWindowStart))?.id
-                    }, enabled = windowStart < maximumWindowStart) { Text("前へ") }
-                    Text("最新から${windowStart + 1}～${windowStart + comparison.size}回目 / ${measurements.size}回",
-                        modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    TextButton(onClick = {
+                LabResultsDateNavigation(
+                    year = comparison.first().targetDate.year,
+                    onPrevious = {
                         selectedMeasurementWindowAnchor = measurements.getOrNull((windowStart - 1).coerceAtLeast(0))?.id
-                    }, enabled = windowStart > 0) { Text("次へ") }
-                }
+                    },
+                    onNext = {
+                        selectedMeasurementWindowAnchor = measurements.getOrNull((windowStart + 1).coerceAtMost(maximumWindowStart))?.id
+                    },
+                    canPrevious = windowStart > 0,
+                    canNext = windowStart < maximumWindowStart,
+                )
                 Row(Modifier.fillMaxWidth().bodyComparisonDividers(comparisonCount),
                     horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(BodyItemColumnWeight), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -199,7 +199,7 @@ internal fun BodyCompositionScreen(
                     comparison.forEach { measurement ->
                         Text(bodyMeasurementColumnLabel(measurement, comparison),
                             modifier = Modifier.weight(BodyValueColumnWeight), textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            fontWeight = FontWeight.Bold, fontSize = (16 - comparisonCount).sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     }
                     repeat(comparisonCount - comparison.size) { Text("", modifier = Modifier.weight(BodyValueColumnWeight)) }
                 }
@@ -304,7 +304,7 @@ private fun BodyCompositionSettingsScreen(
                     onValueChange = { onMetricChecked(metric.id, it) }), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = checked, onCheckedChange = null)
                     Text(metric.name, modifier = Modifier.weight(1f), fontSize = 13.sp)
-                    if (metric.unit.isNotBlank()) Text(metric.unit, style = MaterialTheme.typography.bodySmall)
+                    if (metric.unit.isNotBlank()) Text(bodyCompositionDisplayUnit(metric.unit), style = MaterialTheme.typography.bodySmall)
                 }
                 HorizontalDivider(color = DividerColor)
             }
@@ -382,7 +382,7 @@ private data class BodyCompositionSeriesKey(val deviceModel: String, val source:
     fun label(): String = listOf(
         deviceModel.ifBlank { "機器不明" },
         sourceDisplayName(source).ifBlank { "出所不明" },
-        unit.ifBlank { "単位なし" },
+        bodyCompositionDisplayUnit(unit).ifBlank { "単位なし" },
     ).joinToString("・")
 }
 
@@ -477,11 +477,12 @@ private fun BodyCompositionChart(
             drawCircle(ChartBlue, 4.dp.toPx(), offsets[index])
         }
         labelPaint.textAlign = if (points.size == 1) Paint.Align.CENTER else Paint.Align.LEFT
-        drawContext.canvas.nativeCanvas.drawText(bodyMeasurementShortDateLabel(points.first().measurement),
+        val showTime = points.size > 1 && points.first().measurement.targetDate == points.last().measurement.targetDate
+        drawContext.canvas.nativeCanvas.drawText(bodyMeasurementShortDateLabel(points.first().measurement, showTime),
             if (firstX == lastX) (left + right) / 2f else left, size.height - 8.dp.toPx(), labelPaint)
         if (points.size > 1) {
             labelPaint.textAlign = Paint.Align.RIGHT
-            drawContext.canvas.nativeCanvas.drawText(bodyMeasurementShortDateLabel(points.last().measurement), right, size.height - 8.dp.toPx(), labelPaint)
+            drawContext.canvas.nativeCanvas.drawText(bodyMeasurementShortDateLabel(points.last().measurement, showTime), right, size.height - 8.dp.toPx(), labelPaint)
         }
     }
 }
@@ -523,8 +524,13 @@ private fun bodyMeasurementColumnLabel(
     comparison: List<BodyCompositionMeasurement>,
 ): String {
     val sameDate = comparison.filter { it.targetDate == measurement.targetDate }
-    val date = "${measurement.targetDate.monthValue}/${measurement.targetDate.dayOfMonth}"
+    val sameMonth = comparison.count {
+        it.targetDate.year == measurement.targetDate.year && it.targetDate.monthValue == measurement.targetDate.monthValue
+    }
+    val month = "${measurement.targetDate.monthValue}月"
+    val date = "$month\n${measurement.targetDate.dayOfMonth}日"
     return when {
+        sameMonth <= 1 -> month
         sameDate.size <= 1 -> date
         measurement.measuredTime != null -> {
             val sameTime = sameDate.count { it.measuredTime == measurement.measuredTime }
@@ -543,13 +549,13 @@ private fun bodyMeasurementDateLabel(
         it.targetDate == measurement.targetDate && it.measuredTime == measurement.measuredTime
     }
     val occurrence = if (sameDateAndTime.size > 1) "・${sameDateAndTime.indexOf(measurement) + 1}件目" else ""
-    return "${measurement.targetDate.year}/${measurement.targetDate.monthValue}/${measurement.targetDate.dayOfMonth} " +
+    return "${measurement.targetDate} " +
         (measurement.measuredTime?.let(::formatBodyTime) ?: "時刻不明") + occurrence
 }
 
-private fun bodyMeasurementShortDateLabel(measurement: BodyCompositionMeasurement): String =
-    "${measurement.targetDate.monthValue}/${measurement.targetDate.dayOfMonth}" +
-        (measurement.measuredTime?.let { " ${formatBodyTime(it)}" } ?: "")
+private fun bodyMeasurementShortDateLabel(measurement: BodyCompositionMeasurement, showTime: Boolean): String =
+    measurement.targetDate.format(DateTimeFormatter.ofPattern("yyyy/M/d")) +
+        (measurement.measuredTime?.takeIf { showTime }?.let { " ${formatBodyTime(it)}" } ?: "")
 
 private fun bodyMeasurementXPosition(measurement: BodyCompositionMeasurement): Double =
     measurement.targetDate.toEpochDay().toDouble() +
@@ -559,7 +565,10 @@ private fun formatBodyTime(time: LocalTime): String =
     time.format(if (time.second == 0 && time.nano == 0) BodyTimeFormatter else DateTimeFormatter.ofPattern("HH:mm:ss", Locale.JAPAN))
 
 private fun formatBodyValue(value: BodyCompositionValue): String =
-    value.value + value.unit.takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()
+    value.value + bodyCompositionDisplayUnit(value.unit).takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()
+
+/** 保存・同期用の単位を維持し、体組成画面では用紙と同じ短い単位を表示する。 */
+internal fun bodyCompositionDisplayUnit(unit: String): String = if (unit == "kcal/日") "kcal" else unit
 
 private fun sourceDisplayName(source: String): String = when (source.lowercase()) {
     "photo" -> "写真"
