@@ -197,6 +197,51 @@ class BodyCompositionTest {
         }
     }
 
+    @Test fun matchingUnknownTimeMeasurementCanCompleteWeightAndClothingAfterConfirmation() {
+        val originalValues = BODY_COMPOSITION_METRICS.filterNot { it.id in setOf("weight", "clothingWeight") }
+            .map { BodyCompositionValue(it.id, "20", it.unit) }
+        val existing = measurement(time = null).copy(values = originalValues)
+        val incoming = measurement(time = null).copy(values = originalValues + listOf(
+            BodyCompositionValue("weight", "67.5", "kg"),
+            BodyCompositionValue("clothingWeight", "1.2", "kg"),
+        ))
+        val plan = planBodyCompositionImport(listOf(incoming), listOf(existing))
+        assertTrue(plan.conflicts.isEmpty())
+        assertEquals(setOf(incoming.id), plan.unknownTimeCompletionIds)
+        assertEquals(existing.id, plan.updates.single().id)
+        assertNull(plan.updates.single().measuredTime)
+        assertEquals(16, plan.updates.single().values.size)
+        assertEquals(originalValues.associateBy { it.metricId },
+            plan.updates.single().values.filterNot { it.metricId in setOf("weight", "clothingWeight") }.associateBy { it.metricId })
+    }
+
+    @Test fun unknownTimeCompletionRejectsAmbiguityAndIncompleteMatches() {
+        val existing = measurement(time = null).copy(values = listOf(
+            BodyCompositionValue("bodyFatPercent", "20.0", "%"),
+            BodyCompositionValue("muscleMass", "45.0", "kg"),
+            BodyCompositionValue("fatMass", "16.0", "kg"),
+        ))
+        val extra = BodyCompositionValue("weight", "67.5", "kg")
+        val matching = measurement(time = null).copy(values = existing.values + extra)
+        val changed = matching.copy(values = matching.values.map {
+            if (it.metricId == "fatMass") it.copy(value = "17.0") else it
+        })
+        val incomplete = matching.copy(values = matching.values.filterNot { it.metricId == "fatMass" })
+        val tooFew = existing.copy(values = existing.values.take(2))
+        val sparse = matching.copy(values = tooFew.values + extra)
+        listOf(
+            planBodyCompositionImport(listOf(changed), listOf(existing)),
+            planBodyCompositionImport(listOf(incomplete), listOf(existing)),
+            planBodyCompositionImport(listOf(sparse), listOf(tooFew)),
+            planBodyCompositionImport(listOf(matching.copy(source = "csv")), listOf(existing)),
+            planBodyCompositionImport(listOf(matching), listOf(existing, existing.copy(id = java.util.UUID.randomUUID().toString()))),
+        ).forEach { plan ->
+            assertTrue(plan.updates.isEmpty())
+            assertTrue(plan.unknownTimeCompletionIds.isEmpty())
+            assertEquals(1, plan.conflicts.size)
+        }
+    }
+
     @Test fun failedBodyBackupKeepsItsSnapshotPendingUntilSuccessfulRetry() = runBlocking {
         var backedUp = 0L
         var fail = true

@@ -109,6 +109,10 @@ internal fun BodyCompositionImportScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (differs) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                         }
+                        if (measurement.id in plan?.unknownTimeCompletionIds.orEmpty()) {
+                            Text("時刻不明のため、同日・同機器で既存の項目がすべて一致する測定へ体重・着衣量を補完します。同じ測定票か確認してください。",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
                         conflict?.let {
                             if (it.missingMetricIds.isNotEmpty()) {
                                 val names = it.reference?.values.orEmpty().filter { value -> value.metricId in it.missingMetricIds }.map { value ->

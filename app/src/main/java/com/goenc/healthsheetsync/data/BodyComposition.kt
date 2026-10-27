@@ -91,6 +91,7 @@ internal data class BodyCompositionImportPlan(
     val updates: List<BodyCompositionMeasurement>,
     val duplicates: List<BodyCompositionMeasurement>,
     val conflicts: List<BodyCompositionImportConflict>,
+    val unknownTimeCompletionIds: Set<String> = emptySet(),
 )
 
 /** 再解析でIDが変わっても重複を防ぎ、曖昧な同日測定は勝手に統合しない。 */
@@ -103,6 +104,7 @@ internal fun planBodyCompositionImport(
     val updates = mutableListOf<BodyCompositionMeasurement>()
     val duplicates = mutableListOf<BodyCompositionMeasurement>()
     val conflicts = mutableListOf<BodyCompositionImportConflict>()
+    val unknownTimeCompletionIds = mutableSetOf<String>()
     incoming.map(::validateBodyCompositionMeasurement).forEach { record ->
         val candidates = accepted.filter { current -> current.id == record.id ||
             (current.targetDate == record.targetDate &&
@@ -119,8 +121,13 @@ internal fun planBodyCompositionImport(
         val shared = current?.let { existingRecord -> record.values.filter { value ->
             existingRecord.values.any { it.metricId == value.metricId }
         } }.orEmpty()
+        val sameKnownTime = current != null && record.measuredTime != null && record.measuredTime == current.measuredTime
+        // 時刻不明の測定は、全既存項目が一致する唯一の候補だけを確認付きで補完する。
+        val sameUnknownTime = current != null && record.measuredTime == null && current.measuredTime == null &&
+            record.source == current.source && current.values.size >= 3 &&
+            shared.size == current.values.size && sameBodyCompositionValues(shared, current.values)
         val canComplete = current != null && record.targetDate == current.targetDate &&
-            record.measuredTime != null && record.measuredTime == current.measuredTime &&
+            (sameKnownTime || sameUnknownTime) &&
             record.deviceModel.isNotBlank() && record.deviceModel == current.deviceModel &&
             shared.isNotEmpty() && sameBodyCompositionValues(shared, current.values.filter { value ->
                 shared.any { it.metricId == value.metricId }
@@ -129,6 +136,7 @@ internal fun planBodyCompositionImport(
             exact -> duplicates += record
             canComplete -> {
                 val previous = requireNotNull(current)
+                if (sameUnknownTime) unknownTimeCompletionIds += record.id
                 val updated = validateBodyCompositionMeasurement(previous.copy(values = previous.values + missing))
                 accepted[accepted.indexOf(previous)] = updated
                 val addedIndex = additions.indexOfFirst { it.id == previous.id }
@@ -160,7 +168,7 @@ internal fun planBodyCompositionImport(
             else -> { additions += record; accepted += record }
         }
     }
-    return BodyCompositionImportPlan(additions, updates, duplicates, conflicts)
+    return BodyCompositionImportPlan(additions, updates, duplicates, conflicts, unknownTimeCompletionIds)
 }
 
 private fun sameBodyCompositionValues(a: List<BodyCompositionValue>, b: List<BodyCompositionValue>): Boolean =
