@@ -135,18 +135,28 @@ internal class LabDatabase private constructor(context: Context) : SQLiteOpenHel
     }
 
     @Synchronized fun appendBodyMeasurements(incoming: List<BodyCompositionMeasurement>): LabResultsSaveResult {
-        val plan = planBodyCompositionImport(incoming, readBodyCompositionMeasurements(readableDatabase))
+        val existing = readBodyCompositionMeasurements(readableDatabase)
+        val plan = planBodyCompositionImport(incoming, existing)
         require(plan.conflicts.isEmpty()) { "既存の体組成測定と相違があります。日時・機器・値を確認してください" }
-        if (plan.additions.isEmpty()) return LabResultsSaveResult(0, plan.duplicates.size)
+        if (plan.additions.isEmpty() && plan.updates.isEmpty()) return LabResultsSaveResult(0, plan.duplicates.size)
         val db = writableDatabase
         db.beginTransaction()
         try {
             plan.additions.forEach { insertBodyCompositionMeasurement(db, it) }
+            plan.updates.forEach { updated ->
+                val previous = existing.single { it.id == updated.id }
+                updated.values.filter { value -> previous.values.none { it.metricId == value.metricId } }.forEach { value ->
+                    db.insertOrThrow("body_values", null, ContentValues().apply {
+                        put("measurement_id", updated.id); put("metric_id", value.metricId)
+                        put("value", value.value); put("unit", value.unit)
+                    })
+                }
+            }
             putMetadata(db, "updated_at", Instant.now().toString())
             incrementBackupRevision(db)
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
-        return LabResultsSaveResult(plan.additions.size, plan.duplicates.size)
+        return LabResultsSaveResult(plan.additions.size + plan.updates.size, plan.duplicates.size)
     }
 
     @Synchronized fun ensureItems(records: List<LabResult>) {

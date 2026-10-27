@@ -22,8 +22,8 @@ class BodyCompositionTest {
             {"metricId":"basalMetabolicRate","value":"1500","unit":"kcal"}]}]}""").single()
         assertEquals(LocalDate.of(2025, 1, 2), parsed.targetDate)
         assertNull(parsed.measuredTime)
-        assertEquals(listOf("muscleMass", "basalMetabolicRate"), parsed.values.map { it.metricId })
-        assertEquals("45.00", parsed.values.first().value)
+        assertEquals(listOf("weight", "muscleMass", "basalMetabolicRate"), parsed.values.map { it.metricId })
+        assertEquals("45.00", parsed.values[1].value)
         assertEquals("kcal/日", parsed.values.last().unit)
     }
 
@@ -85,13 +85,15 @@ class BodyCompositionTest {
         assertTrue(runCatching { parseBodyCompositionTables(headers, listOf(BODY_VALUE_HEADERS)) }.isFailure)
     }
 
-    @Test fun catalogKeepsMeasuredWeightAndHeightOutAndDerivedItemsOptional() {
-        assertEquals(14, BODY_COMPOSITION_METRICS.size)
-        assertEquals(11, BODY_COMPOSITION_METRICS.count { it.defaultVisible })
-        assertFalse(BODY_COMPOSITION_METRICS.any { it.name in setOf("体重", "身長") })
+    @Test fun catalogIncludesWeightAndClothingButNotHeight() {
+        assertEquals(16, BODY_COMPOSITION_METRICS.size)
+        assertEquals(13, BODY_COMPOSITION_METRICS.count { it.defaultVisible })
+        assertTrue(BODY_COMPOSITION_METRICS.any { it.name == "体重" })
+        assertTrue(BODY_COMPOSITION_METRICS.any { it.name == "着衣量" })
+        assertFalse(BODY_COMPOSITION_METRICS.any { it.name == "身長" })
     }
 
-    @Test fun allFourteenMetricsRoundTripWithoutMixingUnitsOrDroppingZeroAndNegativeValues() {
+    @Test fun allMetricsRoundTripWithoutMixingUnitsOrDroppingZeroAndNegativeValues() {
         val input = measurement().copy(values = BODY_COMPOSITION_METRICS.map { metric ->
             val text = when (metric.id) {
                 "obesityPercent" -> "-2.0"
@@ -103,9 +105,40 @@ class BodyCompositionTest {
         val normalized = validateBodyCompositionMeasurement(input)
         val restored = parseBodyCompositionTables(bodyMeasurementRows(listOf(input)), bodyValueRows(listOf(input))).single()
         assertEquals(normalized, restored)
-        assertEquals(14, restored.values.size)
+        assertEquals(16, restored.values.size)
         assertEquals("0.0", restored.values.single { it.metricId == "fatMass" }.value)
         assertEquals("-2.0", restored.values.single { it.metricId == "obesityPercent" }.value)
+    }
+
+    @Test fun existingMeasurementCanBeCompletedWithoutChangingItsValues() {
+        val existing = measurement()
+        val incoming = measurement(value = "20.00").copy(values = listOf(
+            BodyCompositionValue("bodyFatPercent", "20.00", "%"),
+            BodyCompositionValue("weight", "67.5", "kg"),
+            BodyCompositionValue("clothingWeight", "1.2", "kg"),
+        ))
+        val plan = planBodyCompositionImport(listOf(incoming), listOf(existing))
+        assertTrue(plan.conflicts.isEmpty())
+        assertTrue(plan.additions.isEmpty())
+        val updated = plan.updates.single()
+        assertEquals(existing.id, updated.id)
+        assertEquals("20.0", updated.values.single { it.metricId == "bodyFatPercent" }.value)
+        assertEquals("67.5", updated.values.single { it.metricId == "weight" }.value)
+        assertEquals("1.2", updated.values.single { it.metricId == "clothingWeight" }.value)
+        assertEquals(updated, parseBodyCompositionTables(bodyMeasurementRows(listOf(updated)), bodyValueRows(listOf(updated))).single())
+    }
+
+    @Test fun completionRejectsAmbiguousOrChangedMeasurements() {
+        val existing = measurement()
+        fun incoming(value: String = "20.0", time: String? = "09:00", device: String = "試験機A") =
+            measurement(time, value, device).copy(values = listOf(
+                BodyCompositionValue("bodyFatPercent", value, "%"), BodyCompositionValue("weight", "67.5", "kg")))
+        listOf(incoming(value = "21.0"), incoming(time = null), incoming(device = ""),
+            incoming().copy(values = listOf(BodyCompositionValue("weight", "67.5", "kg")))).forEach {
+            val plan = planBodyCompositionImport(listOf(it), listOf(existing))
+            assertTrue(plan.updates.isEmpty())
+            assertEquals(1, plan.conflicts.size)
+        }
     }
 
     @Test fun failedBodyBackupKeepsItsSnapshotPendingUntilSuccessfulRetry() = runBlocking {
