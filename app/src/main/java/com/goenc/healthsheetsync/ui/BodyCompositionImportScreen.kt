@@ -47,6 +47,8 @@ import com.goenc.healthsheetsync.data.validateBodyCompositionMeasurement
 import java.time.LocalDate
 import java.time.LocalTime
 
+private val BodyCompositionMatchColor = Color(0xFF176B36)
+
 @Composable
 internal fun BodyCompositionImportScreen(
     state: LabResultsUiState,
@@ -92,13 +94,17 @@ internal fun BodyCompositionImportScreen(
             LazyColumn(Modifier.weight(1f)) {
                 itemsIndexed(records, key = { _, measurement -> measurement.id }) { index, measurement ->
                     val conflict = plan?.conflicts?.firstOrNull { it.incoming.id == measurement.id }
+                    val duplicate = plan?.duplicates?.any { it.id == measurement.id } == true
                     Column(Modifier.fillMaxWidth().clickable(enabled = !busy) { editingIndex = index }.padding(vertical = 8.dp)) {
+                        if (duplicate) Text("全項目が一致しています（重複のため追加なし）",
+                            style = MaterialTheme.typography.bodySmall, color = BodyCompositionMatchColor)
                         Text(buildString {
                             append(measurement.targetDate)
                             measurement.measuredTime?.let { append(" ${it}") }
                             append("  ")
                             append(measurement.deviceModel.ifBlank { "機器不明" })
-                        }, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                        }, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            color = if (duplicate) BodyCompositionMatchColor else MaterialTheme.colorScheme.onSurface)
                         measurement.values.forEach { value ->
                             val metricName = BODY_COMPOSITION_METRICS.firstOrNull { it.id == value.metricId }?.name ?: value.metricId
                             val differs = value.metricId in conflict?.differingMetricIds.orEmpty()
@@ -107,7 +113,11 @@ internal fun BodyCompositionImportScreen(
                             val savedText = if (differs) "（$referenceLabel: ${saved?.let(::bodyValueWithUnit) ?: "なし"}）" else ""
                             Text("$metricName: ${bodyValueWithUnit(value)}$savedText",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (differs) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                                color = when {
+                                    differs -> MaterialTheme.colorScheme.error
+                                    duplicate -> BodyCompositionMatchColor
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                })
                         }
                         if (measurement.id in plan?.unknownTimeCompletionIds.orEmpty()) {
                             Text("時刻不明のため、同日・同機器で既存の項目がすべて一致する測定へ体重・着衣量を補完します。同じ測定票か確認してください。",
