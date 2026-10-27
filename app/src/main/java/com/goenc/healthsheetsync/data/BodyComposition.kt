@@ -78,7 +78,14 @@ internal fun validateBodyCompositionMeasurement(measurement: BodyCompositionMeas
     })
 }
 
-internal data class BodyCompositionImportConflict(val incoming: BodyCompositionMeasurement, val reason: String)
+internal data class BodyCompositionImportConflict(
+    val incoming: BodyCompositionMeasurement,
+    val reason: String,
+    val reference: BodyCompositionMeasurement? = null,
+    val referenceIsIncoming: Boolean = false,
+    val differingMetricIds: Set<String> = emptySet(),
+    val missingMetricIds: Set<String> = emptySet(),
+)
 internal data class BodyCompositionImportPlan(
     val additions: List<BodyCompositionMeasurement>,
     val updates: List<BodyCompositionMeasurement>,
@@ -130,8 +137,26 @@ internal fun planBodyCompositionImport(
                     if (updateIndex >= 0) updates[updateIndex] = updated else updates += updated
                 }
             }
-            candidates.isNotEmpty() -> conflicts += BodyCompositionImportConflict(record,
-                "同じ測定の値の相違、または日時・機器が不明な同日測定があります。日時・機器・値を確認するか除外してください")
+            candidates.isNotEmpty() -> {
+                // 日時・機器が曖昧なら、別の測定と比べて値を誤って赤表示しない。
+                val reference = current?.takeIf {
+                    it.targetDate == record.targetDate && record.measuredTime != null &&
+                        it.measuredTime == record.measuredTime && record.deviceModel.isNotBlank() &&
+                        it.deviceModel == record.deviceModel
+                }
+                val different = reference?.let { saved -> record.values.filter { value ->
+                    val old = saved.values.firstOrNull { it.metricId == value.metricId }
+                    if (old == null) value.metricId !in setOf("weight", "clothingWeight")
+                    else !sameBodyCompositionValues(listOf(value), listOf(old))
+                }.map { it.metricId }.toSet() }.orEmpty()
+                val missing = reference?.values?.filter { old ->
+                    record.values.none { it.metricId == old.metricId }
+                }?.map { it.metricId }?.toSet().orEmpty()
+                conflicts += BodyCompositionImportConflict(record,
+                    if (reference == null) "同日測定の日時・機器を特定できません。日時・機器を確認してください"
+                    else "比較対象の測定と項目または値が異なります。内容を確認してください",
+                    reference, reference != null && additions.any { it.id == reference.id }, different, missing)
+            }
             else -> { additions += record; accepted += record }
         }
     }

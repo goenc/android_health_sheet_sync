@@ -19,6 +19,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,9 +33,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.goenc.healthsheetsync.data.BODY_COMPOSITION_METRICS
+import com.goenc.healthsheetsync.data.BodyCompositionImportConflict
 import com.goenc.healthsheetsync.data.BodyCompositionMeasurement
 import com.goenc.healthsheetsync.data.BodyCompositionValue
 import com.goenc.healthsheetsync.data.LabResultsUiState
@@ -88,6 +91,7 @@ internal fun BodyCompositionImportScreen(
             Text("追加 ${plan?.additions?.size ?: 0}件 ／ 項目補完 ${plan?.updates?.size ?: 0}件 ／ 同一測定 ${plan?.duplicates?.size ?: 0}件 ／ 相違 ${plan?.conflicts?.size ?: 0}件")
             LazyColumn(Modifier.weight(1f)) {
                 itemsIndexed(records, key = { _, measurement -> measurement.id }) { index, measurement ->
+                    val conflict = plan?.conflicts?.firstOrNull { it.incoming.id == measurement.id }
                     Column(Modifier.fillMaxWidth().clickable(enabled = !busy) { editingIndex = index }.padding(vertical = 8.dp)) {
                         Text(buildString {
                             append(measurement.targetDate)
@@ -97,11 +101,25 @@ internal fun BodyCompositionImportScreen(
                         }, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
                         measurement.values.forEach { value ->
                             val metricName = BODY_COMPOSITION_METRICS.firstOrNull { it.id == value.metricId }?.name ?: value.metricId
-                            Text("$metricName: ${value.value}${bodyCompositionDisplayUnit(value.unit).takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()}",
-                                style = MaterialTheme.typography.bodySmall)
+                            val differs = value.metricId in conflict?.differingMetricIds.orEmpty()
+                            val saved = conflict?.reference?.values?.firstOrNull { it.metricId == value.metricId }
+                            val referenceLabel = if (conflict?.referenceIsIncoming == true) "別の取込結果" else "登録済み"
+                            val savedText = if (differs) "（$referenceLabel: ${saved?.let(::bodyValueWithUnit) ?: "なし"}）" else ""
+                            Text("$metricName: ${bodyValueWithUnit(value)}$savedText",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (differs) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                         }
-                        plan?.conflicts?.firstOrNull { it.incoming == measurement }?.let { conflict ->
-                            Text(conflict.reason + "。修正または除外が必要。", color = MaterialTheme.colorScheme.error)
+                        conflict?.let {
+                            if (it.missingMetricIds.isNotEmpty()) {
+                                val names = it.reference?.values.orEmpty().filter { value -> value.metricId in it.missingMetricIds }.map { value ->
+                                    val name = BODY_COMPOSITION_METRICS.firstOrNull { metric -> metric.id == value.metricId }?.name ?: value.metricId
+                                    "$name ${bodyValueWithUnit(value)}"
+                                }
+                                val referenceLabel = if (it.referenceIsIncoming) "別の取込結果" else "登録済み"
+                                Text("今回の結果にない${referenceLabel}の項目: ${names.joinToString("、")}",
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
+                            Text(it.reason + "。修正または除外が必要。", color = MaterialTheme.colorScheme.error)
                         }
                     }
                     HorizontalDivider()
@@ -126,7 +144,9 @@ internal fun BodyCompositionImportScreen(
     }
     editingIndex?.let { index ->
         preview?.getOrNull(index)?.let { measurement ->
-            EditBodyCompositionMeasurement(measurement, onDismiss = { editingIndex = null }, onRemove = {
+            val conflict = runCatching { planBodyCompositionImport(preview.orEmpty(), state.bodyMeasurements) }
+                .getOrNull()?.conflicts?.firstOrNull { it.incoming.id == measurement.id }
+            EditBodyCompositionMeasurement(measurement, conflict, onDismiss = { editingIndex = null }, onRemove = {
                 preview = preview?.filterIndexed { position, _ -> position != index }
                 editingIndex = null
             }, onSave = { changed ->
@@ -148,6 +168,7 @@ private data class BodyCompositionValueDraft(
 @Composable
 private fun EditBodyCompositionMeasurement(
     measurement: BodyCompositionMeasurement,
+    conflict: BodyCompositionImportConflict?,
     onDismiss: () -> Unit,
     onRemove: () -> Unit,
     onSave: (BodyCompositionMeasurement) -> Unit,
@@ -169,12 +190,25 @@ private fun EditBodyCompositionMeasurement(
             OutlinedTextField(deviceModel, { deviceModel = it; error = null },
                 label = { Text("機器名") }, singleLine = true)
             drafts.forEachIndexed { index, draft ->
-                Text(labels.getOrElse(index) { draft.metricId }, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                val saved = conflict?.reference?.values?.firstOrNull { it.metricId == draft.metricId }
+                val normalized = runCatching { validateBodyCompositionMeasurement(measurement.copy(
+                    values = listOf(BodyCompositionValue(draft.metricId, draft.value.trim(), draft.unit.trim())),
+                )).values.single() }.getOrNull()
+                val differs = draft.included && conflict?.reference != null && if (saved == null) {
+                    draft.metricId in conflict.differingMetricIds
+                } else normalized == null || normalized.unit != saved.unit ||
+                    normalized.value.toBigDecimal().compareTo(saved.value.toBigDecimal()) != 0
+                Text(labels.getOrElse(index) { draft.metricId }, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                    color = if (differs) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                val referenceLabel = if (conflict?.referenceIsIncoming == true) "別の取込結果" else "登録済み"
+                if (differs) Text("$referenceLabel: ${saved?.let(::bodyValueWithUnit) ?: "なし"}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(draft.value, { updated ->
                         drafts = drafts.mapIndexed { position, old -> if (position == index) old.copy(value = updated) else old }
                         error = null
-                    }, label = { Text("値") }, modifier = Modifier.weight(1f), singleLine = true)
+                    }, label = { Text("値") }, modifier = Modifier.weight(1f), singleLine = true, isError = differs,
+                        textStyle = LocalTextStyle.current.copy(color = if (differs) MaterialTheme.colorScheme.error else Color.Unspecified))
                     OutlinedTextField(draft.unit, { updated ->
                         drafts = drafts.mapIndexed { position, old -> if (position == index) old.copy(unit = updated) else old }
                         error = null
@@ -206,6 +240,9 @@ private fun EditBodyCompositionMeasurement(
         }) { Text("修正を反映") }
     }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
 }
+
+private fun bodyValueWithUnit(value: BodyCompositionValue): String =
+    value.value + bodyCompositionDisplayUnit(value.unit).takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()
 
 internal fun buildBodyCompositionPrompt(): String = """
     添付した体組成計の測定票から、読み取れる測定だけを抽出し、指定形式のJSONを返してください。

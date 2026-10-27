@@ -62,6 +62,62 @@ class BodyCompositionTest {
         assertEquals(1, planBodyCompositionImport(listOf(measurement("11:00").copy(id = existing.id)), listOf(existing)).conflicts.size)
     }
 
+    @Test fun conflictIdentifiesOnlyDifferingValuesAndKeepsSavedValuesForDisplay() {
+        val existing = measurement().copy(values = listOf(
+            BodyCompositionValue("bodyFatPercent", "20.0", "%"),
+            BodyCompositionValue("muscleMass", "45.0", "kg"),
+        ))
+        val incoming = measurement().copy(values = listOf(
+            BodyCompositionValue("bodyFatPercent", "21.0", "%"),
+            BodyCompositionValue("muscleMass", "45.00", "kg"),
+            BodyCompositionValue("clothingWeight", "1.2", "kg"),
+        ))
+        val conflict = planBodyCompositionImport(listOf(incoming), listOf(existing)).conflicts.single()
+        assertEquals(setOf("bodyFatPercent"), conflict.differingMetricIds)
+        assertTrue(conflict.missingMetricIds.isEmpty())
+        assertEquals(existing.id, conflict.reference?.id)
+        assertEquals("20.0", conflict.reference?.values?.single { it.metricId == "bodyFatPercent" }?.value)
+    }
+
+    @Test fun ambiguousMeasurementNeverIdentifiesAValueAsWrong() {
+        val saved = measurement()
+        val unknownTime = measurement(time = null, value = "21.0")
+        val unknownDevice = measurement(value = "21.0", device = "")
+        val multipleMatches = measurement(time = null, value = "21.0")
+        listOf(
+            planBodyCompositionImport(listOf(unknownTime), listOf(saved)).conflicts.single(),
+            planBodyCompositionImport(listOf(unknownDevice), listOf(saved)).conflicts.single(),
+            planBodyCompositionImport(listOf(multipleMatches), listOf(saved, measurement("10:00"))).conflicts.single(),
+        ).forEach { conflict ->
+            assertNull(conflict.reference)
+            assertTrue(conflict.differingMetricIds.isEmpty())
+            assertTrue(conflict.missingMetricIds.isEmpty())
+        }
+    }
+
+    @Test fun conflictIdentifiesMissingAndUnexpectedItems() {
+        val existing = measurement().copy(values = listOf(
+            BodyCompositionValue("bodyFatPercent", "20.0", "%"),
+            BodyCompositionValue("muscleMass", "45.0", "kg"),
+        ))
+        val incoming = measurement().copy(values = listOf(
+            BodyCompositionValue("bodyFatPercent", "20.0", "%"),
+            BodyCompositionValue("fatMass", "16.0", "kg"),
+        ))
+        val conflict = planBodyCompositionImport(listOf(incoming), listOf(existing)).conflicts.single()
+        assertEquals(setOf("fatMass"), conflict.differingMetricIds)
+        assertEquals(setOf("muscleMass"), conflict.missingMetricIds)
+    }
+
+    @Test fun conflictsWithinOneImportIdentifyTheirReferenceAsAnotherIncomingMeasurement() {
+        val first = measurement()
+        val second = measurement(value = "21.0")
+        val conflict = planBodyCompositionImport(listOf(first, second), emptyList()).conflicts.single()
+        assertEquals(first.id, conflict.reference?.id)
+        assertTrue(conflict.referenceIsIncoming)
+        assertEquals(setOf("bodyFatPercent"), conflict.differingMetricIds)
+    }
+
     @Test fun duplicateIncomingRowsAreNotAddedTwice() {
         val input = measurement()
         val plan = planBodyCompositionImport(listOf(input, input.copy(id = java.util.UUID.randomUUID().toString())), emptyList())
